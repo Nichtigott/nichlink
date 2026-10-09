@@ -17,8 +17,8 @@
 
 use std::path::Path;
 
-use nichlink_kernel::adoption::{AdoptionVerdict, parse_adoption, verdict_of};
-use nichlink_kernel::lexicon::{ADOPTION_DIR, ADOPTION_FILE, NICHLINK_DIR};
+use xirang_kernel::adoption::{AdoptionVerdict, parse_adoption, verdict_of};
+use xirang_kernel::lexicon::{ADOPTION_DIR, ADOPTION_FILE, XIRANG_DIR};
 
 /// Every ledger entry that needs a person, as one line each.
 /// 每一条需要人来处理的台账条目，各一行。
@@ -92,7 +92,7 @@ fn ledgers(root: &Path) -> Vec<std::path::PathBuf> {
                     .parent()
                     .and_then(|parent| parent.parent())
                     .and_then(|parent| parent.file_name())
-                    .is_some_and(|parent| parent == NICHLINK_DIR)
+                    .is_some_and(|parent| parent == XIRANG_DIR)
             {
                 found.push(path);
             }

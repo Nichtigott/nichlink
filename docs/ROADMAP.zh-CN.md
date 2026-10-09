@@ -1,8 +1,8 @@
-# NichLink 路线图
+# XiRang 路线图
 
 [English](ROADMAP.md) | 简体中文
 
-这份路线图只描述 NichLink 注册协议本身。NichUI 产品、商业运营和社区工作不属于这里的技术里程碑。
+这份路线图只描述 XiRang 注册协议本身。NichUI 产品、商业运营和社区工作不属于这里的技术里程碑。
 
 ## 当前版本：0.1 early production
 
@@ -13,10 +13,10 @@
 - [x] Studio 的搜索、检查、数据和源码跳转；
 - [x] MCP 桥——查询，外加一条先预览的 authoring 写入路径——以及经过校验的 Wasm/进程插件适配器；
 - [x] 跨平台 CI、规模审计、符号审计和打包检查。
-- [x] kernel / 执行面分界：一个纯 kernel（`nichlink-kernel`）承载协议名词与纯方法，
-  薄执行面（`nichlink-toolchain`、`nichlink-toolchain`、
-  `nichlink-toolchain`、`nichlink-toolchain`、`nichlink-toolchain`、`nichlink-toolchain`、
-  `nichlink-toolchain`）把这些方法绑定到各自上下文。
+- [x] kernel / 执行面分界：一个纯 kernel（`xirang-kernel`）承载协议名词与纯方法，
+  薄执行面（`xirang-toolchain`、`xirang-toolchain`、
+  `xirang-toolchain`、`xirang-toolchain`、`xirang-toolchain`、`xirang-toolchain`、
+  `xirang-toolchain`）把这些方法绑定到各自上下文。
 
 0.1 可用于实验和选定的内部生产项目，但不宣称能完整分析任意 Rust 程序。
 
@@ -51,7 +51,7 @@ rustc 不同的东西。
 
 ### 7. 经校验的 MCP 写入工具
 
-**已开工(2026-09-26):** `nichlink.apply` 经与 Studio 相同的 authoring 执行器做经校验的
+**已开工(2026-09-26):** `xirang.apply` 经与 Studio 相同的 authoring 执行器做经校验的
 `add` / `edit` / `rename` / `delete`,默认在一份一次性的包副本上预览;`edit` 会先读回该面,因此
 局部请求保留它没有点名的每个字段。待做:`graft` 写入、插件、项目脚手架、树 diff,以及让代理察觉
 "这些面本该同行为"的一致性分析。每次写入都走与构建面

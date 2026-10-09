@@ -6,17 +6,17 @@
 /// It used to read only the host, and a ghost is an independent package: the host's `[patch.crates-io]` does
 /// not reach it, so it can hold this workspace's crates twice while the host holds them once. Measured on a
 /// partitioned tree — the host's own `check` was green while `cargo metadata --manifest-path
-/// crates/dash-dash-board/Cargo.toml` reported `{'nichlink-kernel': 2, 'nichlink-macro': 2,
-/// 'nichlink-toolchain': 2}` (audit `M7`, §M7.66). This pin covers the half that is testable without a
+/// crates/dash-dash-board/Cargo.toml` reported `{'xirang-kernel': 2, 'xirang-macro': 2,
+/// 'xirang-toolchain': 2}` (audit `M7`, §M7.66). This pin covers the half that is testable without a
 /// registry: **which manifests the gate looks at**.
 /// 它过去只读宿主，而幽灵是一个独立的包：宿主的 `[patch.crates-io]` 到不了它，因此宿主只有一份时它可能带着
 /// 本工作区的 crate 两份。在一个分区树上实测——宿主自己的 `check` 是绿的，而
 /// `cargo metadata --manifest-path crates/dash-dash-board/Cargo.toml` 报
-/// `{'nichlink-kernel': 2, 'nichlink-macro': 2, 'nichlink-toolchain': 2}`（审计 `M7`，§M7.66）。这条钉子
+/// `{'xirang-kernel': 2, 'xirang-macro': 2, 'xirang-toolchain': 2}`（审计 `M7`，§M7.66）。这条钉子
 /// 覆盖的是"不需要 registry 就能测"的那一半：**门禁读哪些清单**。
 #[test]
 fn the_duplicated_gate_reads_every_generated_package() {
-    let area = std::env::temp_dir().join(format!("nichlink-gate-manifests-{}", std::process::id()));
+    let area = std::env::temp_dir().join(format!("xirang-gate-manifests-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&area);
     std::fs::create_dir_all(area.join("host")).expect("the host");
     std::fs::create_dir_all(area.join("crates/one")).expect("a generated package");

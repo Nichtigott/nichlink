@@ -1,5 +1,5 @@
-//! Pins for `nichlink.consistency`: the sibling set and the deviation rule, both decidable.
-//! `nichlink.consistency` 的钉子：同族集合与离群判据，两者都可判定。
+//! Pins for `xirang.consistency`: the sibling set and the deviation rule, both decidable.
+//! `xirang.consistency` 的钉子：同族集合与离群判据，两者都可判定。
 //!
 //! The failure these guard is the one the capability answers: two siblings calling one family of
 //! names while a third calls another, with every file locally plausible. What is pinned here is the
@@ -43,7 +43,7 @@ fn specimen_package(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-consistency-{label}-{}-{sequence}",
+        "xirang-mcp-consistency-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -89,10 +89,9 @@ fn specimen_package(label: &str) -> PathBuf {
 /// 写一份台账，其中唯一一条条目针对 `src/control/object/<name>/<name>.rs` **此刻**的字节。
 fn adopt(root: &Path, anchor: &str, file: &str) {
     let contents = std::fs::read_to_string(root.join(file)).expect("fixture source");
-    let fingerprint =
-        nichlink_kernel::adoption::adoption_fingerprint(&[(file.to_owned(), contents)]);
+    let fingerprint = xirang_kernel::adoption::adoption_fingerprint(&[(file.to_owned(), contents)]);
     write_fixture(
-        &root.join(".nichlink/adopted/entries"),
+        &root.join(".xirang/adopted/entries"),
         &format!(
             "{anchor}|the reference shape|traced once|nich|2026-10-01T10:00:00+08:00|{file}|\
              {fingerprint}|first adoption\n"
@@ -100,10 +99,10 @@ fn adopt(root: &Path, anchor: &str, file: &str) {
     );
 }
 
-/// Mark a fixture face as NichLink-generated, which is the predicate the write path's rewrite actions
+/// Mark a fixture face as XiRang-generated, which is the predicate the write path's rewrite actions
 /// use (`lexicon::GENERATED_MARKER`). A hand-written face is refused by `edit` **by design**, so a
 /// repair pin that wants the executable path has to use a generated one.
-/// 把一个夹具面标成 NichLink 生成的，也就是写入路径的重写动作所用的那个判据
+/// 把一个夹具面标成 XiRang 生成的，也就是写入路径的重写动作所用的那个判据
 /// （`lexicon::GENERATED_MARKER`）。手写的面会被 `edit` **按设计**拒绝，因此想走可执行那条路的修复钉子
 /// 必须用生成的面。
 fn generated(root: &Path, file: &str) {
@@ -111,7 +110,7 @@ fn generated(root: &Path, file: &str) {
     let text = std::fs::read_to_string(&path).expect("fixture source");
     std::fs::write(
         &path,
-        format!("{}\n{text}", nichlink_kernel::lexicon::GENERATED_MARKER),
+        format!("{}\n{text}", xirang_kernel::lexicon::GENERATED_MARKER),
     )
     .expect("fixture write");
 }
@@ -392,7 +391,7 @@ fn the_two_baselines_are_not_accepted_together() {
 /// `lacks`——而这张清单可以对着拥有它的词表检查，不需要夹具。
 #[test]
 fn the_shape_fields_are_the_kernels_own_vocabulary() {
-    let vocabulary = nichlink_kernel::declaration::FACE_FIELD_ORDER;
+    let vocabulary = xirang_kernel::declaration::FACE_FIELD_ORDER;
     for field in super::SHAPE_FIELDS {
         assert!(
             vocabulary.contains(&field.key),

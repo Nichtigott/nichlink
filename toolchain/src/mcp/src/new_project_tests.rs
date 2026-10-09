@@ -36,7 +36,7 @@ fn root(label: &str) -> Root {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
-        "nichlink-mcp-new-project-{label}-{}-{sequence}",
+        "xirang-mcp-new-project-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&path);
@@ -70,7 +70,7 @@ fn call(fixture: &Root, arguments: serde_json::Value) -> (String, bool) {
     let reply = crate::mcp::tools::tool_call(
         &fixture.path,
         json!(1),
-        &json!({"name": "nichlink.new_project", "arguments": arguments}),
+        &json!({"name": "xirang.new_project", "arguments": arguments}),
     );
     let text = reply["result"]["content"][0]["text"]
         .as_str()
@@ -111,13 +111,13 @@ fn a_preview_writes_nothing_and_names_every_path_it_would_write() {
         fixture.path.display()
     );
     for expected in [
-        "preview: nichlink.new_project would create the binary project `probe-host`",
+        "preview: xirang.new_project would create the binary project `probe-host`",
         &target.display().to_string(),
         "nothing was written",
         "+ Cargo.toml",
         "+ build.rs",
         "+ src/main.rs",
-        "+ .vscode/nichlink-face.code-snippets",
+        "+ .vscode/xirang-face.code-snippets",
         "+[workspace]",
     ] {
         assert!(
@@ -158,7 +158,7 @@ fn an_apply_writes_every_file_the_preview_showed() {
         "Cargo.toml",
         "build.rs",
         "src/lib.rs",
-        ".vscode/nichlink-face.code-snippets",
+        ".vscode/xirang-face.code-snippets",
     ] {
         assert!(
             target.join(relative).is_file(),
@@ -728,12 +728,12 @@ fn the_creation_reply_carries_the_initial_census() {
 /// 离线解析不了的出生会说出来，而不是在第一条命令上失败（审计 `F8`）。
 ///
 /// The round that found this measured `cargo build --offline` failing with `no matching package named
-/// nichlink-toolchain` on a freshly generated project whose manifest named the published release —
+/// xirang-toolchain` on a freshly generated project whose manifest named the published release —
 /// the first-impression scenario failing silently at `cargo build`. The check behind the line is
 /// local (a registry-cache lookup), so it is made here against a fabricated cargo home: an empty one
 /// must warn, one holding the release must not.
 /// 发现这条缺陷的那一轮实测：清单指向已发布那一版的刚生成项目上，`cargo build --offline` 报
-/// `no matching package named nichlink-toolchain`——第一印象场景在 `cargo build` 上悄悄失败。这句话背后
+/// `no matching package named xirang-toolchain`——第一印象场景在 `cargo build` 上悄悄失败。这句话背后
 /// 的检查是**本地**的（查注册表缓存），因此这里用伪造的 cargo home 来钉：空的那份必须警告，装着这一版的
 /// 那份不许警告。
 #[test]
@@ -762,7 +762,7 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
     let cache = home.join("registry/cache/index.crates.io-0000000000000000");
     std::fs::create_dir_all(&cache).expect("the cache directory");
     std::fs::write(
-        cache.join(format!("nichlink-toolchain-{version}.crate")),
+        cache.join(format!("xirang-toolchain-{version}.crate")),
         b"x",
     )
     .expect("the archive");
@@ -776,8 +776,8 @@ fn a_release_the_cache_does_not_have_is_reported_rather_than_left_to_fail_later(
     let index = home.join("registry/index/index.crates.io-0000000000000000/.cache/ni/ch");
     std::fs::create_dir_all(&index).expect("the index cache directory");
     std::fs::write(
-        index.join("nichlink-toolchain"),
-        format!("{{\"name\":\"nichlink-toolchain\",\"vers\":\"{version}\"}}\n"),
+        index.join("xirang-toolchain"),
+        format!("{{\"name\":\"xirang-toolchain\",\"vers\":\"{version}\"}}\n"),
     )
     .expect("the index entry");
     assert!(
@@ -828,7 +828,7 @@ fn a_named_checkout_is_the_way_to_get_dependencies_that_resolve_offline() {
     std::fs::create_dir_all(checkout.join("toolchain")).expect("toolchain directory");
     let manifest = case.join("tool-manifest");
     std::fs::create_dir_all(&manifest).expect("tool manifest directory");
-    let exe = case.join("bin/nichlink-mcp");
+    let exe = case.join("bin/xirang-mcp");
 
     // A named checkout answers with `path` dependencies into it — with or without `dependency`.
     // 点名检出会用指向它的 `path` 依赖作答——给不给 `dependency` 都行。

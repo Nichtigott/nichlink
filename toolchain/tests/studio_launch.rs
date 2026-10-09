@@ -15,7 +15,7 @@ use std::process::Command;
 /// The binary under test, as Cargo builds it for this integration test.
 /// 被测二进制，由 Cargo 为本集成测试构建。
 fn studio() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_nichlink-studio"))
+    Command::new(env!("CARGO_BIN_EXE_xirang-studio"))
 }
 
 /// A path argument that is not a project is refused, and the message names it.
@@ -44,16 +44,13 @@ fn a_path_that_is_not_a_project_fails_with_a_message() {
 #[test]
 fn a_configured_root_that_is_not_a_directory_fails_with_the_variable_named() {
     let output = studio()
-        .env(
-            "NICH_LINK_PACKAGE_ROOT",
-            "/nonexistent-root-for-studio-tests",
-        )
+        .env("XIRANG_PACKAGE_ROOT", "/nonexistent-root-for-studio-tests")
         .output()
         .expect("run the Studio binary");
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("NICH_LINK_PACKAGE_ROOT"),
+        stderr.contains("XIRANG_PACKAGE_ROOT"),
         "the message must name the variable: {stderr}"
     );
 }
@@ -94,6 +91,6 @@ fn help_prints_usage_and_succeeds() {
         .expect("run the Studio binary");
     assert!(output.status.success(), "{output:?}");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("nichlink-toolchain [PROJECT]"), "{stdout}");
-    assert!(stdout.contains("NICH_LINK_PACKAGE_ROOT"), "{stdout}");
+    assert!(stdout.contains("xirang-toolchain [PROJECT]"), "{stdout}");
+    assert!(stdout.contains("XIRANG_PACKAGE_ROOT"), "{stdout}");
 }

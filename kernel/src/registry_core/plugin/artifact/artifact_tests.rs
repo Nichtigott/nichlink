@@ -116,7 +116,7 @@ fn official_artifact() -> PluginArtifact {
                 name: "official.canvas",
                 crate_name: "official_canvas",
                 version: "1.0.0",
-                framework: FrameworkId::new("nichlink.test"),
+                framework: FrameworkId::new("xirang.test"),
                 source: PluginSource::Official,
                 mode: PluginMode::Extension,
                 checksum: CHECKSUM,
@@ -141,7 +141,7 @@ fn official_artifact() -> PluginArtifact {
 fn official_channel(artifact: &VerifiedPluginArtifact) -> Result<(), SlotValidationError> {
     validate_artifact(
         "canvas",
-        FrameworkId::new("nichlink.test"),
+        FrameworkId::new("xirang.test"),
         PluginMode::Extension,
         FlowContract::NONE,
         &[PluginChannel::Official],

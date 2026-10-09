@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::OnceLock;
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::discovery_node::{Node, relative_display};
 use super::entry::path_mentions_module;
@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn select_module_subtree_keeps_the_whole_subtree_once() {
         let root = std::env::temp_dir().join(format!(
-            "nichlink-subtree-{}-{}",
+            "xirang-subtree-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

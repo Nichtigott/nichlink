@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::HostCut;
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::crate_plan::{
     GENERATED_MARKER, PlannedCrate, relative_walk, respell_dependency_paths, toml_section,
@@ -109,9 +109,9 @@ fn facade_lib_rs(namespace: &str) -> String {
     format!(
         "//! {marker}: the crate that compiles the cross-crate half of a host's registration tree.\n\
          //! Do not edit — the declaration lives in the host's `{declaration}`.\n\
-         //! 由 NichLink 生成：编译宿主注册树跨 crate 那一半的 crate。请勿手工修改——声明住在宿主的\n\
+         //! 由 XiRang 生成：编译宿主注册树跨 crate 那一半的 crate。请勿手工修改——声明住在宿主的\n\
          //! `{declaration}` 里。\n\n\
-         pub const NICHLINK_NAMESPACE: &str = {namespace:?};\n\n\
+         pub const XIRANG_NAMESPACE: &str = {namespace:?};\n\n\
          include!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n",
         marker = GENERATED_MARKER,
         declaration = lexicon::ADD_CRATES_FILE,
@@ -132,12 +132,12 @@ fn facade_build_rs(host_root: &Path, namespace: &str, cuts: &[HostCut]) -> Strin
     let declaration = host_root.join(lexicon::ADD_CRATES_FILE);
     format!(
         "//! {marker}: build the cross-crate half out of the host's sources.\n\
-         //! 由 NichLink 生成：从宿主的源码构建跨 crate 那一半。\n\n\
+         //! 由 XiRang 生成：从宿主的源码构建跨 crate 那一半。\n\n\
          fn main() {{\n\
          {i}println!(\"cargo:rerun-if-changed={src}\");\n\
          {i}println!(\"cargo:rerun-if-changed={declaration}\");\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}nichlink_toolchain::build_method::{function}(\n\
+         {i}xirang_toolchain::build_method::{function}(\n\
          {i}    std::path::Path::new({root:?}),\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
@@ -145,7 +145,7 @@ fn facade_build_rs(host_root: &Path, namespace: &str, cuts: &[HostCut]) -> Strin
          {i}    true,\n\
          {cuts_argument}\
          {i})\n\
-         {i}.expect(\"nichlink\");\n\
+         {i}.expect(\"xirang\");\n\
          }}\n",
         i = "    ",
         src = src.display(),
@@ -191,7 +191,7 @@ fn facade_cargo_toml(
     let mut output = format!(
         "# {marker}: the dependencies are the host's, with their relative paths re-spelled, plus the\n\
          # crates it hands work to.\n\
-         # 由 NichLink 生成：依赖是宿主的（相对路径已重拼），再加上它把工作交出去的那些 crate。\n\
+         # 由 XiRang 生成：依赖是宿主的（相对路径已重拼），再加上它把工作交出去的那些 crate。\n\
          [package]\nname = {package:?}\nversion = {version:?}\nedition = {edition:?}\n\
          publish = false\n\n[dependencies]\n{dependencies}",
         marker = GENERATED_MARKER,

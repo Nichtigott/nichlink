@@ -1,10 +1,10 @@
-//! 运行 `cargo run -p nichlink-example-control-button --example graft_record`
+//! 运行 `cargo run -p xirang-example-control-button --example graft_record`
 //! 演示一个真实宿主如何把磁盘上的 graft 记录接进有效树：
-//! `apply_recorded_grafts` 读取临时包根下的 `.nichlink/external-grafts/`，
+//! `apply_recorded_grafts` 读取临时包根下的 `.xirang/external-grafts/`，
 //! 记录胜出时有效树携带记录的实现，而原树与构建捕获的静态计划都不动。
-//! Run `cargo run -p nichlink-example-control-button --example graft_record` to
+//! Run `cargo run -p xirang-example-control-button --example graft_record` to
 //! show how a real host wires on-disk graft records into its effective tree:
-//! `apply_recorded_grafts` reads `.nichlink/external-grafts/` under a throwaway
+//! `apply_recorded_grafts` reads `.xirang/external-grafts/` under a throwaway
 //! package root, and when a record wins the effective tree carries the record's
 //! implementation while neither the base tree nor the build-captured static plan
 //! moves.
@@ -16,12 +16,12 @@
 //! `ButtonFast`, and a **string** declaration yields to the record so the
 //! effective tree carries `SliderFast`. It also never points the loader at
 //! `env!("CARGO_MANIFEST_DIR")`: a record is runtime input and must not leak
-//! into the user's real `.nichlink/`.
+//! into the user's real `.xirang/`.
 //! 直白写法错在哪：出厂声明是**类型化**的（`cut(NODE_ID) graft(NODE_ID)`），而类型化
 //! 声明是宿主的最终裁决——覆盖它的记录会被报告为 `TypedDeclarationKept` 并忽略。因此
 //! 本示例证明三个情形：类型化计划保留 `ButtonFast`，**字符串**声明让位给记录使有效树
 //! 携带 `SliderFast`，而没有声明保住的记录被跳过并打印原因。它也绝不把加载器指向
-//! `env!("CARGO_MANIFEST_DIR")`：记录是运行期输入，不能泄漏进用户真实的 `.nichlink/`。
+//! `env!("CARGO_MANIFEST_DIR")`：记录是运行期输入，不能泄漏进用户真实的 `.xirang/`。
 //!
 //! The third case shows the failure that would otherwise be invisible: a record
 //! whose slot no declaration keeps alive is skipped, and the skip is printed to
@@ -43,9 +43,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink_toolchain::run_method::registry_core::lexicon;
-use nichlink_toolchain::run_method::registry_core::{Registry, StaticGraftCut};
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::run_method::registry_core::lexicon;
+use xirang_toolchain::run_method::registry_core::{Registry, StaticGraftCut};
+use xirang_toolchain::run_method::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 
@@ -58,7 +58,7 @@ impl TempRoot {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-graft-record-example-{}-{sequence}",
+            "xirang-graft-record-example-{}-{sequence}",
             std::process::id()
         ));
         std::fs::create_dir_all(&root).expect("create the throwaway package root");

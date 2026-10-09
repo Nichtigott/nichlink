@@ -105,19 +105,19 @@ Linking dynamic dispatch...
 ```
 The original fc hash matches the declared `da9c82b7282a0ace…` ✓ — proceed.
 
-fc's layout: the control-button host (same as fa/fb/g3) PLUS `.nichlink/adopted/entries` (the ledger).
+fc's layout: the control-button host (same as fa/fb/g3) PLUS `.xirang/adopted/entries` (the ledger).
 
 Now:
 1. rm -rf trees/fc; rsync; verify copy hash.
 2. init (append to logs/fc.txt).
-3. Premise self-check: cat `.nichlink/adopted/entries`; explore `adopted`/`conformance` verdicts.
+3. Premise self-check: cat `.xirang/adopted/entries`; explore `adopted`/`conformance` verdicts.
 
 Let me also mark the task in_progress first (rule: mark in_progress before completed; let me do it now).
 
 Then explore the tree: the question "已经采信了，现在再横向加一个" = "It's already adopted; now add another one horizontally." So: the ledger has an adopted entry (root/control/button) and I must add another one **horizontally** (i.e., a sibling — e.g. `root/control/slider`), keeping the ledger (the existing entry must stay) and writing down how existing entries were handled + evidence. The gate must be green.
 
 Let me look at the tree's ledger + what "adopted"/"conformance" are (probably toolchain APIs the host's tests use; maybe the tree has a test or an example using them). Let me explore:
-- `cat .nichlink/adopted/entries` (nonbridge)
+- `cat .xirang/adopted/entries` (nonbridge)
 - codegraph `files` for fc
 - Look for a test that reads the ledger (grep in my copy for "adopted"/"conformance" — allowed within my copy).
 
@@ -141,7 +141,7 @@ Hash matches ✓. Copying, re-indexing, and running the premise self-check:
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
 6	
 7	pub struct Button;
 8	
@@ -284,7 +284,7 @@ Let me run the verification.
 2	//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	pub struct Toggle;
 8	
@@ -325,22 +325,22 @@ Content of answers/fc.md:
 
 # fc —「已经采信了，现在再横向加一个。」（可改；交付后门必须绿、台账必须还在）
 
-① 题面/前提：宿主干净，`.nichlink/adopted/entries` 里有一条**已采信的**记录：`root/control/button | … | 12:32:28（UTC，队长口径）| src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在横向扩展**之前**记下的 ⇒ 本题要做横向扩展并保住它。
+① 题面/前提：宿主干净，`.xirang/adopted/entries` 里有一条**已采信的**记录：`root/control/button | … | 12:32:28（UTC，队长口径）| src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在横向扩展**之前**记下的 ⇒ 本题要做横向扩展并保住它。
 ② 做了什么：横向加一个同级对象 `Toggle`（与 Button/Slider 同形）——
    - `src/control/object/toggle/toggle.rs`：`Toggle` + `impl ControlHandle` + `control_object!{ kind: Toggle, exports: ["control.render"], parent: control::NODE_ID, handle_contracts: [ControlHandle], flow: … }`；
    - `src/lib.rs`：新增 `PUBLISHED_OBJECT_FACES`（在代码里拼出三个面的路径）——不拼就不发布（作用域从入口可达源码收窄、忽略 import/字符串/注释）；
    - `tests/registry.rs`：4 处**期望**随扩展更新（行表 3→4、`plan.faces().len()` 3→4、作用域 2→3 并加 toggle 行、把"父级规则不看 kind"的合成样例 `Toggle/"toggle"` 改名 `Dial/"dial"` 以免撞新面的槽位名）。
 ③ 台账（既有条目的处置 + 证据）——**这是本题的硬要求**：
-   - 处置：既有条目**一字未动**（`.nichlink/adopted/entries` 前后 sha256 `697a5380e448c1e5` 相同）、它指名的字节也**一字未动**（`button.rs` 前后 `e842be74cce534bf` 相同）⇒ 这条采信记录仍然描述它在描述的那些字节；我没有为 `Toggle` 造第二条记录（采信由桥/`nichlink-mcp` 写，手写一条我无法计算其指纹 = 造假证据）。若要给新兄弟采信，应由桥按自己的 conformance 读一次再写。
+   - 处置：既有条目**一字未动**（`.xirang/adopted/entries` 前后 sha256 `697a5380e448c1e5` 相同）、它指名的字节也**一字未动**（`button.rs` 前后 `e842be74cce534bf` 相同）⇒ 这条采信记录仍然描述它在描述的那些字节；我没有为 `Toggle` 造第二条记录（采信由桥/`xirang-mcp` 写，手写一条我无法计算其指纹 = 造假证据）。若要给新兄弟采信，应由桥按自己的 conformance 读一次再写。
    - 证据：上面两个 sha256 的前后对比 + 台账原文（`logs/fc.txt` 里 `cat` 的记录）；另外实测**该指纹不是文件字节的 sha256**（文件字节 = `e842be74…`，台账写 `22b54a4c…`）——所以"有效性"只能靠"桥自己读"，不能靠我重算，这一点如实写明。
 ④ 门与可见结果：`cargo test --offline` → rc=0（25+1+1 全 ok）；`--all-features` → 6 个 target 全 ok、0 failed；`--example tree` 由 3 行变 **4 行**，含 `root/control/toggle kind=Toggle source=control/object/toggle/toggle.rs`。
-⑤ 反证 + 命令序列：若只加文件不在入口拼路径，`tree` 仍是 3 行（没发布）；若我动了 `button.rs` 或重写台账，上面两个 sha256 会变（我也正是用它们当判据）。命令序列：`cat .nichlink/adopted/entries`+`sha256sum`（前/后）→ `cargo test`（前 rc=101？ hmm 改前是绿的）…
+⑤ 反证 + 命令序列：若只加文件不在入口拼路径，`tree` 仍是 3 行（没发布）；若我动了 `button.rs` 或重写台账，上面两个 sha256 会变（我也正是用它们当判据）。命令序列：`cat .xirang/adopted/entries`+`sha256sum`（前/后）→ `cargo test`（前 rc=101？ hmm 改前是绿的）…
 
-careful: fc's pre-change gate was green (TREES.json says 门绿且台账在) — I didn't run the "before" gate. Hmm! Should I? The premise self-check per the captain: "先确认 `.nichlink/adopted/entries` 存在且 adopted/conformance 读出来的 verdict 符合题面" ✓ (ledger exists, note matches). I also ran `--example tree` before (3 rows ✓). I did not run the gate before the change — but TREES.json's state says it's green and the captain restored it. For the record, the "after" gate is green; a "before" run would have been nice-to-have. Hmm — my log shows a pre-change `cargo test`? No: my fc nonbridge calls so far: cat ledger, tree before, cargo test (after patch — failed compile), cargo test (green), all-features, tree after. So no pre-change gate run. That's fine but let me note the premise check was: ledger present + tree example 3 rows; the gate's pre-state per the registry is green (and my post-change run is green).
+careful: fc's pre-change gate was green (TREES.json says 门绿且台账在) — I didn't run the "before" gate. Hmm! Should I? The premise self-check per the captain: "先确认 `.xirang/adopted/entries` 存在且 adopted/conformance 读出来的 verdict 符合题面" ✓ (ledger exists, note matches). I also ran `--example tree` before (3 rows ✓). I did not run the gate before the change — but TREES.json's state says it's green and the captain restored it. For the record, the "after" gate is green; a "before" run would have been nice-to-have. Hmm — my log shows a pre-change `cargo test`? No: my fc nonbridge calls so far: cat ledger, tree before, cargo test (after patch — failed compile), cargo test (green), all-features, tree after. So no pre-change gate run. That's fine but let me note the premise check was: ledger present + tree example 3 rows; the gate's pre-state per the registry is green (and my post-change run is green).
 
 Hmm, I could still run a "before" check by... no, the tree is modified now. I could verify against the pristine original? Not without copying again (that would be a re-copy; not needed). I'll note honestly: "改前我没有单独再跑一次门（登记态说它是绿的；我的改前可见检查是 tree 的 3 行 + 台账原文 + 两个 sha256），改后两面都绿".
 
-Hmm, actually, since t3's step ③ says "题目态自检：fc 的题面要求'台账必须还在 + 桥写的真实条目生效' —— 先确认 .nichlink/adopted/entries 存在且 adopted/conformance 读出来的 verdict 符合题面" — my check ✓ (ledger exists, well-formed, note matches the题面). The gate's "before" state isn't demanded. OK.
+Hmm, actually, since t3's step ③ says "题目态自检：fc 的题面要求'台账必须还在 + 桥写的真实条目生效' —— 先确认 .xirang/adopted/entries 存在且 adopted/conformance 读出来的 verdict 符合题面" — my check ✓ (ledger exists, well-formed, note matches the题面). The gate's "before" state isn't demanded. OK.
 
 Let me now compute fc's counts and write the answer.
 
@@ -390,7 +390,7 @@ Project Structure (14 files):
 
 ### 该题的**非仪器**调用（臂自己记的，日志里带 `=== CMD(nonbridge)`）
 
-**非桥 1**：`cat trees/fc/.nichlink/adopted/entries`
+**非桥 1**：`cat trees/fc/.xirang/adopted/entries`
 ```
 root/control/button|the button renders its label and reports its offset in the family coordinate system|the shipped shape pins in tests/ plus a manual render at 2 scales|nich|12:32:28|src/control/object/button/button.rs|22b54a4cc8245cdc6ae5f7fa10b7c1dfaf647416c4881396cc30177179fcf9f6|agreed before the horizontal extension
 # prints root/control/button | 12:32:28 | src/control/object/button/button.rs=22b54a4cc8245cdc6ae5f7fa10b7c1dfaf647416c4881396cc30177179fcf9f6
@@ -407,7 +407,7 @@ root/control/slider  kind=Slider  source=control/object/slider/slider.rs
 
 **非桥 3**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fc cargo test --offline > /tmp/fc_after.out 2>&1; rc=$?; cat /tmp/fc_after.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc)
 error[E0433]: cannot find `toggle` in `object`
   --> src/lib.rs:70:29
    |
@@ -415,15 +415,15 @@ error[E0433]: cannot find `toggle` in `object`
    |                             ^^^^^^ could not find `toggle` in `object`
 
 For more information about this error, try `rustc --explain E0433`.
-error: could not compile `nichlink-example-control-button` (lib) due to 1 previous error
+error: could not compile `xirang-example-control-button` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
-error: could not compile `nichlink-example-control-button` (lib test) due to 1 previous error
+error: could not compile `xirang-example-control-button` (lib test) due to 1 previous error
 === NONBRIDGE-BYTES: 623
 ```
 
 **非桥 4**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fc cargo test --offline > /tmp/fc_after.out 2>&1; rc=$?; cat /tmp/fc_after.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.84s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fc/debug/deps/control_button-ae8520d232bed415)
 
@@ -444,7 +444,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 **非桥 5**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fc cargo test --offline --all-features > /tmp/fc_all.out 2>&1; rc=$?; cat /tmp/fc_all.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.91s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fc/debug/deps/control_button-ae8520d232bed415)
 
@@ -532,7 +532,7 @@ Let me check the answers' line counts and required lines.
 
 **调用** `bash`（step 3）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; echo \"=== ledger fingerprint vs sha256 of the named file ===\"; sha256sum trees/fc/src/control/object/button/button.rs; echo \"ledger says : 22b54a4cc8245cdc6ae5f7fa10b7c1dfaf647416c4881396cc30177179fcf9f6\"; echo \"=== ledger file sha256 (baseline) ===\"; sha256sum trees/fc/.nichlink/adopted/entries; echo \"=== .nichlink references in the tree ===\"; grep -rn \"nichlink\\b\\|\\.nichlink\\|ledger\\|entries\" trees/fc --include='*.rs' --include='*.toml' | grep -v '^trees/fc/target' | head -15; echo \"=== fc vs fa (current) registry.rs pins ===\"; grep -n 'root/control\\|faces().len()\\|selected.len()' trees/fc/tests/registry.rs | head -12; echo \"=== fc Cargo.toml ===\"; sed -n '1,30p' trees/fc/Cargo.toml", "description": "fc: fingerprint check and pinned expectations"}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; echo \"=== ledger fingerprint vs sha256 of the named file ===\"; sha256sum trees/fc/src/control/object/button/button.rs; echo \"ledger says : 22b54a4cc8245cdc6ae5f7fa10b7c1dfaf647416c4881396cc30177179fcf9f6\"; echo \"=== ledger file sha256 (baseline) ===\"; sha256sum trees/fc/.xirang/adopted/entries; echo \"=== .xirang references in the tree ===\"; grep -rn \"xirang\\b\\|\\.xirang\\|ledger\\|entries\" trees/fc --include='*.rs' --include='*.toml' | grep -v '^trees/fc/target' | head -15; echo \"=== fc vs fa (current) registry.rs pins ===\"; grep -n 'root/control\\|faces().len()\\|selected.len()' trees/fc/tests/registry.rs | head -12; echo \"=== fc Cargo.toml ===\"; sed -n '1,30p' trees/fc/Cargo.toml", "description": "fc: fingerprint check and pinned expectations"}
 ```
 
 **结果**：
@@ -541,23 +541,23 @@ Let me check the answers' line counts and required lines.
 e842be74cce534bfa996f9cfedb37c7d2c65a394b3d793a626315ab8cd291d77  trees/fc/src/control/object/button/button.rs
 ledger says : 22b54a4cc8245cdc6ae5f7fa10b7c1dfaf647416c4881396cc30177179fcf9f6
 === ledger file sha256 (baseline) ===
-697a5380e448c1e52baa3d0a60423b0c8a1a7556a7231490d567b6b9223e9052  trees/fc/.nichlink/adopted/entries
-=== .nichlink references in the tree ===
-trees/fc/src/lib.rs:27:pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
-trees/fc/Cargo.toml:2:name = "nichlink-example-control-button"
-trees/fc/Cargo.toml:14:nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", version = "0.2.0", features = ["run", "authoring"] }
-trees/fc/Cargo.toml:17:nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }
-trees/fc/Cargo.toml:20:nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["build"] }
-trees/fc/Cargo.toml:27:nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["run", "authoring"] }
-trees/fc/tests/ide_mirror.rs:47:    let target = std::env::temp_dir().join("nichlink-ide-mirror-target");
-trees/fc/tests/ide_mirror.rs:51:    check_under_rust_analyzer("nichlink-example-control-button", &target);
-trees/fc/tests/ide_mirror.rs:52:    check_under_rust_analyzer("nichlink-example-control-button-graft", &target);
-trees/fc/tests/registry.rs:211:    assert_eq!(face.namespace, "nichlink-example-control-button-graft");
-trees/fc/tests/registry.rs:665:    // Host source is untouched: the selector lives in `.nichlink`, not in `src/`.
-trees/fc/tests/registry.rs:666:    // 宿主源码未被改动：选择器只存在于 `.nichlink`，不在 `src/`。
-trees/fc/tests/registry.rs:675:    // then empty. The whole `.nichlink` tree also holds an adoption ledger, which this test never
+697a5380e448c1e52baa3d0a60423b0c8a1a7556a7231490d567b6b9223e9052  trees/fc/.xirang/adopted/entries
+=== .xirang references in the tree ===
+trees/fc/src/lib.rs:27:pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
+trees/fc/Cargo.toml:2:name = "xirang-example-control-button"
+trees/fc/Cargo.toml:14:xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", version = "0.2.0", features = ["run", "authoring"] }
+trees/fc/Cargo.toml:17:xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }
+trees/fc/Cargo.toml:20:xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["build"] }
+trees/fc/Cargo.toml:27:xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["run", "authoring"] }
+trees/fc/tests/ide_mirror.rs:47:    let target = std::env::temp_dir().join("xirang-ide-mirror-target");
+trees/fc/tests/ide_mirror.rs:51:    check_under_rust_analyzer("xirang-example-control-button", &target);
+trees/fc/tests/ide_mirror.rs:52:    check_under_rust_analyzer("xirang-example-control-button-graft", &target);
+trees/fc/tests/registry.rs:211:    assert_eq!(face.namespace, "xirang-example-control-button-graft");
+trees/fc/tests/registry.rs:665:    // Host source is untouched: the selector lives in `.xirang`, not in `src/`.
+trees/fc/tests/registry.rs:666:    // 宿主源码未被改动：选择器只存在于 `.xirang`，不在 `src/`。
+trees/fc/tests/registry.rs:675:    // then empty. The whole `.xirang` tree also holds an adoption ledger, which this test never
 trees/fc/tests/registry.rs:677:    // had to work around it by running the gate first and writing the ledger afterwards.
-trees/fc/tests/registry.rs:678:    // 只删本测试创建的那份计划——而它所在的目录只在因此为空时才收。整棵 `.nichlink` 里还住着采信台账，
+trees/fc/tests/registry.rs:678:    // 只删本测试创建的那份计划——而它所在的目录只在因此为空时才收。整棵 `.xirang` 里还住着采信台账，
 === fc vs fa (current) registry.rs pins ===
 30:    GraftPlan::command(FRAMEWORK, "cut root/control/button graft button_fast")
 57:            "root/control kind=Control source=control/control.rs",
@@ -569,7 +569,7 @@ trees/fc/tests/registry.rs:678:    // 只删本测试创建的那份计划——
 
 **该步推理**（逐字）：
 ```
-The ledger `.nichlink/adopted/entries` in fc:
+The ledger `.xirang/adopted/entries` in fc:
 
 Line 1 (data row): `root/control/button|the button renders its label and reports its offset in the family coordinate system|the shipped shape pins in tests/ plus a manual render at 2 scales|nich|12:32:28|src/control/object/button/button.rs|22b54a4cc8245cdc6ae5f7fa10b7c1dfaf647416c4881396cc30177179fcf9f6|agreed before the horizontal extension`
 
@@ -579,11 +579,11 @@ Line 2 (comment): `# prints root/control/button | 12:32:28 | src/control/object/
 
 Interesting: "agreed before the horizontal extension" — the note tells us the ledger was recorded before the horizontal extension (i.e., the current entry is the baseline and I'm about to extend horizontally).
 
-Grep found no "adopted"/"conformance" vocabulary in the tree's .rs files. Hmm, the captain said: "先确认 `.nichlink/adopted/entries` 存在且 `adopted`/`conformance` 读出来的 verdict 符合题面". Maybe "adopted"/"conformance" are subcommands/queries of the frozen codegraph? No... In round 7/8, the arm's tool (nichlink-mcp) had tools for reading ledgers. Hmm, maybe the *toolchain* has an API for reading adopted entries (`call_evidence`/`adoption` module), and the host tree has an example or test. Let me search the tree for what reads `.nichlink/adopted`:
+Grep found no "adopted"/"conformance" vocabulary in the tree's .rs files. Hmm, the captain said: "先确认 `.xirang/adopted/entries` 存在且 `adopted`/`conformance` 读出来的 verdict 符合题面". Maybe "adopted"/"conformance" are subcommands/queries of the frozen codegraph? No... In round 7/8, the arm's tool (xirang-mcp) had tools for reading ledgers. Hmm, maybe the *toolchain* has an API for reading adopted entries (`call_evidence`/`adoption` module), and the host tree has an example or test. Let me search the tree for what reads `.xirang/adopted`:
 
-- grep for "nichlink/adopted" or "adopted" found nothing in .rs files. Hmm, so nothing in the tree reads the ledger. Then the "verdict" must be read by the *toolchain's* API (e.g. `nichlink_toolchain::call_evidence::...`).
+- grep for "xirang/adopted" or "adopted" found nothing in .rs files. Hmm, so nothing in the tree reads the ledger. Then the "verdict" must be read by the *toolchain's* API (e.g. `xirang_toolchain::call_evidence::...`).
 
-Let me check the toolchain for the adoption/ledger API: `toolchain/src/call_evidence/...`. The captain mentions "`adopted`/`conformance` 读出来的 verdict" — maybe there are CLI subcommands in the `nichlink` binary (toolchain/src/cli): e.g. `nichlink adopted` / `nichlink conformance`? Hmm! The workspace has a `nichlink` binary. That's a *workspace* tool, not part of the frozen codegraph arm...
+Let me check the toolchain for the adoption/ledger API: `toolchain/src/call_evidence/...`. The captain mentions "`adopted`/`conformance` 读出来的 verdict" — maybe there are CLI subcommands in the `xirang` binary (toolchain/src/cli): e.g. `xirang adopted` / `xirang conformance`? Hmm! The workspace has a `xirang` binary. That's a *workspace* tool, not part of the frozen codegraph arm...
 
 Hmm, but the question's premise: "已经采信了，现在再横向加一个。" (Already adopted; now add another one horizontally.) The deliverable: keep the ledger (it must still be there), write down how I handled the existing entries + evidence, gate green. So the *work* = extend the tree horizontally (add a sibling object — like fa but with the ledger in play), and record what happens to the existing adopted entry (does it need updating? is it still valid?).
 
@@ -593,7 +593,7 @@ Hmm — the ledger's fingerprint `22b54a4c…` — is it the sha256 of the file 
 
 Hmm, but wait: the ledger's time field is `12:32:28` and the note says "agreed before the horizontal extension". Also, "the shipped shape pins in tests/ plus a manual render at 2 scales" is the evidence field.
 
-The premise self-check the captain wants: "确认 `.nichlink/adopted/entries` 存在且 `adopted`/`conformance` 读出来的 verdict 符合题面". Since nothing in the tree reads it, maybe the *frozen codegraph* CLI has... no. Hmm, maybe the intended reading is: the toolchain's `call_evidence` module has API to load adopted entries and check conformance, and the *round9 arm's* tool (nichlink-mcp) exposed those as queries ("adopted"/"conformance" tools!). Yes — that's it: the mcp module (`toolchain/src/mcp`) has "source and registry queries" per AGENTS.md; maybe it exposes `adopted`/`conformance`. The captain (round9 arm) used those tools. For my codegraph arm, the equivalent = read the ledger file + verify the fingerprint myself.
+The premise self-check the captain wants: "确认 `.xirang/adopted/entries` 存在且 `adopted`/`conformance` 读出来的 verdict 符合题面". Since nothing in the tree reads it, maybe the *frozen codegraph* CLI has... no. Hmm, maybe the intended reading is: the toolchain's `call_evidence` module has API to load adopted entries and check conformance, and the *round9 arm's* tool (xirang-mcp) exposed those as queries ("adopted"/"conformance" tools!). Yes — that's it: the mcp module (`toolchain/src/mcp`) has "source and registry queries" per AGENTS.md; maybe it exposes `adopted`/`conformance`. The captain (round9 arm) used those tools. For my codegraph arm, the equivalent = read the ledger file + verify the fingerprint myself.
 
 So my premise self-check = ledger exists ✓ + its entry is consistent (fingerprint matches the named file's bytes; the note says pre-extension) ✓.
 
@@ -603,7 +603,7 @@ Also, what is the *fingerprint* exactly? For h2 the ledger fingerprint didn't ma
 
 Then the work:
 - "再横向加一个" (add another one horizontally): add a sibling face — e.g. `Toggle` under `root/control` (like fa's task but now with the ledger).
-- Keep the ledger: don't touch/delete `.nichlink/adopted/entries`; the existing button entry must remain valid ⇒ don't modify button.rs (so its fingerprint stays valid) ✓.
+- Keep the ledger: don't touch/delete `.xirang/adopted/entries`; the existing button entry must remain valid ⇒ don't modify button.rs (so its fingerprint stays valid) ✓.
 - Write down how existing entries are handled + evidence: e.g. add a NEW entry for the new face? Hmm — "写清对既有条目的处置与证据" (write clearly the disposition of existing entries and the evidence). So: the existing entry (button) stays untouched and remains valid (fingerprint still matches); and I should record evidence (fingerprint recomputation).
 
 Should I add a new ledger entry for the new face? Hmm. "已经采信了，现在再横向加一个" — the adoption already happened for button; now add a sibling (another object) horizontally. The deliverable per BRIEF §4: "交付：做了什么、依据、命令序列、总调用次数；fa/fb/fd/fe 交付后门必须绿" and §3's extra for fc: "台账必须还在，并写清对既有条目的处置与证据".
@@ -625,7 +625,7 @@ Premise check: the ledger and its fingerprint:
 
 **调用** `bash`（step 5）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; D=/home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh fc bash -c \"cd $D/trees/fc && CARGO_TARGET_DIR=$D/cargo-target-fc cargo run --offline -q --example tree > /tmp/fc_tree_before.txt 2>&1; rc=\\$?; cat /tmp/fc_tree_before.txt; exit \\$rc\" 2>&1 | tail -5; echo \"=== baselines ===\"; echo \"tree sha  : $(sha256sum /tmp/fc_tree_before.txt | cut -c1-16)\"; echo \"ledger sha: $(sha256sum trees/fc/.nichlink/adopted/entries | cut -c1-16)\"; echo \"button sha: $(sha256sum trees/fc/src/control/object/button/button.rs | cut -c1-16)\"; echo \"ledger content:\"; cat trees/fc/.nichlink/adopted/entries", "description": "fc: capture tree/ledger/button baselines", "timeoutMs": 600000}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; D=/home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh fc bash -c \"cd $D/trees/fc && CARGO_TARGET_DIR=$D/cargo-target-fc cargo run --offline -q --example tree > /tmp/fc_tree_before.txt 2>&1; rc=\\$?; cat /tmp/fc_tree_before.txt; exit \\$rc\" 2>&1 | tail -5; echo \"=== baselines ===\"; echo \"tree sha  : $(sha256sum /tmp/fc_tree_before.txt | cut -c1-16)\"; echo \"ledger sha: $(sha256sum trees/fc/.xirang/adopted/entries | cut -c1-16)\"; echo \"button sha: $(sha256sum trees/fc/src/control/object/button/button.rs | cut -c1-16)\"; echo \"ledger content:\"; cat trees/fc/.xirang/adopted/entries", "description": "fc: capture tree/ledger/button baselines", "timeoutMs": 600000}
 ```
 
 **结果**：
@@ -647,7 +647,7 @@ root/control/button|the button renders its label and reports its offset in the f
 **该步推理**（逐字）：
 ```
 Key facts:
-- fc's tree = fa's tree (pre-my-edits) + `.nichlink/adopted/entries` (and fa has `.nichlink/external-grafts` from my `graft_record` example runs; fc has none yet). My fa edits are the only other differences ✓. So fc's button.rs == the original (clean) button.rs ✓ (41 lines, with runtime_checks).
+- fc's tree = fa's tree (pre-my-edits) + `.xirang/adopted/entries` (and fa has `.xirang/external-grafts` from my `graft_record` example runs; fc has none yet). My fa edits are the only other differences ✓. So fc's button.rs == the original (clean) button.rs ✓ (41 lines, with runtime_checks).
 - None of my fingerprint hypotheses match `22b54a4c…`. So the ledger's fingerprint scheme isn't derivable from the tree (it's the bridge's own scheme — probably a hash over the conformance/registry snapshot). I'll report that honestly.
 
 Now, the work for fc per the question "已经采信了，现在再横向加一个":
@@ -657,7 +657,7 @@ I'll mirror my fa work (Toggle) — but hmm, should I choose a different name th
 
 Hmm, wait. Let me think about whether the *horizontal extension* should perhaps be to the ledger as well. Let me weigh the evidence once more:
 
-The BRIEF §3 (fc-specific): "`fc` 另加：**台账必须还在**，并写清对既有条目的处置与证据". "对既有条目的处置" = "the disposition of the existing entries" — if the task were only "add a sibling face", why would the existing ledger entry's disposition be at issue? Because in the *round-9 arm's tool* (nichlink-mcp with an authoring write path), the arm might rewrite the ledger (the mcp has a "previewed authoring write path"! per AGENTS.md: "mcp (AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path)"). So the risk: the arm's write path could clobber the ledger. The check: the ledger must still be there + say what happened to existing entries.
+The BRIEF §3 (fc-specific): "`fc` 另加：**台账必须还在**，并写清对既有条目的处置与证据". "对既有条目的处置" = "the disposition of the existing entries" — if the task were only "add a sibling face", why would the existing ledger entry's disposition be at issue? Because in the *round-9 arm's tool* (xirang-mcp with an authoring write path), the arm might rewrite the ledger (the mcp has a "previewed authoring write path"! per AGENTS.md: "mcp (AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path)"). So the risk: the arm's write path could clobber the ledger. The check: the ledger must still be there + say what happened to existing entries.
 
 So fc's work = do the authoring work (add a sibling face) *through* whatever path, keeping the ledger. For my codegraph arm (read-only tool for source), the work is manual editing like fa.
 
@@ -714,7 +714,7 @@ fc = the same clean host **plus** an adoption ledger. Baseline + work (horizonta
 
 **调用** `bash`（step 6）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; cat > trees/fc/src/control/object/toggle/toggle.rs <<'EOF'\n//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse nichlink_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlHandle for Toggle {\n    fn paint(&self) -> ControlFrame {\n        ControlFrame\n    }\n}\n\ncrate::control_object! {\n    kind: Toggle,\n    exports: [\"control.render\"],\n    parent: crate::control::NODE_ID,\n    handle_contracts: [crate::control::ControlHandle],\n    flow: FlowContract::new(\n        ContractId::new(\"control.render.v1\"),\n        1,\n        \"ControlInput\",\n        \"ControlFrame\",\n    ),\n}\nEOF\npython3 - <<'PY'\n# entry: spell the new face's path in code so the build-time scope publishes it\np='trees/fc/src/lib.rs'\ns=open(p,encoding='utf-8').read()\nanchor='/// 按框架和包命名空间装配这个示例的注册机。'\nassert anchor in s\nblock='''/// 本应用发布的对象面：入口**在代码里拼出**它们的路径。\n/// The object faces this application ships: the entry **spells** their paths in code.\n///\n/// 构建期作用域从入口的可达源码收窄，没被提到的注册面不会被这个应用发布；而那次扫描**忽略\n/// import、字符串与注释**，只把代码里拼出的路径当成一次引用，因此这里写成表达式而不是 `use`。\n/// 它同时是编译器检查的引用：面若没被发布，这一行会以未解析路径失败，而不是静默消失。\n/// The build-time scope narrows from the entry's reachable source, so a face nobody\n/// mentions is not shipped; that scan **ignores imports, strings and comments** and\n/// counts only paths spelled in code, so these are expressions rather than `use`.\n/// That also makes each line a compiler-checked reference: a face that is not shipped\n/// fails here as an unresolved path instead of disappearing silently.\npub const PUBLISHED_OBJECT_FACES: [NodeId; 3] = [\n    crate::control::object::button::NODE_ID,\n    crate::control::object::slider::NODE_ID,\n    crate::control::object::toggle::NODE_ID,\n];\n\n'''\ns=s.replace(anchor, block+anchor, 1)\n
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; cat > trees/fc/src/control/object/toggle/toggle.rs <<'EOF'\n//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse xirang_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlHandle for Toggle {\n    fn paint(&self) -> ControlFrame {\n        ControlFrame\n    }\n}\n\ncrate::control_object! {\n    kind: Toggle,\n    exports: [\"control.render\"],\n    parent: crate::control::NODE_ID,\n    handle_contracts: [crate::control::ControlHandle],\n    flow: FlowContract::new(\n        ContractId::new(\"control.render.v1\"),\n        1,\n        \"ControlInput\",\n        \"ControlFrame\",\n    ),\n}\nEOF\npython3 - <<'PY'\n# entry: spell the new face's path in code so the build-time scope publishes it\np='trees/fc/src/lib.rs'\ns=open(p,encoding='utf-8').read()\nanchor='/// 按框架和包命名空间装配这个示例的注册机。'\nassert anchor in s\nblock='''/// 本应用发布的对象面：入口**在代码里拼出**它们的路径。\n/// The object faces this application ships: the entry **spells** their paths in code.\n///\n/// 构建期作用域从入口的可达源码收窄，没被提到的注册面不会被这个应用发布；而那次扫描**忽略\n/// import、字符串与注释**，只把代码里拼出的路径当成一次引用，因此这里写成表达式而不是 `use`。\n/// 它同时是编译器检查的引用：面若没被发布，这一行会以未解析路径失败，而不是静默消失。\n/// The build-time scope narrows from the entry's reachable source, so a face nobody\n/// mentions is not shipped; that scan **ignores imports, strings and comments** and\n/// counts only paths spelled in code, so these are expressions rather than `use`.\n/// That also makes each line a compiler-checked reference: a face that is not shipped\n/// fails here as an unresolved path instead of disappearing silently.\npub const PUBLISHED_OBJECT_FACES: [NodeId; 3] = [\n    crate::control::object::button::NODE_ID,\n    crate::control::object::slider::NODE_ID,\n    crate::control::object::toggle::NODE_ID,\n];\n\n'''\ns=s.replace(anchor, block+anchor, 1)\n
 …[参数：此处截断，全文 4907 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -723,8 +723,8 @@ fc = the same clean host **plus** an adoption ledger. Baseline + work (horizonta
 fc patched: new face + entry publication + 4 expectations
 fc rc=101
 error[E0433]: cannot find `toggle` in `object`
-error: could not compile `nichlink-example-control-button` (lib) due to 1 previous error
-error: could not compile `nichlink-example-control-button` (lib test) due to 1 previous error
+error: could not compile `xirang-example-control-button` (lib) due to 1 previous error
+error: could not compile `xirang-example-control-button` (lib test) due to 1 previous error
 [stderr]
 bash: line 1: trees/fc/src/control/object/toggle/toggle.rs: No such file or directory
 
@@ -755,7 +755,7 @@ Let me write the files.
 
 **调用** `bash`（step 7）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; mkdir -p trees/fc/src/control/object/toggle; cat > trees/fc/src/control/object/toggle/toggle.rs <<'EOF'\n//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse nichlink_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlHandle for Toggle {\n    fn paint(&self) -> ControlFrame {\n        ControlFrame\n    }\n}\n\ncrate::control_object! {\n    kind: Toggle,\n    exports: [\"control.render\"],\n    parent: crate::control::NODE_ID,\n    handle_contracts: [crate::control::ControlHandle],\n    flow: FlowContract::new(\n        ContractId::new(\"control.render.v1\"),\n        1,\n        \"ControlInput\",\n        \"ControlFrame\",\n    ),\n}\nEOF\nls -l trees/fc/src/control/object/toggle/toggle.rs; D=/home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh fc bash -c \"cd $D/trees/fc && CARGO_TARGET_DIR=$D/cargo-target-fc cargo test --offline > /tmp/fc_after.out 2>&1; rc=\\$?; cat /tmp/fc_after.out; exit \\$rc\" >/dev/null; echo \"fc rc=$(grep -a '^=== EXIT' logs/fc.txt | tail -1 | awk '{print $3}')\"; grep -a -E 'test result:|FAILED|^error' /tmp/fc_after.out | head -10", "description": "fc: create face file and re-run gate", "timeoutMs": 900000}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; mkdir -p trees/fc/src/control/object/toggle; cat > trees/fc/src/control/object/toggle/toggle.rs <<'EOF'\n//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse xirang_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlHandle for Toggle {\n    fn paint(&self) -> ControlFrame {\n        ControlFrame\n    }\n}\n\ncrate::control_object! {\n    kind: Toggle,\n    exports: [\"control.render\"],\n    parent: crate::control::NODE_ID,\n    handle_contracts: [crate::control::ControlHandle],\n    flow: FlowContract::new(\n        ContractId::new(\"control.render.v1\"),\n        1,\n        \"ControlInput\",\n        \"ControlFrame\",\n    ),\n}\nEOF\nls -l trees/fc/src/control/object/toggle/toggle.rs; D=/home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh fc bash -c \"cd $D/trees/fc && CARGO_TARGET_DIR=$D/cargo-target-fc cargo test --offline > /tmp/fc_after.out 2>&1; rc=\\$?; cat /tmp/fc_after.out; exit \\$rc\" >/dev/null; echo \"fc rc=$(grep -a '^=== EXIT' logs/fc.txt | tail -1 | awk '{print $3}')\"; grep -a -E 'test result:|FAILED|^error' /tmp/fc_after.out | head -10", "description": "fc: create face file and re-run gate", "timeoutMs": 900000}
 ```
 
 **结果**：
@@ -867,17 +867,17 @@ Let me fix both with python.
 
 # fc —「已经采信了，现在再横向加一个。」（可改；交付后门必须绿、**台账必须还在**）
 
-① 题面/前提：`.nichlink/adopted/entries` 里有一条**已采信**的记录：`root/control/button | … | nich | 12:32:28 | src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在**横向扩展之前**记的 ⇒ 本题要做横向扩展、并保住这条记录（时刻字段按队长口径是 **UTC**）。
+① 题面/前提：`.xirang/adopted/entries` 里有一条**已采信**的记录：`root/control/button | … | nich | 12:32:28 | src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在**横向扩展之前**记的 ⇒ 本题要做横向扩展、并保住这条记录（时刻字段按队长口径是 **UTC**）。
 ② 做了什么（横向加一个同级对象 `Toggle`，与 Button/Slider 同形）：
    - 新文件 `src/control/object/toggle/toggle.rs`：`Toggle`＋`impl ControlHandle for Toggle`＋`crate::control_object!{ kind: Toggle, exports: ["control.render"], parent: crate::control::NODE_ID, handle_contracts: [crate::control::ControlHandle], flow: FlowContract::new(ContractId::new("control.render.v1"), 1, "ControlInput", "ControlFrame") }`（照 `slider.rs` 逐项写）。
    - `src/lib.rs`：新增 `pub const PUBLISHED_OBJECT_FACES: [NodeId; 3]`，**在代码里拼出**三个对象面的路径——构建期作用域从入口可达源码收窄、扫描忽略 import/字符串/注释，不拼就不发布。
    - `tests/registry.rs`：4 处**期望**随扩展更新（树行表 3→4、`plan.faces().len()` 3→4、构建期作用域 2→3 并加 toggle 行、把"父级规则不看 kind"那条测试里的合成样例 `Toggle/"toggle"` 改名 `Dial/"dial"`，否则撞新面的槽位名）。
 ③ **台账：既有条目的处置 + 证据**（本题硬要求）
-   - 处置：既有条目**一字未动**，它指名的字节也**一字未动**——`.nichlink/adopted/entries` 前后 sha256 都是 `697a5380e448c1e5`，`src/control/object/button/button.rs` 前后都是 `e842be74cce534bf` ⇒ 那条采信仍然描述它在描述的那些字节；横向扩展没有碰到它。
+   - 处置：既有条目**一字未动**，它指名的字节也**一字未动**——`.xirang/adopted/entries` 前后 sha256 都是 `697a5380e448c1e5`，`src/control/object/button/button.rs` 前后都是 `e842be74cce534bf` ⇒ 那条采信仍然描述它在描述的那些字节；横向扩展没有碰到它。
    - **我没有**给 `Toggle` 手写第二条记录：**理由不是"算不出来"**——内核有公开的 `adoption_fingerprint`（`kernel/src/registry_core/adoption/adoption.rs:200`；写入路径的调用点 `toolchain/src/mcp/src/adopted.rs:329`），输入＝相对路径＋文件文本，拼法 `路径 ++ 0x00 ++ 内容字节长度 ++ 0x00 ++ 内容 ++ 0x00` 再 sha256；我按这个拼法复算 `src/control/object/button/button.rs` 得 `22b54a4c…` == 台账值 ✓（也就解释了它为什么 ≠ 文件字节的 sha256 `e842be74…`）。理由是**流程性**的：采信要由桥按它的 conformance 流程写，"谁在什么证据下采信的"这条链不能靠人手写绕过。给不给新兄弟采信，由桥按同一流程决定。
    - 证据：上面两个 sha256 的前后对比 + 台账原文（`cat` 记录在 `logs/fc.txt`）；"指纹方案不可由树内重算"这一条也如实写明。
 ④ 门与可见结果：`cargo test --offline` → **6 个 target 全 ok、0 failed，rc=0**（registry 25 条含更新后的 4 处期望）；`--all-features` → **6 ok / 0 failed，rc=0**；`cargo run --example tree` 由 3 行变 **4 行**，新增 `root/control/toggle  kind=Toggle  source=control/object/toggle/toggle.rs`。
-⑤ 反证与命令序列：若只加文件而不在入口拼路径，`tree` 仍是 3 行（未声明的面不发布）＝没加成；若我在扩展时碰到 `button.rs` 或重写台账，上面两个 sha256 会变——我也正是用它们当"既有条目未被搅动"的判据。序列：`cat .nichlink/adopted/entries` + `sha256sum`（扩展前）→ 写新面/入口/期望 → `cargo test --offline`（先因新面文件缺目录编译失败一次，补齐后 rc=0）→ `--all-features`（rc=0）→ `--example tree`（3 行→4 行）→ 台账与 `button.rs` 的 sha256 复核（不变）。改前我没有另跑门（登记态说它绿；改前的可见检查是 tree 3 行 + 台账原文 + 两个 sha256）。
+⑤ 反证与命令序列：若只加文件而不在入口拼路径，`tree` 仍是 3 行（未声明的面不发布）＝没加成；若我在扩展时碰到 `button.rs` 或重写台账，上面两个 sha256 会变——我也正是用它们当"既有条目未被搅动"的判据。序列：`cat .xirang/adopted/entries` + `sha256sum`（扩展前）→ 写新面/入口/期望 → `cargo test --offline`（先因新面文件缺目录编译失败一次，补齐后 rc=0）→ `--all-features`（rc=0）→ `--example tree`（3 行→4 行）→ 台账与 `button.rs` 的 sha256 复核（不变）。改前我没有另跑门（登记态说它绿；改前的可见检查是 tree 3 行 + 台账原文 + 两个 sha256）。
 
 总调用：成功 7 / 被拒 0（codegraph；含 2 次 init ⇒ 5 步）
 调用清单：codegraph `init .`、`files`、`node src/control/object/button/button.rs`、`node src/control/object/toggle/toggle.rs`（改后）、`sync .`（新文件入索引）；非 codegraph：`cat` 台账、`sha256sum` ×3、`cargo test` ×3、`cargo run --example tree` ×2、`diff`（对照 fa 的既有知识）。

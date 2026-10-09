@@ -1,5 +1,5 @@
-//! Small rustc/MIR bridge for NichLink's debug model.
-//! NichLink 调试模型使用的轻量 rustc/MIR 桥接层。
+//! Small rustc/MIR bridge for XiRang's debug model.
+//! XiRang 调试模型使用的轻量 rustc/MIR 桥接层。
 //!
 //! Static parsing and evidence merging live in the kernel `mir` module;
 //! this file keeps the runtime-coupled merge entry point and the petgraph

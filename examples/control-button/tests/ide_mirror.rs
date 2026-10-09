@@ -44,10 +44,10 @@ fn check_under_rust_analyzer(package: &str, target: &Path) {
 #[test]
 #[ignore = "runs a separate cargo build; CI runs it explicitly"]
 fn the_ide_mirror_type_checks_with_nested_faces() {
-    let target = std::env::temp_dir().join("nichlink-ide-mirror-target");
+    let target = std::env::temp_dir().join("xirang-ide-mirror-target");
     // The nested-face host is the one that failed; the mirror-only host guards
     // the other direction, where a face declares no registry to own.
     // 嵌套面宿主是失败的那一个；只有镜像的宿主守住另一侧——注册面没有注册机可拥有。
-    check_under_rust_analyzer("nichlink-example-control-button", &target);
-    check_under_rust_analyzer("nichlink-example-control-button-graft", &target);
+    check_under_rust_analyzer("xirang-example-control-button", &target);
+    check_under_rust_analyzer("xirang-example-control-button-graft", &target);
 }

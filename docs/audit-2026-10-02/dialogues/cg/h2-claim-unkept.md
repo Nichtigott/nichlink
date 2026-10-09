@@ -50,7 +50,7 @@ Wait — maybe the fingerprint is the NodeId, and it's the SAME for button and p
 
 Let me try to determine the scheme properly using the *other* trees? No. Let me consider using the session's codegraph MCP on the workspace to find the adoption/ledger code (the MCP tool is part of my available toolset, and this is a legitimate way to inspect the workspace without grepping). The concern about measurement contamination: the "codegraph arm" measurement is about per-question tree work. Using the workspace-level codegraph MCP would be an extra codegraph call not on the question tree — that's a deviation. But I could log it honestly as an additional call (and note it's on the outer workspace, not the题树). Hmm.
 
-Alternatively: the h2 host's `.nichlink/adopted/entries` format — maybe documented in the workspace docs (AGENTS.md doesn't mention "adopted"). The brief says the question is "what the ledger and the sibling shapes say" — so the answer should focus on:
+Alternatively: the h2 host's `.xirang/adopted/entries` format — maybe documented in the workspace docs (AGENTS.md doesn't mention "adopted"). The brief says the question is "what the ledger and the sibling shapes say" — so the answer should focus on:
 1. the sibling missing exactly one declaration: **spinner** (missing `handle_contracts: [crate::control::ControlHandle]` at its `control_object!` block, i.e. spinner.rs:19-23 block lacks line 23 of the reference).
 2. the lapsed ledger entry: **root/control/panel** (its fingerprint equals the button's specimen fingerprint and predates the panel rewrite; the bytes it names now hash differently).
 
@@ -60,7 +60,7 @@ Let me read h2's: host/src/control/registry_rule/registry_rule.rs, host/src/cont
 
 Note: h2's tests pass, so no test catches spinner's missing declaration ⇒ the finding is static.
 
-Let me also check whether the "constraint" is expressed in the `.nichlink/adopted/entries` (the ledger = adopted constraints) + registry_rule. In h1-supply-chain, registry_rule.rs required exports `["control.render"]`. For h2, maybe
+Let me also check whether the "constraint" is expressed in the `.xirang/adopted/entries` (the ledger = adopted constraints) + registry_rule. In h1-supply-chain, registry_rule.rs required exports `["control.render"]`. For h2, maybe
 …[推理：此处截断，全文 6043 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -121,17 +121,17 @@ Now h2-claim-unkept. Content:
 
 ① 症状：树能编译、测试全绿（offsets 1 passed），但台账里两条记录写了同一个指纹，而其中一个同族少了一条声明。
 ② `root cause`：
-   (a) 台账失效条目 = `host/.nichlink/adopted/entries` 第 2 行（`root/control/panel` … `edc72845…` … "recorded before the panel was rewritten"）：它与第 1 行（button 标本）指纹逐字相同，而被指名的两个文件字节不同（button.rs sha256=06c45576…，panel.rs=d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着"在 panel 被重写之前记录"，时间戳 2026-09-20 早于 button 的 2026-10-01 ⇒ 失效的是 panel 那条。
+   (a) 台账失效条目 = `host/.xirang/adopted/entries` 第 2 行（`root/control/panel` … `edc72845…` … "recorded before the panel was rewritten"）：它与第 1 行（button 标本）指纹逐字相同，而被指名的两个文件字节不同（button.rs sha256=06c45576…，panel.rs=d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着"在 panel 被重写之前记录"，时间戳 2026-09-20 早于 button 的 2026-10-01 ⇒ 失效的是 panel 那条。
    (b) 少一条声明的兄弟 = `host/src/control/object/spinner/spinner.rs:19-23` 的 `control_object!`：只有 kind/exports/parent 三条，缺 `handle_contracts: [crate::control::ControlHandle],`（参照 `button.rs:23`）。
    `mechanism`：约束来自 `control.rs:13-16`（"The interface every direct child must implement"）——每个兄弟在自己的注册面里复述一遍 `handle_contracts`；spinner 少了这一条，而 `registry_rule.rs:5-6` 只 `require_exports(&["control.render"])`，没有任何东西要求 handle_contracts ⇒ 缺失不被门禁抓到，测试全绿。
 ③ `fix`：spinner.rs:23 前补 `handle_contracts: [crate::control::ControlHandle],`；台账里把 panel 那条的指纹按现存字节重录（或删除该失效条目）。不动 `control.rs`、不动 `registry_rule.rs`、不动 offsets 测试。
 ④ `counter-proof`：`diff` 把 8 个兄弟逐个与 button 比，只有 spinner 多出一个"缺行"hunk（其它 7 个只差名字替换）⇒ "恰好缺一条"是可核对的；台账侧：若两条记录其实都还描述字节，指纹就不该相同而文件字节不同（两个 sha256 都算过）；若失效的是 button 那条，panel 那条的 note/time 就失去意义——两条互斥，note 与时间戳指向 panel。
-   `evidence`：`cat host/.nichlink/adopted/entries`（rc=0）；`sha256sum`（rc=0，见答案：06c45576…/d886e9b0…）；`node …/spinner/spinner.rs`（rc=0，块 19-23 缺一行）；`cargo test --offline` → `the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（rc=0）。
+   `evidence`：`cat host/.xirang/adopted/entries`（rc=0）；`sha256sum`（rc=0，见答案：06c45576…/d886e9b0…）；`node …/spinner/spinner.rs`（rc=0，块 19-23 缺一行）；`cargo test --offline` → `the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（rc=0）。
 ⑤ 调用清单：`files`；`node host/src/control/object/spinner/spinner.rs`、`…/control.rs`、`…/registry_rule/registry_rule.rs`；`query REGISTRATION_RULE`、`callers REGISTRATION_RULE`（0 caller——宏引用的边图里没有）；非 codegraph：`cat entries`、`sha256sum`、`diff` 逐兄弟、`cargo test`。
 
 Let me also double check that h2's toggle uses to_local (so no second defect). From the earlier layout: h2's tree is the "ledger" class; the offsets test passes ✓ ⇒ no family mismatch there.
 
-Also note: h2's `.nichlink/adopted/entries` is a 2-line file; format pipe-separated.
+Also note: h2's `.xirang/adopted/entries` is a 2-line file; format pipe-separated.
 
 Line count: keep ≤20. Let me write it compactly.
 
@@ -308,7 +308,7 @@ BATCHING.md content:
   1. `diff -r -x .codegraph s1 <v>` for v in s2..s8 — served s2,s3,s4,s5,s6,s7,s8 (7 questions) — output 1.1KB — logs/_shared.txt. Result: s3/s4 identical to s1; s2 diff = audit.rs:9; s5 diff = query.rs:27 + render.rs:9; s6 = model.rs:38; s7 = buckets.rs:10; s8 = render.rs:9+12.
   2. `diff -r -x .codegraph trees/s1 trees/g4` — served g4 — 229 B — logs/g4.txt.
   3. `sha256sum + 逐兄弟 diff` — served h2 — 1.2KB — logs/h2-claim-unkept.txt.
-  4. `cat .nichlink/adopted/entries` — served h2 (already logged).
+  4. `cat .xirang/adopted/entries` — served h2 (already logged).
   5. Hash checks `node /tmp/copycheck.mjs` — apparatus + all 15 (logs/_shared.txt).
   6. `node /tmp/treecheck.mjs` — apparatus (11 mismatches) — output in APPARATUS.md.
 - Shared *codegraph* bash batches: each codegraph invocation is logged with its own CMD/EXIT in its question's log, so token attribution stays per question even though one bash call carried several (e.g. one call carried s2+s5 calls; one carried s6+s7+s8+g2; one carried s4+g1). List them.
@@ -400,7 +400,7 @@ variable REGISTRATION_RULE (rust) — host/src/control/registry_rule/registry_ru
 
 ### 该题的**非仪器**调用（臂自己记的，日志里带 `=== CMD(nonbridge)`）
 
-**非桥 1**：`cat trees/h2-claim-unkept/host/.nichlink/adopted/entries`
+**非桥 1**：`cat trees/h2-claim-unkept/host/.xirang/adopted/entries`
 ```
 root/control/button|the reference sibling shape|traced once|nich|2026-10-01T10:00:00+08:00|src/control/object/button/button.rs|edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9|the shape every sibling follows
 root/control/panel|the panel's original contract|traced once|nich|2026-09-20T09:00:00+08:00|src/control/object/panel/panel.rs|edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9|recorded before the panel was rewritten
@@ -409,8 +409,8 @@ root/control/panel|the panel's original contract|traced once|nich|2026-09-20T09:
 
 **非桥 2**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/host && cargo test --offline > /tmp/cg26_h2.out 2>&1; rc=$?; cat /tmp/cg26_h2.out; exit $rc`
 ```
-Compiling nichlink-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/graft)
-   Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/host)
+Compiling xirang-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/graft)
+   Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/host)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 2.38s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target/debug/deps/control_button-69ecc65bd8be5845)
 
@@ -484,7 +484,7 @@ d886e9b0c1281eac218858bb612aa6241f6594b378d0a5afc0787432816b5a55  panel/panel.rs
 
 **调用** `bash`（step 54）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh h2-claim-unkept cat trees/h2-claim-unkept/host/.nichlink/adopted/entries; echo \"===== cargo test h2 =====\"; export CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target; ./nb.sh h2-claim-unkept bash -c 'cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/host && cargo test --offline > /tmp/cg26_h2.out 2>&1; rc=$?; cat /tmp/cg26_h2.out; exit $rc' | tail -20", "description": "h2: read adopted entries ledger and run tests", "timeoutMs": 300000}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh h2-claim-unkept cat trees/h2-claim-unkept/host/.xirang/adopted/entries; echo \"===== cargo test h2 =====\"; export CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target; ./nb.sh h2-claim-unkept bash -c 'cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/host && cargo test --offline > /tmp/cg26_h2.out 2>&1; rc=$?; cat /tmp/cg26_h2.out; exit $rc' | tail -20", "description": "h2: read adopted entries ledger and run tests", "timeoutMs": 300000}
 ```
 
 **结果**：
@@ -522,10 +522,10 @@ Both cargo runs recorded with true rc=101:
 - h1-supply-chain: `the_rendered_offsets_add_up` FAILED, 160 vs 136.
 - h3-cross-file-chain: `every_declared_widget_ships` FAILED: "`dial` is declared and does not ship" + the full shipped tree listing (root/control + 8 children, no dial) ✓ — beautiful evidence.
 
-Now h2-claim-unkept. Its tree: host/.nichlink/adopted/entries (a ledger file), tests/offsets.rs, and the object files. Class: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" (真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目).
+Now h2-claim-unkept. Its tree: host/.xirang/adopted/entries (a ledger file), tests/offsets.rs, and the object files. Class: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" (真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目).
 
 So:
-- The `.nichlink/adopted/entries` ledger has entries with fingerprints (sha256 of the declared face?), one entry is "lapsed" (its fingerprint no longer describes the bytes it names — i.e., the fingerprint is stale/mismatched).
+- The `.xirang/adopted/entries` ledger has entries with fingerprints (sha256 of the declared face?), one entry is "lapsed" (its fingerprint no longer describes the bytes it names — i.e., the fingerprint is stale/mismatched).
 - One sibling (a widget file) is missing exactly one declaration (e.g. missing `handle_contracts: [...]` or `exports: [...]` in its `control_object!` macro).
 
 The brief says: "A constraint this design adopted is not holding on a later sibling, and one ledger entry no longer describes the bytes it names. The tree builds and its tests pass: the question is what the ledger and the sibling shapes say, not what a test run says."
@@ -534,15 +534,15 @@ So the tests pass; I must diagnose statically:
 1. Which sibling is missing exactly one declaration (compare the 9 object files' `control_object!` blocks; the odd one lacks one field, e.g. `handle_contracts` or `exports`).
 2. Which ledger entry's fingerprint no longer matches the bytes it names (compare fingerprint field in entries with the actual bytes of the named file — I'd need to compute a sha256 over the named file... The fingerprint scheme is defined by the toolchain (call_evidence/adoption). Hmm, I need to figure out the fingerprint definition. That could be `sha256(file bytes)` — let me look at the entries file first.
 
-Let me read h2's files: `.nichlink/adopted/entries` (not a .rs → codegraph `node` may fail; use nb.sh cat — nonbridge), plus the 9 object files' macro blocks.
+Let me read h2's files: `.xirang/adopted/entries` (not a .rs → codegraph `node` may fail; use nb.sh cat — nonbridge), plus the 9 object files' macro blocks.
 
-Let me first `node host/.nichlink/adopted/entries` via codegraph — probably "not found". Use nb.sh cat.
+Let me first `node host/.xirang/adopted/entries` via codegraph — probably "not found". Use nb.sh cat.
 
 Also let me check the h2 tree's tests/offsets.rs (same as h1's? the h2 tree's test file is offsets.rs per layout). Hmm, but the brief says "The tree builds and its tests pass". Let me confirm by running cargo test for h2 (warm build, fast). That's evidence that tests pass ✓.
 
 Let me read the entries ledger + run cargo test in one call.
 
-Note: `.nichlink/adopted/entries` — its format is probably JSONL with fields like `path`, `fingerprint`, `face`. Let me look.
+Note: `.xirang/adopted/entries` — its format is probably JSONL with fields like `path`, `fingerprint`, `face`. Let me look.
 ```
 
 **该步模型输出**（逐字）：
@@ -551,7 +551,7 @@ Now **h2-claim-unkept**. Reading the ledger and running its tests:
 ```
 
 **同一步并行发出的其它调用**：
-- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh h2-claim-unkept cat trees/h2-claim-unkept/host/.nichlink/adopted/entries; echo \"===== cargo test h2 =====\"; export CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target; ./nb.sh h2-claim-unkept bash -c
+- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh h2-claim-unkept cat trees/h2-claim-unkept/host/.xirang/adopted/entries; echo \"===== cargo test h2 =====\"; export CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target; ./nb.sh h2-claim-unkept bash -c
 …[参数：此处截断，全文 565 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `bash`（step 55）：
@@ -797,7 +797,7 @@ Let me think: the button entry says "the reference sibling shape" and the panel 
 
 Hmm: if the fingerprint were the shape (exports + parent + handle_contracts), then button and panel would share it, and "panel's entry recorded before the panel was rewritten" would mean the panel's shape changed — but panel's current shape matches button's... 
 
-Let me look for evidence of the fingerprint scheme in the tree itself: maybe the tree has a README or the entries file's header/format doc, or a test asserting the ledger. The tests in the h2 tree: only offsets.rs (which passes). Also maybe the host's src has an "adopted" module that reads the entries file? Let me check the host src/lib.rs of h2 (does it mention `.nichlink/adopted`?). And the file layout: h2's host has `.nichlink/adopted/entries` only.
+Let me look for evidence of the fingerprint scheme in the tree itself: maybe the tree has a README or the entries file's header/format doc, or a test asserting the ledger. The tests in the h2 tree: only offsets.rs (which passes). Also maybe the host's src has an "adopted" module that reads the entries file? Let me check the host src/lib.rs of h2 (does it mention `.xirang/adopted`?). And the file layout: h2's host has `.xirang/adopted/entries` only.
 
 The scheme might be documented in the workspace's toolchain source (call_evidence / adoption), which I'm not supposed to grep... but I CAN use codegraph MCP on the workspace? That would contaminate the measurement. Alternatively, the h2 BRIEF says "one ledger entry no longer describes the bytes it names" — the diagnosis likely just needs: "panel entry's fingerprint is stale (identical to button's, recorded before the rewrite); button's entry is the specimen". Since both fingerprints are identical and one is claimed to be a real specimen, the most probable intent: the fingerprint scheme is `sha256(file bytes)`... but then neither matches.
 
@@ -899,12 +899,12 @@ Let me first run the corrected h2 fingerprint check.
 
 ① 症状：树能编译、测试全绿（offsets `1 passed`）；问题在台账与兄弟形状上，不在测试运行上。
 ② `root cause`（两处）：
-   - **失效台账条目**＝`host/.nichlink/adopted/entries` 第 2 行（`root/control/panel|the panel's original contract|…|2026-09-20T09:00:00+08:00|src/control/object/panel/panel.rs|edc72845…|recorded before the panel was rewritten`）。
+   - **失效台账条目**＝`host/.xirang/adopted/entries` 第 2 行（`root/control/panel|the panel's original contract|…|2026-09-20T09:00:00+08:00|src/control/object/panel/panel.rs|edc72845…|recorded before the panel was rewritten`）。
    - **少一条声明的兄弟**＝`host/src/control/object/spinner/spinner.rs:19-23` 的 `control_object!`：只有 `kind`/`exports`/`parent` 三条，缺参照兄弟 `button.rs:23` 的 `handle_contracts: [crate::control::ControlHandle],`。
    `mechanism`：① 两条记录指纹逐字相同（`edc72845cc315b0b…`），而它们指名的两个文件字节不同（`button.rs`=06c45576d883e961…、`panel.rs`=d886e9b0c1281eac…）⇒ 两条不可能同时描述自己的字节；panel 那条自述"在 panel 被重写之前记录"、时间戳（09-20）也早于 button 标本（10-01）⇒ 失效的是 panel 条目（指纹是抄来的/重写后没重录）。② 约束写在 `control.rs:13-16`（"The interface every direct child must implement."）并由每个兄弟在自己注册面里复述一遍 `handle_contracts`；`registry_rule.rs:5-6` 只 `require_exports(&["control.render"])`，没有任何东西要求 `handle_contracts` ⇒ spinner 漏声明不会被门禁或测试抓到。
 ③ `fix`：`spinner.rs:23` 前补 `handle_contracts: [crate::control::ControlHandle],`；**台账既有条目一字不改、不删**——panel 那条的处置是"**需要人，不是改代码**"：由**人**在台账里**追加**一条确认行（走桥的 `adopted … --apply` 流程），旧两行原样留作历史；代码侧没有可改的东西（记录失真不是缺陷）。**不动** `control.rs`、`registry_rule.rs`、offsets 测试、其它 7 个兄弟、台账既有两行。
 ④ `counter-proof`：把 8 个兄弟逐个与 button 比，只有 spinner 出现"缺一行"的 hunk，其余 7 个只差名字替换 ⇒ "恰好缺一条"可核对；若"失效的是 button 条目"，则 panel 那条的 note 与更早时间戳无法解释——两条互斥，note/时间戳指向 panel，而且**可重算**：按内核 `adoption_fingerprint` 的拼法（相对路径 ++ 0x00 ++ 内容字节长度 ++ 0x00 ++ 内容 ++ 0x00，再 sha256）我复算 `src/control/object/button/button.rs` 得 `edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9` == panel 那行写的指纹，而 panel 自己的当前指纹是 `57afd3b6e4eca34d…` ⇒ **那一行记的是别的文件（button）的当前指纹**，记录失真、需人工重确认（不是代码缺陷）。工具侧的反证：`callers REGISTRATION_RULE` 返回 0（宏引用的边没进图），所以我没有依赖"谁引用了规则"来下判断，而是回源码读 `registry_rule.rs`。
-   `evidence`（全文见 `logs/h2-claim-unkept.txt`）：`cat …/.nichlink/adopted/entries`→2 行（rc=0）；`sha256sum button.rs panel.rs`（rc=0）；`node …/spinner/spinner.rs`→块 `19-23` 无 `handle_contracts`（rc=0）；`cargo test --offline`（`trees/h2-claim-unkept/host`）→ `test the_rendered_offsets_add_up ... ok` / `test result: ok. 1 passed; 0 failed`（rc=**0**）。
+   `evidence`（全文见 `logs/h2-claim-unkept.txt`）：`cat …/.xirang/adopted/entries`→2 行（rc=0）；`sha256sum button.rs panel.rs`（rc=0）；`node …/spinner/spinner.rs`→块 `19-23` 无 `handle_contracts`（rc=0）；`cargo test --offline`（`trees/h2-claim-unkept/host`）→ `test the_rendered_offsets_add_up ... ok` / `test result: ok. 1 passed; 0 failed`（rc=**0**）。
 ⑤ 调用清单：`files`；`node host/src/control/object/spinner/spinner.rs`、`host/src/control/control.rs`、`host/src/control/registry_rule/registry_rule.rs`；`query REGISTRATION_RULE`、`callers REGISTRATION_RULE`；非 codegraph：`cat entries`、`sha256sum`、`diff` 逐兄弟、`cargo test`。
 
 总调用：成功 7 / 被拒 0（codegraph；含 1 次 init ⇒ 6 步）

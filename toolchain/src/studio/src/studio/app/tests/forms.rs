@@ -142,7 +142,7 @@ fn an_unreadable_source_is_loud_where_an_empty_one_is_quiet() {
         "the columns themselves must say they were never read: {handle:?} / {part:?}"
     );
 
-    let dir = std::env::temp_dir().join("nichlink-toolchain-empty-contracts");
+    let dir = std::env::temp_dir().join("xirang-toolchain-empty-contracts");
     std::fs::create_dir_all(&dir).expect("a temp dir");
     let empty = dir.join("no-contracts.rs");
     std::fs::write(&empty, "// a source file with no face at all\n").expect("write");
@@ -188,8 +188,8 @@ fn a_plugin_selection_takes_two_presses_and_rolls_back_a_half_write() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-plugin-{suffix}"));
-    let plugins = root.join(".nichlink/plugins");
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-plugin-{suffix}"));
+    let plugins = root.join(".xirang/plugins");
     std::fs::create_dir_all(&plugins).expect("plugin directory");
     let entry = plugins.join("user.rs");
     let lock = plugins.join("user.lock");
@@ -201,7 +201,7 @@ fn a_plugin_selection_takes_two_presses_and_rolls_back_a_half_write() {
         panic!("p should open the Plugin form");
     };
     plugin.values[plugin_field::SOURCE] = "user".to_owned();
-    plugin.values[plugin_field::FRAMEWORK] = "nichlink.test".to_owned();
+    plugin.values[plugin_field::FRAMEWORK] = "xirang.test".to_owned();
     plugin.values[plugin_field::PACKAGE] = "demo-plugin".to_owned();
     plugin.values[plugin_field::VERSION] = "0.1.0".to_owned();
     plugin.values[plugin_field::CRATE] = "demo_plugin".to_owned();

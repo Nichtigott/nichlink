@@ -49,14 +49,14 @@ const TAG_GUARD: &str = "startsWith(github.ref, 'refs/tags/')";
 ///
 /// Its upload mode is the `--publish` flag the command test reads, so the file itself is
 /// not followed: following it would read its `--publish` branch and call every rehearsal
-/// step (`run: tools/nichlink-publish`, `--check-table`, `--verify-consumers`) an upload.
+/// step (`run: tools/xirang-publish`, `--check-table`, `--verify-consumers`) an upload.
 /// A local file the gate does *not* know by name is a different matter — nothing about its
 /// name says which mode it runs in, so it is read.
 /// 它的上传模式正是命令判定读取的 `--publish` 标志，因此不跟进这个文件本身：跟进它会读到它的
-/// `--publish` 分支，从而把每个演练步骤（`run: tools/nichlink-publish`、`--check-table`、
+/// `--publish` 分支，从而把每个演练步骤（`run: tools/xirang-publish`、`--check-table`、
 /// `--verify-consumers`）都当成上传。而门禁**不**按名字认识的本地文件是另一回事——它的名字
 /// 说明不了它以哪种模式运行，因此会被读。
-const KNOWN_PUBLISHER: &str = "tools/nichlink-publish";
+const KNOWN_PUBLISHER: &str = "tools/xirang-publish";
 
 /// Report every way the workflow lets an upload happen without a tag ref.
 /// 报告该工作流容许在没有 tag ref 的情况下上传的每一种方式。

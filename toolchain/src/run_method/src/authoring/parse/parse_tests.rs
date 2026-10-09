@@ -103,7 +103,7 @@ fn every_shipped_rule_source_still_reads_through_the_production_entry() {
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         assert_eq!(
             read,
-            nichlink_kernel::authoring::parse::rule_syntax_from_text(&text),
+            xirang_kernel::authoring::parse::rule_syntax_from_text(&text),
             "{}: the production entry and the shipped bytes disagree",
             path.display()
         );
@@ -144,7 +144,7 @@ fn a_malformed_rule_source_is_refused_with_its_context() {
         "the const's own initializer decides the rule"
     );
     assert_eq!(
-        nichlink_kernel::authoring::parse::rule_syntax_from_text(commented),
+        xirang_kernel::authoring::parse::rule_syntax_from_text(commented),
         "exports:wrong",
         "the tolerant entry still reads the commented clause, which is why this path left it"
     );
@@ -181,7 +181,7 @@ fn unique_root(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-t72-{label}-{}-{sequence}",
+        "xirang-t72-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -242,10 +242,10 @@ fn the_rule_path_field_names_the_location_the_production_reader_reads() {
     }
     values.insert(
         "parent_node".to_owned(),
-        nichlink_kernel::identity::NodeId::from_namespaced_path("probe", "root.rs", "root")
+        xirang_kernel::identity::NodeId::from_namespaced_path("probe", "root.rs", "root")
             .to_string(),
     );
-    let snapshot = nichlink_kernel::authoring::snapshot::snapshot_from_values(&values, "probe")
+    let snapshot = xirang_kernel::authoring::snapshot::snapshot_from_values(&values, "probe")
         .expect("a readable face");
     assert_eq!(
         snapshot.registry_rule_path, "src/control/registry_rule/registry_rule.rs",

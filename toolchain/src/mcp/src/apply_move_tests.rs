@@ -27,7 +27,7 @@ fn scratch(label: &str) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let module = module_path!().replace("::", "-");
-    let root = std::env::temp_dir().join(format!("nichlink-{module}-{label}-{sequence}"));
+    let root = std::env::temp_dir().join(format!("xirang-{module}-{label}-{sequence}"));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).expect("scratch root");
     root
@@ -113,10 +113,10 @@ fn the_root_is_a_destination_with_its_own_spelling() {
         rewrite_parent_line(typed, super::ROOT_PARENT_SPELLING).expect("the root is a destination");
     assert_eq!(
         edit.after.trim(),
-        "parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),",
+        "parent: crate::root_node_id(crate::XIRANG_NAMESPACE),",
         "moving to the root writes the root's own spelling, keeping the comma"
     );
-    let already_root = "    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n";
+    let already_root = "    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),\n";
     rewrite_parent_line(already_root, super::ROOT_PARENT_SPELLING)
         .expect("the root's spelling is accepted as a source too");
 }

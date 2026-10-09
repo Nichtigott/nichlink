@@ -10,10 +10,10 @@
 use std::collections::BTreeMap;
 
 #[cfg(feature = "syntax")]
-use nichlink_kernel::authoring::snapshot::snapshot_from_values;
+use xirang_kernel::authoring::snapshot::snapshot_from_values;
 #[cfg(feature = "syntax")]
-use nichlink_kernel::declaration::RuntimeCheckSpec;
-use nichlink_kernel::plugin::PluginCatalog;
+use xirang_kernel::declaration::RuntimeCheckSpec;
+use xirang_kernel::plugin::PluginCatalog;
 
 /// The value map `snapshot_from_values` reads, with the fields a face always carries.
 /// `snapshot_from_values` 读取的取值表，含注册面总会带着的那些字段。
@@ -45,27 +45,26 @@ fn values(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 #[test]
 fn a_plugin_lock_schema_gate_is_not_line_order_dependent() {
     assert!(
-        PluginCatalog::parse_plugin_catalog("# nichlink-schema=v999\n").is_err(),
+        PluginCatalog::parse_plugin_catalog("# xirang-schema=v999\n").is_err(),
         "an empty lock that declares an unknown schema must be refused"
     );
     assert!(
         PluginCatalog::parse_plugin_catalog(
-            "official|f|p|1.0.0|c|sha256:00|extension\n# nichlink-schema=v999\n"
+            "official|f|p|1.0.0|c|sha256:00|extension\n# xirang-schema=v999\n"
         )
         .is_err(),
         "a header written after the records still gates them"
     );
     assert!(
-        PluginCatalog::parse_plugin_catalog("# nichlink-schema v999\n").is_err(),
+        PluginCatalog::parse_plugin_catalog("# xirang-schema v999\n").is_err(),
         "a misspelled header must not silently disable the gate"
     );
     assert!(
-        PluginCatalog::parse_plugin_catalog("# nichlink-schema=v3\n# nichlink-schema=v3\n")
-            .is_err(),
+        PluginCatalog::parse_plugin_catalog("# xirang-schema=v3\n# xirang-schema=v3\n").is_err(),
         "a second header is a duplicate, not a silent overwrite"
     );
     assert!(
-        PluginCatalog::parse_plugin_catalog("# nichlink-schema=v3\n").is_ok(),
+        PluginCatalog::parse_plugin_catalog("# xirang-schema=v3\n").is_ok(),
         "the canonical header parses"
     );
     assert!(
@@ -133,7 +132,7 @@ fn a_malformed_requires_entry_is_refused_not_dropped() {
 #[cfg(feature = "syntax")]
 #[test]
 fn the_strict_requires_entry_refuses_a_malformed_entry() {
-    use nichlink_kernel::authoring::parse::try_parse_requirements_owned;
+    use xirang_kernel::authoring::parse::try_parse_requirements_owned;
     let error = try_parse_requirements_owned("a=>b,broken")
         .expect_err("the strict entry refuses a `requires` entry without `=>`");
     assert!(
@@ -156,7 +155,7 @@ fn the_strict_requires_entry_refuses_a_malformed_entry() {
 #[cfg(feature = "syntax")]
 #[test]
 fn the_published_requires_entry_keeps_its_lossy_released_shape() {
-    use nichlink_kernel::authoring::parse::parse_requirements_owned;
+    use xirang_kernel::authoring::parse::parse_requirements_owned;
     let requirements: Vec<_> = parse_requirements_owned("a=>b,broken,c=>d");
     assert_eq!(
         requirements.len(),
@@ -215,7 +214,7 @@ fn the_requires_entries_document_which_one_is_lossy() {
 #[cfg(feature = "syntax")]
 #[test]
 fn a_generic_argument_with_a_comma_still_derives_trait_labels() {
-    let labels = nichlink_kernel::authoring::parse::trait_names_from_paths(
+    let labels = xirang_kernel::authoring::parse::trait_names_from_paths(
         "crate::ui::ControlHandle<u8, u16>, crate::parts::ActionParts",
     )
     .expect("a type path with generic arguments derives its labels");

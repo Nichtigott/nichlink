@@ -72,10 +72,10 @@ I'll start by claiming the task and reading the brief.
 3: 第八轮有 **11 道题的题面不成立**（拷成了上一轮的完工态）⇒ 本轮把这 11 道**正回题目态**，并**自证**过
 4: （该红的红、该绿的绿，见 `TREES.json` 每棵树的 `state`）。对照臂**复用第七轮冻结结果，不重跑**。
 5: ## 1. 工具与根
-6: - 工具：`./target/debug/nichlink-mcp`（当前检出构建）。每次调用带 `--log target/round9/logs/<id>.jsonl`。
+6: - 工具：`./target/debug/xirang-mcp`（当前检出构建）。每次调用带 `--log target/round9/logs/<id>.jsonl`。
 7: - **每道题一个根**：`--root target/round9/trees/<id>`（`<id>` 见 §4 清单）。**不要**指到 `trees/` 或本检出，
 8:   否则向上解析会落在树外（第八轮 A4 就是这么错的）。
-9: - 题树里 `nichlink-toolchain` 的 path 依赖**已指向当前检出**（`…/nichlink/toolchain`）⇒ 树里 `cargo test`
+9: - 题树里 `xirang-toolchain` 的 path 依赖**已指向当前检出**（`…/xirang/toolchain`）⇒ 树里 `cargo test`
 10:   用的就是本轮的被测框架。
 11: ## 2. 记录（硬要求）
 12: 每次调用往 `target/round9/logs/<id>.jsonl` 追一行 `{"request": …, "response": …, "exit": N}`；每题一份
@@ -181,7 +181,7 @@ Let me read the task carefully. I need to run 26 questions using the frozen code
 
 Wait — "用 codegraph 把 26 题跑完" — but question is: does my copy tree need an index? The task says: copy the tree to `target/probe-cg26/trees/<id>`, then `cd <copy> && codegraph init .`, then use `codegraph explore` etc.
 
-But hold on — the questions in the round9 brief are phrased for the nichlink-mcp tool (source queries). But my job is to answer them with codegraph. Hmm, actually let me re-read the team goal: "把 codegraph 那一侧的第九轮 26 题补上" — get a paired reading with the ninth round (26 questions in one session). So I need to answer the same 26 questions but using codegraph 1.6.1 as tool. The deliverable per-question is `target/probe-cg26/answers/<id>.md` with 5 sections + a `nonbridge:` line.
+But hold on — the questions in the round9 brief are phrased for the xirang-mcp tool (source queries). But my job is to answer them with codegraph. Hmm, actually let me re-read the team goal: "把 codegraph 那一侧的第九轮 26 题补上" — get a paired reading with the ninth round (26 questions in one session). So I need to answer the same 26 questions but using codegraph 1.6.1 as tool. The deliverable per-question is `target/probe-cg26/answers/<id>.md` with 5 sections + a `nonbridge:` line.
 
 Let me check the state of things: what trees exist in target/round9/trees, and whether probe-cg26 already exists.
 
@@ -266,7 +266,7 @@ Let me read the task carefully. I need to run 26 questions using the frozen code
 
 Wait — "用 codegraph 把 26 题跑完" — but question is: does my copy tree need an index? The task says: copy the tree to `target/probe-cg26/trees/<id>`, then `cd <copy> && codegraph init .`, then use `codegraph explore` etc.
 
-But hold on — the questions in the round9 brief are phrased for the nichlink-mcp tool (source queries). But my job is to answer them with codegraph. Hmm, actually let me re-read the team goal: "把 codegraph 那一侧的第九轮 26 题补上" — get a paired reading with the ninth round (26 questions in one session). So I need to answer the same 26 questions but using codegraph 1.6.1 as tool. The deliverable per-question is `target/probe-cg26/answers/<id>.md` with 5 sections + a `nonbridge:` line.
+But hold on — the questions in the round9 brief are phrased for the xirang-mcp tool (source queries). But my job is to answer them with codegraph. Hmm, actually let me re-read the team goal: "把 codegraph 那一侧的第九轮 26 题补上" — get a paired reading with the ninth round (26 questions in one session). So I need to answer the same 26 questions but using codegraph 1.6.1 as tool. The deliverable per-question is `target/probe-cg26/answers/<id>.md` with 5 sections + a `nonbridge:` line.
 
 Let me check the state of things: what trees exist in target/round9/trees, and whether probe-cg26 already exists.
 
@@ -385,7 +385,7 @@ Let me proceed.
 2:   "built_at": "2026-10-02",
 3:   "hash_algorithm": "sha256；跳过 {target,.codegraph,.git}；按相对路径排序；逐文件 update(rel) ++ 0x00 ++ update(str(len(bytes))) ++ 0x00 ++ update(bytes) ++ 0x00",
 4:   "root_rule": "--root = target/round9/trees/<id>（每棵树自带 Cargo.toml/工作区 ⇒ 向上解析不会跑到本检出）",
-5:   "toolchain_rule": "树里 nichlink-toolchain 的 path 依赖指向当前检出 /home/nich/Moirai_N3/nichlink/toolchain（已 sed 统一）",
+5:   "toolchain_rule": "树里 xirang-toolchain 的 path 依赖指向当前检出 /home/nich/Moirai_N3/nichlink/toolchain（已 sed 统一）",
 6:   "trees": {
 7:     "r1": {
 8:       "state": "injected defect 1 (inverted-guard) — 恰 1 条红：the_filter_keeps_only_entries_at_or_above_the_floor",
@@ -474,7 +474,7 @@ drwxr-xr-x 27 nich users 4096 10月  2 20:32 ..
 -rw-r--r--  1 nich users 3470 10月  2 20:29 Cargo.lock
 -rw-r--r--  1 nich users 1179 10月  2 20:29 Cargo.toml
 drwxr-xr-x  2 nich users 4096 10月  1 18:31 examples
-drwxr-xr-x  3 nich users 4096 10月  2 20:30 .nichlink
+drwxr-xr-x  3 nich users 4096 10月  2 20:30 .xirang
 drwxr-xr-x  3 nich users 4096 10月  2 21:30 src
 drwxr-xr-x  5 nich users 4096 10月  2 21:30 target
 === fa/target size ===
@@ -508,7 +508,7 @@ drwxr-xr-x 4 nich users 4096 10月  2 22:51 ..
 -rw-r--r-- 1 nich users   57  9月 29 09:21 build.rs
 -rw-r--r-- 1 nich users 3470 10月  2 17:06 Cargo.lock
 -rw-r--r-- 1 nich users 1156 10月  2 22:48 Cargo.toml
-drwxr-xr-x 3 nich users 4096  9月 30 19:19 .nichlink
+drwxr-xr-x 3 nich users 4096  9月 30 19:19 .xirang
 drwxr-xr-x 3 nich users 4096  9月 21 21:29 src
 drwxr-xr-x 5 nich users 4096 10月  2 21:36 target
 drwxr-xr-x 2 nich users 4096 10月  2 17:06 tests
@@ -563,7 +563,7 @@ Careful about the log format requirement: `=== CMD: <full command>` / raw output
 
 Approach: write a small helper script? The task says record every call. I could write a shell helper `target/probe-cg26/run.sh` that appends CMD/EXIT and output. But the helper must be careful about multi-byte truncation. Actually simplest: a bash function that takes log file and command, runs it with tee.
 
-But is a helper allowed? The rules forbid recursive repo-wide grep, reading forbidden dirs. A helper script is fine. But it does count as tooling — my nonbridge count is about tool calls other than codegraph... Hmm, "末行 `nonbridge: <除 codegraph 外你用了几次工具调用、合计多少字节输出>`" — this is per-question: how many tool calls I used besides codegraph (e.g., reading source files with `read`, `grep`, `cargo test`), and total bytes of output. This is for comparing with the nichlink-mcp arm measurements presumably. Ah wait — in the ninth round, the "nonbridge" count would be the number of tool calls that are not the nichlink MCP "bridge" tool. So for my arm: codegraph calls vs non-codegraph tool calls. So I should track per question how many non-codegraph calls I make (e.g., `cat`, `read`, `grep`, `cargo test`) and the byte count of their output.
+But is a helper allowed? The rules forbid recursive repo-wide grep, reading forbidden dirs. A helper script is fine. But it does count as tooling — my nonbridge count is about tool calls other than codegraph... Hmm, "末行 `nonbridge: <除 codegraph 外你用了几次工具调用、合计多少字节输出>`" — this is per-question: how many tool calls I used besides codegraph (e.g., reading source files with `read`, `grep`, `cargo test`), and total bytes of output. This is for comparing with the xirang-mcp arm measurements presumably. Ah wait — in the ninth round, the "nonbridge" count would be the number of tool calls that are not the xirang MCP "bridge" tool. So for my arm: codegraph calls vs non-codegraph tool calls. So I should track per question how many non-codegraph calls I make (e.g., `cat`, `read`, `grep`, `cargo test`) and the byte count of their output.
 
 So: I should use codegraph as much as possible, and count other calls. Since the whole session is mine, the counting is per-question. I'll track it via the log files: nonbridge calls should probably also be logged? To be safe and to make counting easy, I'll log every call to the per-question log file with a marker `=== CMD:` including non-codegraph commands, and mark them. Actually the log requirement says "每次调用追三行" — each call. Hmm, that likely means each codegraph call. But logging nonbridge calls too helps me count them. I'll log them with a distinct marker like `=== CMD(nonbridge): ...`. That's honest and complete.
 
@@ -575,7 +575,7 @@ To keep this tractable, I'll write a wrapper script `target/probe-cg26/cg.sh` th
 
 And `nb.sh` for nonbridge calls similarly. Hmm, but is writing scripts "nonbridge tool calls"? For counting purposes, the script *execution* is one bash tool call. I think the fairest interpretation: count *tool calls* (harness-level) other than codegraph, and their output bytes. Since a bash call may contain multiple commands. Hmm.
 
-Let me think about what the ninth-round arm counts. In the ninth round, the tool was `nichlink-mcp` (an MCP server with tools like source_query, registry_query, etc.), and "non
+Let me think about what the ninth-round arm counts. In the ninth round, the tool was `xirang-mcp` (an MCP server with tools like source_query, registry_query, etc.), and "non
 …[推理：此处截断，全文 8444 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -614,12 +614,12 @@ Let me think about what the ninth-round arm counts. In the ninth round, the tool
 204K	target/round9/trees/h2-claim-unkept/
 === non-target top-level per tree ===
 --- carrier: control-button control-button-graft .git .gitignore 
---- fa: build.rs Cargo.lock Cargo.toml examples .nichlink src target tests 
---- fb: build.rs Cargo.lock Cargo.toml examples .nichlink src target tests 
---- fc: build.rs Cargo.lock Cargo.toml examples .nichlink src target tests 
+--- fa: build.rs Cargo.lock Cargo.toml examples .xirang src target tests 
+--- fb: build.rs Cargo.lock Cargo.toml examples .xirang src target tests 
+--- fc: build.rs Cargo.lock Cargo.toml examples .xirang src target tests 
 --- fd: Cargo.lock Cargo.toml crates target 
 --- fe: Cargo.lock Cargo.toml crates target 
---- g3: build.rs Cargo.lock Cargo.toml examples .git .gitignore .nichlink src target tests 
+--- g3: build.rs Cargo.lock Cargo.toml examples .git .gitignore .xirang src target tests 
 --- g4: Cargo.lock Cargo.toml crates .git .gitignore .sha256.now target 
 --- h1: Cargo.lock Cargo.toml crates .git .gitignore target 
 --- h1-supply-chain: BRIEF.md graft host 
@@ -643,7 +643,7 @@ Let me think about what the ninth-round arm counts. In the ninth round, the tool
 
 **该步推理**：
 ```
-Good: source trees are tiny (60K-100K); the bulk is `target/` build dirs which are excluded. But note: the hardbug trees have `host/` and `graft/` subdirs — the "题树" root is `<id>` with `host/` (the nichlink host) and `graft/` (a graft crate). For codegraph, I'd want to index the whole `<id>` root (or maybe the host?). Hmm. "每题一个根" — in round9, `--root target/round9/trees/<id>`. The nichlink-mcp tool used the host dir; and the graft crate is a path dependency. For codegraph, indexing the whole tree root is the natural analog. I'll index the whole copy root.
+Good: source trees are tiny (60K-100K); the bulk is `target/` build dirs which are excluded. But note: the hardbug trees have `host/` and `graft/` subdirs — the "题树" root is `<id>` with `host/` (the xirang host) and `graft/` (a graft crate). For codegraph, I'd want to index the whole `<id>` root (or maybe the host?). Hmm. "每题一个根" — in round9, `--root target/round9/trees/<id>`. The xirang-mcp tool used the host dir; and the graft crate is a path dependency. For codegraph, indexing the whole tree root is the natural analog. I'll index the whole copy root.
 
 Note `.cargo-target` in round9 and `target/` inside trees: they're excluded from copy via `--exclude target`. Hmm, careful: `--exclude target` excludes any dir named target at any level (rsync pattern without slash matches at any depth? Actually `--exclude target` matches basename `target` anywhere). Also excludes `.codegraph`.
 
@@ -653,11 +653,11 @@ Also — the tree `target/` dirs contain build outputs. Copying without them mea
 
 Actually wait. The team goal says: "得到与我们第九轮（26 题一会话）同题、同树、同形状的一对读数，从而能直接报 步/题 · 步均上下文 · 输出/题 · 推理/题（不归一化 ✓），并逐题判对错（对登记真值/预设答案 ✓）". So the measurement is about steps/context/output/reasoning per question, and then judging each answer correct against registered truth/preset answers. The ninth round's answers are in `target/round9/answers/<id>.md` — but I'm forbidden from reading those ("不许读 target/round9/answers|logs"). So the judging will be done by the captain against truth, or my answers will be judged. So my job: produce answers in the same shape as the ninth round arm would.
 
-So I should produce answers that a judge can compare to the truth. For r1-r4 (injected defects), my answers must state root cause file:line + minimal fix + counter-evidence. I could use codegraph to find the defect (static reasoning), and optionally run cargo test to confirm which test fails. Running `cargo test --offline` in the copy would be a nonbridge call, costly but maybe valuable for correctness. Given "同形状" (same shape) — in the ninth round arm, the tool was nichlink-mcp which provides source/registry queries; the arm's answers were derived from those queries, and the arm probably did run cargo? Hmm, the round9 brief says the tool is nichlink-mcp with --log; and §5 says "凡断言某条路径…每一跳都要回源码定义处核过". It doesn't require running cargo test. The r1-r4 question says "各自 cargo test --offline 恰有 1 条失败" as a given fact; the deliverable is root cause + minimal fix + counter-evidence.
+So I should produce answers that a judge can compare to the truth. For r1-r4 (injected defects), my answers must state root cause file:line + minimal fix + counter-evidence. I could use codegraph to find the defect (static reasoning), and optionally run cargo test to confirm which test fails. Running `cargo test --offline` in the copy would be a nonbridge call, costly but maybe valuable for correctness. Given "同形状" (same shape) — in the ninth round arm, the tool was xirang-mcp which provides source/registry queries; the arm's answers were derived from those queries, and the arm probably did run cargo? Hmm, the round9 brief says the tool is xirang-mcp with --log; and §5 says "凡断言某条路径…每一跳都要回源码定义处核过". It doesn't require running cargo test. The r1-r4 question says "各自 cargo test --offline 恰有 1 条失败" as a given fact; the deliverable is root cause + minimal fix + counter-evidence.
 
-For my arm, to be comparable and honest, I can answer statically via codegraph; running cargo test would be a nonbridge call. Since I need to report "nonbridge" count, it's allowed to use nonbridge calls, just counted. But cost: cargo builds are heavy (the toolchain dependency is the real workspace, needs building — could take minutes per tree, and r1-r4 trees are tiny but the path dep is the whole toolchain crate... `cargo test --offline` would compile nichlink-toolchain + deps). That could be very expensive. Also the round9 `.cargo-target` exists in round9 dir, indicating shared target dir usage. For my copies, I'd need my own target dir. Risky/slow.
+For my arm, to be comparable and honest, I can answer statically via codegraph; running cargo test would be a nonbridge call. Since I need to report "nonbridge" count, it's allowed to use nonbridge calls, just counted. But cost: cargo builds are heavy (the toolchain dependency is the real workspace, needs building — could take minutes per tree, and r1-r4 trees are tiny but the path dep is the whole toolchain crate... `cargo test --offline` would compile xirang-toolchain + deps). That could be very expensive. Also the round9 `.cargo-target` exists in round9 dir, indicating shared target dir usage. For my copies, I'd need my own target dir. Risky/slow.
 
-Decision: Try to answer statically with codegraph for r1-r4 first (the codegraph arm's value is static analysis). Where cheap and decisive, optionally run `cargo test` — but let me first see the tree sizes and how much time is left. Actually, the key purpose here is the measurement paired with the ninth round. The ninth round's r1-r4 answers came from nichlink-mcp tooling (source queries) — likely also static (the arm had no test-running requirement). Hmm, but the tree state says "恰 1 条红" was verified by the tree builders (TREES.json self-check), not by the answering arm.
+Decision: Try to answer statically with codegraph for r1-r4 first (the codegraph arm's value is static analysis). Where cheap and decisive, optionally run `cargo test` — but let me first see the tree sizes and how much time is left. Actually, the key purpose here is the measurement paired with the ninth round. The ninth round's r1-r4 answers came from xirang-mcp tooling (source queries) — likely also static (the arm had no test-running requirement). Hmm, but the tree state says "恰 1 条红" was verified by the tree builders (TREES.json self-check), not by the answering arm.
 
 I'll do: primary = codegraph static analysis. For r1-r4, I may run a targeted `cargo test --offline` in the copy if time permits, logging as nonbridge. Let me decide later, based on how the codegraph analysis goes. Actually — running cargo test would strongly support the "反证" section. But it also is expensive. Let me check how long a build takes for one tree later. Actually, r3/r4 trees are 428K/432K — tiny single-crate trees. r1/r2 are 23M (includes target? excluded). Let me look at their sources: r1/r2 likely have crates/ subdirs.
 
@@ -752,7 +752,7 @@ And it prints the output so I see it. And ideally record the byte count. Let me 
 
 But caution: does creating/running shell scripts count as tool calls? They're within bash calls. I'll count nonbridge per the rule documented in SETUP.md.
 
-Hmm, wait. Let me reconsider the nonbridge counting semantics once more: "末行 `nonbridge: <除 codegraph 外你用了几次工具调用、合计多少字节输出>`". I read it as: number of tool calls other than codegraph, and the total bytes they output. In my harness, the "tool calls" are bash/read/grep calls. To be comparable with the ninth round arm (where the tool was nichlink-mcp and other calls were bash/read), I should count my harness-level calls that aren't codegraph invocations. But I invoke codegraph *through* bash calls too. The cleanest mapping: each codegraph CLI invocation (logged with CMD/EXIT) is a "bridge call"; other tool calls are nonbridge. But my bash calls that run codegraph also produce output (the codegraph output) which is already logged separately.
+Hmm, wait. Let me reconsider the nonbridge counting semantics once more: "末行 `nonbridge: <除 codegraph 外你用了几次工具调用、合计多少字节输出>`". I read it as: number of tool calls other than codegraph, and the total bytes they output. In my harness, the "tool calls" are bash/read/grep calls. To be comparable with the ninth round arm (where the tool was xirang-mcp and other calls were bash/read), I should count my harness-level calls that aren't codegraph invocations. But I invoke codegraph *through* bash calls too. The cleanest mapping: each codegraph CLI invocation (logged with CMD/EXIT) is a "bridge call"; other tool calls are nonbridge. But my bash calls that run codegraph also produce output (the codegraph output) which is already logged separately.
 
 Given ambiguity, I'll define precisely in SETUP.md:
 - `codegraph call` = one logged invocation of the frozen CLI (per-question log entries with `=== CMD:`).
@@ -1578,7 +1578,7 @@ diff -r -x target -x .git -x .codegraph fa/src/control/object/button/button.rs f
 >     pub label: String,
 > }
 > 
-> impl nichlink_toolchain::runtime::PartsContract for ButtonParts {
+> impl xirang_toolchain::runtime::PartsContract for ButtonParts {
 >     type Output = ButtonParts;
 >     const PROVIDED_PARTS: &'static [&'static str] = &["label"];
 > }
@@ -1654,7 +1654,7 @@ Hmm, wait. Let me consider the alternative: maybe these trees' contents changed 
 
 Hmm, so ALL trees have mtimes ≥ 22:49 (when TREES.json was written). Yet 13 match. The 11 that mismatch are exactly the ones that are *modifiable* per the brief: "`s*`/`g4`/四道 hardbug 类只读；`r1–r4`/`fa–fe`/`g3`/`h1` 可改，但交付后 `cargo test --offline` 必须绿". Hmm! That's for the answering arm's deliverables (the arm is allowed to *fix* them). But the mismatch is BEFORE any of my work — and my copies were made from these originals minutes ago (22:58). Could another agent (e.g., a concurrent teammate) have already mutated these 11 trees between 22:49 and 22:58?! There are other probe dirs (probe-round9, probe-round9b, probe-round9c) — other arms are running on copies. But could one have run against the ORIGINALS and modified them? E.g., a previous arm (the "跑到一半被停" attempt) may have edited the original trees instead of copies — that would explain: r1-r4 all identical (a reset?), h1 == s-tree content (a botched rsync), fd/fe identical, fa/fb divergent...
 
-Hmm, actually: h1's tree hash == s1's hash exactly (9117567f...). That strongly suggests someone rsync'd the s-tree over h1's tree — exactly the shape of a botched copy operation like my own g1 mistake (rsync nesting!). Earlier I saw `ls target/round9/trees/h1` had `Cargo.lock Cargo.toml crates .git .gitignore target` — same layout as the s-trees (crates/core + crates/report). And h1 should be a nichlink host (round-7 h1 level: "默认面一处红"). So yes: h1's tree has been overwritten with the ledger scenario tree.
+Hmm, actually: h1's tree hash == s1's hash exactly (9117567f...). That strongly suggests someone rsync'd the s-tree over h1's tree — exactly the shape of a botched copy operation like my own g1 mistake (rsync nesting!). Earlier I saw `ls target/round9/trees/h1` had `Cargo.lock Cargo.toml crates .git .gitignore target` — same layout as the s-trees (crates/core + crates/report). And h1 should be a xirang host (round-7 h1 level: "默认面一处红"). So yes: h1's tree has been overwritten with the ledger scenario tree.
 
 Wait, but why would my earlier hash of h1 report 9117567fcd4d4d70 — same as s1/s3/s4. Yes.
 
@@ -1702,32 +1702,32 @@ edition = "2024"
 [workspace]
 === fa/Cargo.toml ===
 [package]
-name = "nichlink-example-control-button"
+name = "xirang-example-control-button"
 version = "0.1.0"
 edition = "2024"
 publish = false
 build = "build.rs"
-description = "NichLink example: the README Control/Button tree as a real host crate."
+description = "XiRang example: the README Control/Button tree as a real host crate."
 
 [lib]
 name = "control_button"
 path = "src/lib.rs"
 
 [dependencies]
-nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", version = "0.2.0", features = ["run", "authoring"] }
+xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", version = "0.2.0", features = ["run", "authoring"] }
 # A statically grafted implementation is named by a Rust path at the host entry,
 # so it has to be linked in. A string-named graft would not need this.
-nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }
+xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }
 
 [build-dependencies]
-nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["build"] }
+xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["build"] }
 
 # The authoring query is the same crate the build script uses, so a test can
 # assert that Studio sees exactly the slots this host declares.
 # 创作查询与 build script 使用同一个 crate，测试因此可以断言 Studio 看到的槽位正是
 # 本宿主声明的那两个。
 [dev-dependencies]
-nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["run", "authoring"] }
+xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain", features = ["run", "authoring"] }
 
 [workspace]
 === h1/Cargo.toml ===
@@ -1953,11 +1953,11 @@ BAD: (none)
    Compiling itoa v1.0.18
    Compiling memchr v2.8.3
    Compiling syn v2.0.119
-   Compiling nichlink-kernel v0.2.0 (/home/nich/Moirai_N3/nichlink/kernel)
-   Compiling nichlink-macro v0.2.0 (/home/nich/Moirai_N3/nichlink/macro)
-   Compiling nichlink-toolchain v0.2.0 (/home/nich/Moirai_N3/nichlink/toolchain)
-   Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain/host)
-   Compiling nichlink-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain/graft)
+   Compiling xirang-kernel v0.2.0 (/home/nich/Moirai_N3/nichlink/kernel)
+   Compiling xirang-macro v0.2.0 (/home/nich/Moirai_N3/nichlink/macro)
+   Compiling xirang-toolchain v0.2.0 (/home/nich/Moirai_N3/nichlink/toolchain)
+   Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain/host)
+   Compiling xirang-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h1-supply-chain/graft)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 19.86s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target/debug/deps/control_button-ff660440993ab6a3)
 
@@ -2252,7 +2252,7 @@ Message e5b8802f-75e4-4c83-bc4f-a8c794a30e15 cg26 → captain delivered via live
 
 **结果**：
 ```
-Team "nichlink-cg26" — 把 **codegraph 那一侧的第九轮 26 题**补上（此前三次尝试：一条口径不对 ✗、一条只读树手绑 ✗、一条跑到一半被停 ✗）。目标：得到与我们第九轮（26 题一会话）**同题、同树、同形状**的一对读数，从而能直接报 步/题 · 步均上下文 · 输出/题 · 推理/题（不归一化 ✓），并逐题判对错（对登记真值/预设答案 ✓）。工具＝冻结的 codegraph 1.6.1；题面＝`target/round9/BRIEF.md`。
+Team "xirang-cg26" — 把 **codegraph 那一侧的第九轮 26 题**补上（此前三次尝试：一条口径不对 ✗、一条只读树手绑 ✗、一条跑到一半被停 ✗）。目标：得到与我们第九轮（26 题一会话）**同题、同树、同形状**的一对读数，从而能直接报 步/题 · 步均上下文 · 输出/题 · 推理/题（不归一化 ✓），并逐题判对错（对登记真值/预设答案 ✓）。工具＝冻结的 codegraph 1.6.1；题面＝`target/round9/BRIEF.md`。
 Loop: running — Work remains on the shared task list; wait for the scheduler or complete owned tasks.
 Viewing as: cg26
 Members (2):
@@ -2308,13 +2308,13 @@ Work plan for the 6 trees:
 A. Re-copy: `rm -rf trees/{r1,r2,r3,r4,h1,g3}` then rsync (excluding target/.codegraph/.git).
 B. Hash-verify the 6 copies with the documented algorithm.
 C. Re-init each (append to logs).
-D. `cargo test --offline` for r1-r4 (check exactly 1 red; the failing test names are in BRIEF/TREES.json). Note: r-trees are the single-crate `ledger` (no deps) → fast. h1 is a workspace with crates/core + crates/report (no nichlink dep? h1's Cargo.toml was `[workspace] members = ["crates/core","crates/report"]` — the round-7 h1 tree is a ledger-like workspace, no toolchain dep → fast). g3 is a nichlink host (needs the toolchain build; my cargo-target is warm ✓ → fast).
+D. `cargo test --offline` for r1-r4 (check exactly 1 red; the failing test names are in BRIEF/TREES.json). Note: r-trees are the single-crate `ledger` (no deps) → fast. h1 is a workspace with crates/core + crates/report (no xirang dep? h1's Cargo.toml was `[workspace] members = ["crates/core","crates/report"]` — the round-7 h1 tree is a ledger-like workspace, no toolchain dep → fast). g3 is a xirang host (needs the toolchain build; my cargo-target is warm ✓ → fast).
 E. Analyze each question via codegraph and write answers.
 F. Update logs/answers; report.
 
 Special notes:
 - h1: round-7 h1 level has "默认面一处红（3 条断言同一 target）" per TREES.json. Range-type question: "检查一下这个仓库还有没有别的问题——范围型：先给可核对的全树总账、逐栏处置" — a whole-tree audit with per-column disposition. Requires care.
-- g3: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" — the g3 tree (160K) is a nichlink host like fb (which already had ButtonParts). Interesting: fb had `ButtonParts` + `PartsContract` — the g3 answer is probably the same shape: add an internal layer (a `Parts` struct) to an object without changing its registration tree/public paths, and prove it by comparing the registry outline (before/after) and cargo test green.
+- g3: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" — the g3 tree (160K) is a xirang host like fb (which already had ButtonParts). Interesting: fb had `ButtonParts` + `PartsContract` — the g3 answer is probably the same shape: add an internal layer (a `Parts` struct) to an object without changing its registration tree/public paths, and prove it by comparing the registry outline (before/after) and cargo test green.
 
 Wait — careful: g3's tree is "g3 level——初始绿" (initial green). The task is to modify it (add internal structure) and keep the gate green. The deliverable per the round9 brief: "做了什么、依据、命令序列、总调用次数".
 
@@ -2385,13 +2385,13 @@ Work plan for the 6 trees:
 A. Re-copy: `rm -rf trees/{r1,r2,r3,r4,h1,g3}` then rsync (excluding target/.codegraph/.git).
 B. Hash-verify the 6 copies with the documented algorithm.
 C. Re-init each (append to logs).
-D. `cargo test --offline` for r1-r4 (check exactly 1 red; the failing test names are in BRIEF/TREES.json). Note: r-trees are the single-crate `ledger` (no deps) → fast. h1 is a workspace with crates/core + crates/report (no nichlink dep? h1's Cargo.toml was `[workspace] members = ["crates/core","crates/report"]` — the round-7 h1 tree is a ledger-like workspace, no toolchain dep → fast). g3 is a nichlink host (needs the toolchain build; my cargo-target is warm ✓ → fast).
+D. `cargo test --offline` for r1-r4 (check exactly 1 red; the failing test names are in BRIEF/TREES.json). Note: r-trees are the single-crate `ledger` (no deps) → fast. h1 is a workspace with crates/core + crates/report (no xirang dep? h1's Cargo.toml was `[workspace] members = ["crates/core","crates/report"]` — the round-7 h1 tree is a ledger-like workspace, no toolchain dep → fast). g3 is a xirang host (needs the toolchain build; my cargo-target is warm ✓ → fast).
 E. Analyze each question via codegraph and write answers.
 F. Update logs/answers; report.
 
 Special notes:
 - h1: round-7 h1 level has "默认面一处红（3 条断言同一 target）" per TREES.json. Range-type question: "检查一下这个仓库还有没有别的问题——范围型：先给可核对的全树总账、逐栏处置" — a whole-tree audit with per-column disposition. Requires care.
-- g3: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" — the g3 tree (160K) is a nichlink host like fb (which already had ButtonParts). Interesting: fb had `ButtonParts` + `PartsContract` — the g3 answer is probably the same shape: add an internal layer (a `Parts` struct) to an object without changing its registration tree/public paths, and prove it by comparing the registry outline (before/after) and cargo test green.
+- g3: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" — the g3 tree (160K) is a xirang host like fb (which already had ButtonParts). Interesting: fb had `ButtonParts` + `PartsContract` — the g3 answer is probably the same shape: add an internal layer (a `Parts` struct) to an object without changing its registration tree/public paths, and prove it by comparing the registry outline (before/after) and cargo test green.
 
 Wait — careful: g3's tree is "g3 level——初始绿" (initial green). The task is to modify it (add internal structure) and keep the gate green. The deliverable per the round9 brief: "做了什么、依据、命令序列、总调用次数".
 
@@ -2445,7 +2445,7 @@ Let me now:
 2. Re-init each (append to logs).
 3. Run cargo test for r1-r4 (check exactly 1 red each).
 
-For r1-r4: single crate `ledger` with no deps → fast. For h1: workspace crates/core + crates/report (no external deps) → fast. g3: nichlink host → needs the toolchain (warm target) → fast-ish.
+For r1-r4: single crate `ledger` with no deps → fast. For h1: workspace crates/core + crates/report (no external deps) → fast. g3: xirang host → needs the toolchain (warm target) → fast-ish.
 
 Let me do the hash check + inits in one call, then cargo tests.
 
@@ -2495,9 +2495,9 @@ I already re-copied and init'ed r1-r4, h1, g3 ✓ (and hashes verified). Now:
 2. Init them (append logs).
 3. State self-check: r1-r4 exactly 1 red each; fa/fb all green; fd/fe initially red. Run cargo test for all 10 (r1-r4, fa, fb, fd, fe; h1 has a red per TREES.json "默认面一处红（3 条断言同一 target）"; g3 initial green).
 
-Note for fa/fb: their Cargo.toml depends on `nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }` — the `carrier` dir! The captain's restore didn't mention carrier. In the round9 trees, `carrier/` exists (652K). My probe trees dir doesn't have `carrier`. I need it as a sibling for fa/fb (and maybe fc/g3) to build. Let me copy `carrier` too (it's a support fixture, not a question tree). It was not in TREES.json (not a question), and copying it into target/probe-cg26/trees/carrier is fine (my dir). It's a real dir (not a symlink?) — let me check: earlier `ls -la target/round9/trees/` showed `carrier` as a directory with mtime 22:51. Its content: `control-button control-button-graft .git .gitignore`. So carrier/control-button and carrier/control-button-graft. The fa Cargo.toml path `../carrier/control-button-graft` resolves relative to fa's dir → `trees/carrier/control-button-graft` ✓ if I copy carrier to trees/carrier.
+Note for fa/fb: their Cargo.toml depends on `xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }` — the `carrier` dir! The captain's restore didn't mention carrier. In the round9 trees, `carrier/` exists (652K). My probe trees dir doesn't have `carrier`. I need it as a sibling for fa/fb (and maybe fc/g3) to build. Let me copy `carrier` too (it's a support fixture, not a question tree). It was not in TREES.json (not a question), and copying it into target/probe-cg26/trees/carrier is fine (my dir). It's a real dir (not a symlink?) — let me check: earlier `ls -la target/round9/trees/` showed `carrier` as a directory with mtime 22:51. Its content: `control-button control-button-graft .git .gitignore`. So carrier/control-button and carrier/control-button-graft. The fa Cargo.toml path `../carrier/control-button-graft` resolves relative to fa's dir → `trees/carrier/control-button-graft` ✓ if I copy carrier to trees/carrier.
 
-Let me check whether fa's dependency path is `../carrier/...`: yes, from my earlier read of fa/Cargo.toml: `nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }`. So copying carrier is needed.
+Let me check whether fa's dependency path is `../carrier/...`: yes, from my earlier read of fa/Cargo.toml: `xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }`. So copying carrier is needed.
 
 Hmm, but wait: does the round9 original fa tree build? The round9 harness would run cargo with --root trees/fa... the carrier is at trees/carrier ✓ (sibling). So yes, I need it.
 
@@ -2818,11 +2818,11 @@ Wait — but for r1: the filter test fails ✓, but r1's declared class is "inve
 
 Now: h1's premise: TREES.json says "round-7 h1 level——默认面一处红（3 条断言同一 target）". Let me run cargo test for h1 with a per-tree target dir. And g3 (initial green), fa/fb (green), fd/fe (initial red).
 
-Then also — important for my earlier answer on h1-supply-chain: that tree was never in the shared-name collision set? h1-supply-chain's host package name is `nichlink-example-control-button`, and I built h3 and h2 also as `nichlink-example-control-button`... their binary hashes differed (ff66…, ec43…, 69ec…) so no reuse ✓. But to be safe, the h1-supply-chain result (160 vs 136) matched my prediction exactly — strong evidence it was the right binary ✓.
+Then also — important for my earlier answer on h1-supply-chain: that tree was never in the shared-name collision set? h1-supply-chain's host package name is `xirang-example-control-button`, and I built h3 and h2 also as `xirang-example-control-button`... their binary hashes differed (ff66…, ec43…, 69ec…) so no reuse ✓. But to be safe, the h1-supply-chain result (160 vs 136) matched my prediction exactly — strong evidence it was the right binary ✓.
 
 Now let me run the remaining premise checks (h1, g3, fa, fb, fd, fe) with per-tree target dirs. These need the toolchain for g3/fa/fb → ~20-30s each for the first, then each per-tree dir rebuilds again (per-tree dirs → the toolchain gets rebuilt for each of the 3 host trees: ~20s each). Acceptable.
 
-Hmm, wait: fa/fb/fd/fe may also collide with each other: fa/fb are the same package name (nichlink-example-control-button) but different content — with per-tree dirs, no collision ✓. fd/fe are workspaces with crates/core+report (package names ledger_core/ledger_report? different from h1's naming... h1's crates are also core/report → the same names!). With per-tree dirs, fine ✓.
+Hmm, wait: fa/fb/fd/fe may also collide with each other: fa/fb are the same package name (xirang-example-control-button) but different content — with per-tree dirs, no collision ✓. fd/fe are workspaces with crates/core+report (package names ledger_core/ledger_report? different from h1's naming... h1's crates are also core/report → the same names!). With per-tree dirs, fine ✓.
 
 Let me run the 6 remaining checks now (h1, g3, fa, fb, fd, fe), each logged via nb.sh, and print compact summaries.
 
@@ -2995,7 +2995,7 @@ Let me look and find the runtime module, then read its lib.rs (and search for `P
 54-/// 在宏展开时强制 preset 与 parts 的输出类型相同。
 55-///
 56-/// ```compile_fail
-57:/// use nichlink_kernel::{assert_contract, PartsContract, PresetContract};
+57:/// use xirang_kernel::{assert_contract, PartsContract, PresetContract};
 58-///
 59-/// struct Expected;
 60-/// struct Supplied;
@@ -3155,7 +3155,7 @@ Hmm, what does the *old damaged fb copy* show? It had:
 ```rust
 pub struct Button { parts: ButtonParts }
 pub struct ButtonParts { pub label: String }
-impl nichlink_toolchain::runtime::PartsContract for ButtonParts { type Output = ButtonParts; const PROVIDED_PARTS: &'static [&'static str] = &["label"]; }
+impl xirang_toolchain::runtime::PartsContract for ButtonParts { type Output = ButtonParts; const PROVIDED_PARTS: &'static [&'static str] = &["label"]; }
 impl Button { pub fn parts(&self) -> &ButtonParts { &self.parts } }
 ```
 Notably it did NOT show a preset — maybe the old arm also added a `preset:` in the macro. And it changed the public struct shape (added a field). Hmm, and its `parts_name`? The macro requires `parts_name: $parts_name:expr`... is `parts_name` optional? The test mentions "an omitted `preset`/`parts` must record plain default names" → so when omitted, the REGISTRATION records "NoPreset"/"NoParts". If I declare `parts: X` without `parts_name`, would it default to something? Let me read the macro to see the optional groups.
@@ -3211,7 +3211,7 @@ toolchain/examples/scale_audit.rs
 toolchain/tests/plugin_host_admission.rs-82-    RegistrationInfo {
 toolchain/tests/plugin_host_admission.rs-83-        namespace: "plugin-test",
 toolchain/tests/plugin_host_admission.rs-84-        id: NodeId::from_path("plugin.rs", "plugin"),
-toolchain/tests/plugin_host_admission.rs-85-        parent: nichlink_toolchain::runtime::ROOT_NODE_ID,
+toolchain/tests/plugin_host_admission.rs-85-        parent: xirang_toolchain::runtime::ROOT_NODE_ID,
 toolchain/tests/plugin_host_admission.rs-86-        kind: "Plugin",
 toolchain/tests/plugin_host_admission.rs-87-        preset: "",
 toolchain/tests/plugin_host_admission.rs:88:        parts: "",
@@ -3235,7 +3235,7 @@ Also, importantly: I should focus. The deliverable is "做了什么、依据、�
 For fb/g3 (add internal structure = preset+parts to Button):
 Design:
 ```rust
-use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
+use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
 
 /// Button 的内部结构：一个显式声明的 preset/parts 对。
 pub struct ButtonPreset;
@@ -3290,9 +3290,9 @@ pub struct ButtonParts { pub l
 3://! 未写 `handle:` 的注册面必须保留作者写下的 preset 与 parts。
 5:/// A custom preset and parts pair, distinct from the permissive defaults so the
 7:/// 一对自定义 preset/parts，刻意不同于宽松默认值，断言才能区分"被转发"与"被静默替换"。
-10:impl nichlink_toolchain::runtime::PresetContract for ProbePreset {
-17:impl nichlink_toolchain::runtime::PartsContract for ProbeParts {
-27:    nichlink_toolchain::__control_object! {
+10:impl xirang_toolchain::runtime::PresetContract for ProbePreset {
+17:impl xirang_toolchain::runtime::PartsContract for ProbeParts {
+27:    xirang_toolchain::__control_object! {
 30:        preset: ProbePreset,
 31:        parts: ProbeParts,
 39:fn a_custom_preset_and_parts_survive_the_defaulting_arm() {
@@ -3334,14 +3334,14 @@ Let me read it.
 7: /// 一对自定义 preset/parts，刻意不同于宽松默认值，断言才能区分"被转发"与"被静默替换"。
 8: struct ProbePreset;
 9: 
-10: impl nichlink_toolchain::runtime::PresetContract for ProbePreset {
+10: impl xirang_toolchain::runtime::PresetContract for ProbePreset {
 11:     type Output = ();
 12:     const REQUIRED_PARTS: &'static [&'static str] = &["probe"];
 13: }
 14: 
 15: struct ProbeParts;
 16: 
-17: impl nichlink_toolchain::runtime::PartsContract for ProbeParts {
+17: impl xirang_toolchain::runtime::PartsContract for ProbeParts {
 18:     type Output = ();
 19:     const PROVIDED_PARTS: &'static [&'static str] = &["probe"];
 20: }
@@ -3351,7 +3351,7 @@ Let me read it.
 24: mod probe {
 25:     use crate::{ProbeParts, ProbePreset};
 26: 
-27:     nichlink_toolchain::__control_object! {
+27:     xirang_toolchain::__control_object! {
 28:         collector: development,
 29:         kind: ProbeFace,
 30:         preset: ProbePreset,
@@ -3404,11 +3404,11 @@ Then implement for fb/g3:
 pub struct ButtonPreset;
 pub struct ButtonParts;
 
-impl nichlink_toolchain::runtime::PresetContract for ButtonPreset {
+impl xirang_toolchain::runtime::PresetContract for ButtonPreset {
     type Output = Button;   // hmm, Output must match PartsContract::Output
     const REQUIRED_PARTS: &'static [&'static str] = &["label"];
 }
-impl nichlink_toolchain::runtime::PartsContract for ButtonParts {
+impl xirang_toolchain::runtime::PartsContract for ButtonParts {
     type Output = Button;
     const PROVIDED_PARTS: &'static [&'static str] = &["label"];
 }
@@ -3702,7 +3702,7 @@ Per-question stats computed. Notes:
 
 Note the counts include the earlier (pre-restoration) init calls for r1-r4/h1/fa/fb/fd/fe/g3 — that's fine (index cost recorded honestly); but "被拒 = 0" everywhere (no non-zero exits) — hmm, are there really zero non-zero codegraph exits? Earlier the r1 log had an init on the damaged tree and the `files` call — all exit 0. My codegraph calls never failed (even "Symbol not found" returns exit 0). OK: 成功 = N, 被拒 = 0. I'll define that clearly.
 
-Hmm, one caveat: my earlier *damaged-tree* logs for r1–r4 include the old cargo run (rc 101 in a `=== CMD(nonbridge)` block) — those are nonbridge, not counted in 总调用 (which is about the instrument call). Hmm, but the BRIEF's 总调用 for the round9 arm counted *all* tool calls (成功 N / 被拒 M) — hmm, "末尾一行：`总调用：成功 N / 被拒 M`" in the round9 BRIEF §5 context = the calls of that arm's tool (nichlink-mcp). For my arm, the analogous = codegraph calls. I'll write: `总调用：成功 <codegraph ok> / 被拒 <codegraph refused>（codegraph；另 nonbridge <n> 次）` — that includes both dimensions and matches the requested format. 
+Hmm, one caveat: my earlier *damaged-tree* logs for r1–r4 include the old cargo run (rc 101 in a `=== CMD(nonbridge)` block) — those are nonbridge, not counted in 总调用 (which is about the instrument call). Hmm, but the BRIEF's 总调用 for the round9 arm counted *all* tool calls (成功 N / 被拒 M) — hmm, "末尾一行：`总调用：成功 N / 被拒 M`" in the round9 BRIEF §5 context = the calls of that arm's tool (xirang-mcp). For my arm, the analogous = codegraph calls. I'll write: `总调用：成功 <codegraph ok> / 被拒 <codegraph refused>（codegraph；另 nonbridge <n> 次）` — that includes both dimensions and matches the requested format. 
 
 Hmm, careful: the captain said "逐题代价请只发'仪器调用'... 我们那一侧就报桥调用数、你报 codegraph 调用数，两边的非桥（读文件/shell）分开列". So the 总调用 line should report codegraph calls (成功/被拒), and nonbridge separately ✓. Good: my line will be `总调用：成功 N / 被拒 M（codegraph；本题另有 nonbridge K 次 / B 字节）`.
 
@@ -3892,7 +3892,7 @@ Task t3 claimed by cg26 (attempt 1, attempt_id da8988b2-88f8-455a-8531-ca60aab85
 cg26：作答 fc（第 26 题）并收尾为 26/26
 `fc` 已复位，**24/24 棵树全部对回 `TREES.json` 的 `sha256`** ✓（26 题共 24 棵树：`g1`/`g2` 用 `s3`/`s5` 的树 ✓）。
 
-**按你 `PARTIAL.md` §3 的四步做**：① 核原树哈希 `da9c82b7282a0ace…` ✓（不符即停、报我 ✗）；② 重拷到你的 `target/probe-cg26/trees/fc/`（`rm -rf` 后 `rsync -a --exclude target --exclude .codegraph` ✓）并**核副本哈希** ✓，再 `init`（日志**追加**进同一份 `logs/fc.txt` ✓）；③ **题目态自检**：`fc` 的题面要求"台账必须还在 + 桥写的真实条目生效" ✓ —— 先确认 `.nichlink/adopted/entries` 存在且 `adopted`/`conformance` 读出来的 verdict 符合题面 ✓；④ 作答并按现行形状交付（五段 + `总调用：成功 N / 被拒 M` + `nonbridge:` ✓）。
+**按你 `PARTIAL.md` §3 的四步做**：① 核原树哈希 `da9c82b7282a0ace…` ✓（不符即停、报我 ✗）；② 重拷到你的 `target/probe-cg26/trees/fc/`（`rm -rf` 后 `rsync -a --exclude target --exclude .codegraph` ✓）并**核副本哈希** ✓，再 `init`（日志**追加**进同一份 `logs/fc.txt` ✓）；③ **题目态自检**：`fc` 的题面要求"台账必须还在 + 桥写的真实条目生效" ✓ —— 先确认 `.xirang/adopted/entries` 存在且 `adopted`/`conformance` 读出来的 verdict 符合题面 ✓；④ 作答并按现行形状交付（五段 + `总调用：成功 N / 被拒 M` + `nonbridge:` ✓）。
 
 **复位时踩到的两个坑（供你理解本题的台账，不必复现 ✗）**：⑴ 台账行里含**时刻**，而桥打的是 **UTC**（实测打印 `15:23:43` 时本地 `23:23:43` ✓，差 8 小时 ✗）⇒ 本题的登记态里那个时刻是 `12:32:28`（UTC）✓；⑵ 底座还需 `cargo generate-lockfile --offline` ✓。
 
@@ -3927,7 +3927,7 @@ fc/Cargo.toml
 fc/examples/graft_record.rs
 fc/examples/health_check.rs
 fc/examples/tree.rs
-fc/.nichlink/adopted/entries
+fc/.xirang/adopted/entries
 fc/src/control/control.rs
 fc/src/control/object/button/button.rs
 fc/src/control/object/slider/slider.rs
@@ -4021,7 +4021,7 @@ total 240
 79:⇒ **这 7 道的"题目态 + 最小修 + 双面绿"是我亲眼所见**，不是采信 cg26 的日志。（`g3/fa/fb/fc` 的树依赖本检出的
 93:其余 = `BRIEF.md:26-35` 的预设 + 各树自己的语义（`fa`/`fb`/`fd`/`fe` 还要求门绿，`fc` 另要求台账还在）。
 107:| `fc` | 「已经采信了，再横向加一个」：横向扩展 + **台账必须还在** + 既有条目处置与证据 + 门绿 | 加 `toggle` 面 + `lib.rs` + 期望更新；台账**未动**；**没有**手写新条目 | **命中（理由有一处错）** | 台账文件 mtime 仍是拷贝时刻 `23:24:56`（它的改动都在 `23:26:25` 之后）⇒ **一字未动**我用 mtime 独立证过；sha256 我复算 `697a5380…` ✓、`button.rs` `e842be74…` ✓；但"指纹不可重算"是错的（§4.1） |
-110:`h1` 的 E/F（死代码与覆盖盲区，明确"保留/记录，不改"）、`fc` 的 `.nichlink`（**build 产物**，不是它写的台账）。
+110:`h1` 的 E/F（死代码与覆盖盲区，明确"保留/记录，不改"）、`fc` 的 `.xirang`（**build 产物**，不是它写的台账）。
 113:`h1` 3 红 + D/E/F 附加项；`g3`/`fa`/`fb`/`fc` 是"改"题，题面要求的产物（新面/内部层/台账）都在 ✓。
 128:逐题 init：s1–s8/g4/四道 hardbug 各 1；g1,g2 各 2；r1–r4,h1,g3,fa,fb,fc,fd,fe 各 2
 133:我按日志穷举了 26 个"25 子集"：**没有一个**同时给出那组数；最接近的是 `26 − fc`（`cg=232, init=37, out=355,787, nb=62, nbB=110,853`）

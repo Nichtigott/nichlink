@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 被测工具 | 桥快照 `target/round7/src-target/debug/nichlink-mcp`，sha256 前 16 位 `67b8f3ff2769ab66`，构建自冻结检出 `target/round7/src` = 提交 `6d180b8` |
+| 被测工具 | 桥快照 `target/round7/src-target/debug/xirang-mcp`，sha256 前 16 位 `67b8f3ff2769ab66`，构建自冻结检出 `target/round7/src` = 提交 `6d180b8` |
 | 对照工具 | codegraph CLI **1.5.0**（日志/答案 mtime 18:37–19:04） |
 | 题树 | 22 题 × 2 臂：`r1–r4`（注入缺陷，各自 `pristine-N` 参照）、`s1–s8`（共享只读）、`fa–fe`（control-button 载体）、`g1–g4`、`h1`；每棵 git 单提交 |
 | 题面 / 判分 | `target/round7/BRIEF.md`（含两条改测试规矩与含"平手"的标签集合）／`target/round7/.audit/AUDIT-BRIEF.md`（臂不可读） |

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.14.0">
-  <title>NichLink 工作区架构：宿主生命周期与九个 crate Diagram</title>
+  <title>XiRang 工作区架构：宿主生命周期与九个 crate Diagram</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4836,12 +4836,12 @@
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
-        <h1>NichLink 工作区架构：宿主生命周期与九个 crate</h1>
+        <h1>XiRang 工作区架构：宿主生命周期与九个 crate</h1>
       </div>
     </div>
 
     <script id="archify-guided-views-data" type="application/json">[{"id":"build-path","label":"构建期主路径","focus":["host","buildm","core"],"note":"build.rs 调 run()：扫描 src/、推导面与 NodeId，把生成计划写进 OUT_DIR"},{"id":"runtime-path","label":"运行期与插件","focus":["host","runm","core","macro","pluginhost"],"note":"host!() 用 include! 拉进生成计划；运行期建注册实例并调用插件槽位"},{"id":"surfaces","label":"创作与检视面","focus":["cli","studio","mcp","debugm"],"note":"cli / studio / mcp / debug_method 各自成进程，全部经过内核的词汇与校验"}]</script>
-    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"https://github.com/Nichtigott/nichlink","revision":"cf0c378c68307927589c69d628a2a327ab91b680","shortRevision":"cf0c378"},"referenceCount":9,"nodes":{"buildm":[{"path":"build_method/src/lib.rs","href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/build_method/src/lib.rs"}],"core":[{"path":"core/src/registry_core.rs","href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/core/src/registry_core.rs"}],"cli":[{"path":"cli/src/lib.rs","line":143,"href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/cli/src/lib.rs#L143"}],"runm":[{"path":"run_method/src/lib.rs","href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/run_method/src/lib.rs"}],"macro":[{"path":"macro/src/lib.rs","href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/macro/src/lib.rs"}],"mcp":[{"path":"mcp/src/tools.rs","line":261,"href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/mcp/src/tools.rs#L261"}],"pluginhost":[{"path":"plugin-host/src/admission.rs","line":150,"href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/plugin-host/src/admission.rs#L150"}],"studio":[{"path":"studio/src/studio/app/writers.rs","href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/studio/src/studio/app/writers.rs"}],"debugm":[{"path":"debug_method/src/lib.rs","href":"https://github.com/Nichtigott/nichlink/blob/cf0c378c68307927589c69d628a2a327ab91b680/debug_method/src/lib.rs"}]}}</script>
+    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"https://github.com/Nichtigott/xirang","revision":"cf0c378c68307927589c69d628a2a327ab91b680","shortRevision":"cf0c378"},"referenceCount":9,"nodes":{"buildm":[{"path":"build_method/src/lib.rs","href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/build_method/src/lib.rs"}],"core":[{"path":"core/src/registry_core.rs","href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/core/src/registry_core.rs"}],"cli":[{"path":"cli/src/lib.rs","line":143,"href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/cli/src/lib.rs#L143"}],"runm":[{"path":"run_method/src/lib.rs","href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/run_method/src/lib.rs"}],"macro":[{"path":"macro/src/lib.rs","href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/macro/src/lib.rs"}],"mcp":[{"path":"mcp/src/tools.rs","line":261,"href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/mcp/src/tools.rs#L261"}],"pluginhost":[{"path":"plugin-host/src/admission.rs","line":150,"href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/plugin-host/src/admission.rs#L150"}],"studio":[{"path":"studio/src/studio/app/writers.rs","href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/studio/src/studio/app/writers.rs"}],"debugm":[{"path":"debug_method/src/lib.rs","href":"https://github.com/Nichtigott/xirang/blob/cf0c378c68307927589c69d628a2a327ab91b680/debug_method/src/lib.rs"}]}}</script>
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>
       <div class="guided-view-copy">
@@ -4884,7 +4884,7 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read">
       <svg viewBox="0 0 1360 712" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
-        <title id="archify-diagram-title">NichLink 工作区架构：宿主生命周期与九个 crate</title>
+        <title id="archify-diagram-title">XiRang 工作区架构：宿主生命周期与九个 crate</title>
         <desc id="archify-diagram-description">A architecture diagram generated by Archify.</desc>
         <!-- Definitions -->
         <defs>
@@ -4936,30 +4936,30 @@
         <text data-detail="fine" x="120" y="196" class="t-external" font-size="7" text-anchor="middle">使用者项目</text>
         </g>
 
-        <g id="node-buildm" data-node-id="buildm" data-node-label="nichlink-build-method" tabindex="0" role="button" aria-label="Focus nichlink-build-method, 构建期：扫描 src/ · 写 OUT_DIR, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="构建期：扫描 src/ · 写 OUT_DIR" data-node-context="Architecture component">
-          <title>nichlink-build-method · 构建期：扫描 src/ · 写 OUT_DIR · Architecture component</title>
+        <g id="node-buildm" data-node-id="buildm" data-node-label="xirang-build-method" tabindex="0" role="button" aria-label="Focus xirang-build-method, 构建期：扫描 src/ · 写 OUT_DIR, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="构建期：扫描 src/ · 写 OUT_DIR" data-node-context="Architecture component">
+          <title>xirang-build-method · 构建期：扫描 src/ · 写 OUT_DIR · Architecture component</title>
           <rect x="320" y="140" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="320" y="140" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(326 146) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="420" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-build-method</text>
+          <text data-detail-anchor x="420" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-build-method</text>
         <text data-detail="context" x="420" y="186" class="t-muted" font-size="9" text-anchor="middle">构建期：扫描 src/ · 写 OUT_DIR</text>
         </g>
 
-        <g id="node-core" data-node-id="core" data-node-label="nichlink-core（纯内核）" tabindex="0" role="button" aria-label="Focus nichlink-core（纯内核）, 身份 · 解析 · 树 · 诊断, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="身份 · 解析 · 树 · 诊断" data-node-context="Architecture component">
-          <title>nichlink-core（纯内核） · 身份 · 解析 · 树 · 诊断 · Architecture component</title>
+        <g id="node-core" data-node-id="core" data-node-label="xirang-core（纯内核）" tabindex="0" role="button" aria-label="Focus xirang-core（纯内核）, 身份 · 解析 · 树 · 诊断, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="身份 · 解析 · 树 · 诊断" data-node-context="Architecture component">
+          <title>xirang-core（纯内核） · 身份 · 解析 · 树 · 诊断 · Architecture component</title>
           <rect x="700" y="140" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="700" y="140" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(706 146) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="800" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-core（纯内核）</text>
+          <text data-detail-anchor x="800" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-core（纯内核）</text>
         <text data-detail="context" x="800" y="186" class="t-muted" font-size="9" text-anchor="middle">身份 · 解析 · 树 · 诊断</text>
         </g>
 
-        <g id="node-cli" data-node-id="cli" data-node-label="nichlink-cli" tabindex="0" role="button" aria-label="Focus nichlink-cli, argv 分发 · cargo 子进程, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="argv 分发 · cargo 子进程" data-node-context="Architecture component">
-          <title>nichlink-cli · argv 分发 · cargo 子进程 · Architecture component</title>
+        <g id="node-cli" data-node-id="cli" data-node-label="xirang-cli" tabindex="0" role="button" aria-label="Focus xirang-cli, argv 分发 · cargo 子进程, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="argv 分发 · cargo 子进程" data-node-context="Architecture component">
+          <title>xirang-cli · argv 分发 · cargo 子进程 · Architecture component</title>
           <rect x="1100" y="140" width="220" height="64" rx="6" class="c-mask"/>
           <rect x="1100" y="140" width="220" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1106 146) scale(0.6875)">
@@ -4968,34 +4968,34 @@
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="1210" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-cli</text>
+          <text data-detail-anchor x="1210" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-cli</text>
         <text data-detail="context" x="1210" y="186" class="t-muted" font-size="9" text-anchor="middle">argv 分发 · cargo 子进程</text>
         </g>
 
-        <g id="node-runm" data-node-id="runm" data-node-label="nichlink-run-method" tabindex="0" role="button" aria-label="Focus nichlink-run-method, 运行期：注册实例 · authoring, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="运行期：注册实例 · authoring" data-node-context="Architecture component">
-          <title>nichlink-run-method · 运行期：注册实例 · authoring · Architecture component</title>
+        <g id="node-runm" data-node-id="runm" data-node-label="xirang-run-method" tabindex="0" role="button" aria-label="Focus xirang-run-method, 运行期：注册实例 · authoring, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="运行期：注册实例 · authoring" data-node-context="Architecture component">
+          <title>xirang-run-method · 运行期：注册实例 · authoring · Architecture component</title>
           <rect x="320" y="360" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="320" y="360" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(326 366) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="420" y="390" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-run-method</text>
+          <text data-detail-anchor x="420" y="390" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-run-method</text>
         <text data-detail="context" x="420" y="406" class="t-muted" font-size="9" text-anchor="middle">运行期：注册实例 · authoring</text>
         </g>
 
-        <g id="node-macro" data-node-id="macro" data-node-label="nichlink-macro" tabindex="0" role="button" aria-label="Focus nichlink-macro, 编译期 face 字段前端, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="编译期 face 字段前端" data-node-context="Architecture component">
-          <title>nichlink-macro · 编译期 face 字段前端 · Architecture component</title>
+        <g id="node-macro" data-node-id="macro" data-node-label="xirang-macro" tabindex="0" role="button" aria-label="Focus xirang-macro, 编译期 face 字段前端, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="编译期 face 字段前端" data-node-context="Architecture component">
+          <title>xirang-macro · 编译期 face 字段前端 · Architecture component</title>
           <rect x="700" y="360" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="700" y="360" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(706 366) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="800" y="390" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-macro</text>
+          <text data-detail-anchor x="800" y="390" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-macro</text>
         <text data-detail="context" x="800" y="406" class="t-muted" font-size="9" text-anchor="middle">编译期 face 字段前端</text>
         </g>
 
-        <g id="node-mcp" data-node-id="mcp" data-node-label="nichlink-mcp" tabindex="0" role="button" aria-label="Focus nichlink-mcp, stdio 桥 · 17 个工具, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="stdio 桥 · 17 个工具" data-node-context="Architecture component">
-          <title>nichlink-mcp · stdio 桥 · 17 个工具 · Architecture component</title>
+        <g id="node-mcp" data-node-id="mcp" data-node-label="xirang-mcp" tabindex="0" role="button" aria-label="Focus xirang-mcp, stdio 桥 · 17 个工具, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="stdio 桥 · 17 个工具" data-node-context="Architecture component">
+          <title>xirang-mcp · stdio 桥 · 17 个工具 · Architecture component</title>
           <rect x="1100" y="360" width="220" height="64" rx="6" class="c-mask"/>
           <rect x="1100" y="360" width="220" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1106 366) scale(0.6875)">
@@ -5004,24 +5004,24 @@
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="1210" y="390" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-mcp</text>
+          <text data-detail-anchor x="1210" y="390" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-mcp</text>
         <text data-detail="context" x="1210" y="406" class="t-muted" font-size="9" text-anchor="middle">stdio 桥 · 17 个工具</text>
         </g>
 
-        <g id="node-pluginhost" data-node-id="pluginhost" data-node-label="nichlink-plugin-host" tabindex="0" role="button" aria-label="Focus nichlink-plugin-host, wasm / 进程插件 · 准入, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="wasm / 进程插件 · 准入" data-node-context="Architecture component">
-          <title>nichlink-plugin-host · wasm / 进程插件 · 准入 · Architecture component</title>
+        <g id="node-pluginhost" data-node-id="pluginhost" data-node-label="xirang-plugin-host" tabindex="0" role="button" aria-label="Focus xirang-plugin-host, wasm / 进程插件 · 准入, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="wasm / 进程插件 · 准入" data-node-context="Architecture component">
+          <title>xirang-plugin-host · wasm / 进程插件 · 准入 · Architecture component</title>
           <rect x="320" y="580" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="320" y="580" width="200" height="64" rx="6" class="c-security" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(326 586) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-detail-anchor x="420" y="610" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-plugin-host</text>
+          <text data-detail-anchor x="420" y="610" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-plugin-host</text>
         <text data-detail="context" x="420" y="626" class="t-muted" font-size="9" text-anchor="middle">wasm / 进程插件 · 准入</text>
         </g>
 
-        <g id="node-studio" data-node-id="studio" data-node-label="nichlink-studio" tabindex="0" role="button" aria-label="Focus nichlink-studio, ratatui 创作与检视, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="ratatui 创作与检视" data-node-context="Architecture component">
-          <title>nichlink-studio · ratatui 创作与检视 · Architecture component</title>
+        <g id="node-studio" data-node-id="studio" data-node-label="xirang-studio" tabindex="0" role="button" aria-label="Focus xirang-studio, ratatui 创作与检视, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="ratatui 创作与检视" data-node-context="Architecture component">
+          <title>xirang-studio · ratatui 创作与检视 · Architecture component</title>
           <rect x="700" y="580" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="700" y="580" width="200" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(706 586) scale(0.6875)">
@@ -5030,18 +5030,18 @@
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="800" y="610" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-studio</text>
+          <text data-detail-anchor x="800" y="610" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-studio</text>
         <text data-detail="context" x="800" y="626" class="t-muted" font-size="9" text-anchor="middle">ratatui 创作与检视</text>
         </g>
 
-        <g id="node-debugm" data-node-id="debugm" data-node-label="nichlink-debug-method" tabindex="0" role="button" aria-label="Focus nichlink-debug-method, MIR 与 trace 的证据合并, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="MIR 与 trace 的证据合并" data-node-context="Architecture component">
-          <title>nichlink-debug-method · MIR 与 trace 的证据合并 · Architecture component</title>
+        <g id="node-debugm" data-node-id="debugm" data-node-label="xirang-debug-method" tabindex="0" role="button" aria-label="Focus xirang-debug-method, MIR 与 trace 的证据合并, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="MIR 与 trace 的证据合并" data-node-context="Architecture component">
+          <title>xirang-debug-method · MIR 与 trace 的证据合并 · Architecture component</title>
           <rect x="1100" y="580" width="220" height="64" rx="6" class="c-mask"/>
           <rect x="1100" y="580" width="220" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1106 586) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="1210" y="610" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nichlink-debug-method</text>
+          <text data-detail-anchor x="1210" y="610" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">xirang-debug-method</text>
         <text data-detail="context" x="1210" y="626" class="t-muted" font-size="9" text-anchor="middle">MIR 与 trace 的证据合并</text>
         </g>
 
@@ -5292,7 +5292,7 @@
           <h3>宿主生命周期</h3>
         </div>
         <ul>
-          <li>&bull; build.rs 调 nichlink_build_method::run()：扫描 src/、推导面与 NodeId</li>
+          <li>&bull; build.rs 调 xirang_build_method::run()：扫描 src/、推导面与 NodeId</li>
           <li>&bull; 生成计划写进 OUT_DIR，crate 根的 host!() 用 include! 拉进编译单元</li>
           <li>&bull; 运行期由 run_method 建注册实例，跑 authoring 与 trace</li>
         </ul>
@@ -5333,7 +5333,7 @@
           <li>&bull; core/source/calls.rs 的两套调用扫描器仍并存（R 系列收拢暂缓）；KN4 已让它们对同一函数体给出一致的结论</li>
           <li>&bull; conventions 的 12 道门禁仍各自做文本扫描；G-09 抽出了共享的 drop_governed_lines，整体收拢暂缓</li>
           <li>&bull; 命名空间被 CLI / MCP / Studio 各读一遍，规则不一致（S12，待另一窗口的在途改动落地）</li>
-          <li>&bull; 发布版本号的两套读取逻辑已收敛（RC4）：工作流改调 tools/nichlink-publish --workspace-version</li>
+          <li>&bull; 发布版本号的两套读取逻辑已收敛（RC4）：工作流改调 tools/xirang-publish --workspace-version</li>
           <li>&bull; MCP 的 converge / verify / usages / explain / diff / grafts 答案仍高度重叠（R 系列），但 m2/m3/m4 已让各自契约与行为一致</li>
         </ul>
       </div>

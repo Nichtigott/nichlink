@@ -1,7 +1,7 @@
 # 逐题协议（一题一会话）· 第十轮跑法记录
 
 **这份文件是"怎么跑"的唯一入口**：装置布局、任务书、token 读法、两侧同口径、纪律、以及每题的会话 id 表。
-装置脚本：`tools/nichlink-perquestion-protocol.py`（子命令 `setup` / `brief <arm> <id>` / `measure` / `sessions`）。
+装置脚本：`tools/xirang-perquestion-protocol.py`（子命令 `setup` / `brief <arm> <id>` / `measure` / `sessions`）。
 
 ## 0. 为什么换成一题一会话
 
@@ -57,7 +57,7 @@ target/round10/
 
 | 批 | 题号 | 臂 | 人数 |
 | --- | --- | --- | --- |
-| `nichlink-r10-b1` | `r1`–`r4` | ours + cg | 8 |
+| `xirang-r10-b1` | `r1`–`r4` | ours + cg | 8 |
 | `b2` | `s1`–`s4` | ours + cg | 8 |
 | `b3` | `s5`–`s8` | ours + cg | 8 |
 | `b4` | `g1`–`g4` | ours + cg | 8 |

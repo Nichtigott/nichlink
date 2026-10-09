@@ -18,7 +18,7 @@
 //! - `freshness: reused (content-verified at HH:MM:SS, Ns ago; window 30s)` — this answer
 //!   read a verification taken inside the declared window. It never reads as `current`:
 //!   复用与"当前"是两个词，把它们混同正是这套等级要阻止的事。
-//! - `build stale (run `nichlink check`)` — the record no longer describes these sources,
+//! - `build stale (run `xirang check`)` — the record no longer describes these sources,
 //!   or carries no fingerprint at all.
 //! - `freshness: not checked (its records were not used for this answer)` — the member
 //!   contributed nothing to this answer, so nothing was paid for it.
@@ -84,7 +84,7 @@ pub(crate) const UNKNOWN: &str = "unknown (no content verification inside the re
 
 /// The word every stale verdict is spelled with, in one place.
 /// 每个"过期"裁决共用的唯一词形。
-const STALE: &str = "build stale (run `nichlink check`)";
+const STALE: &str = "build stale (run `xirang check`)";
 
 /// How much of the freshness question one call is willing to pay for.
 /// 一次调用愿意为新鲜度问题付多少。

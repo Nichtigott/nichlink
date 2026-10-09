@@ -7,9 +7,9 @@ use crate::build_method::PartitionView;
 /// 分区屏显示什么，以及用户让它做什么。
 ///
 /// The view is the shared reader's output (`build_method::partition_view`), not a second summary: the
-/// screen and `nichlink crates` have to describe the same tree the same way.
+/// screen and `xirang crates` have to describe the same tree the same way.
 /// 这里的视图是共用读取器（`build_method::partition_view`）的产物，不是第二份摘要：本屏与
-/// `nichlink crates` 必须用同一种说法描述同一棵树。
+/// `xirang crates` 必须用同一种说法描述同一棵树。
 #[derive(Clone, Debug, Default)]
 pub struct PartitionState {
     /// The partition as read from the selected project, when it declares one.

@@ -10,10 +10,8 @@ use super::*;
 fn synthetic(documents: &[(&str, &str)], sources: &[(&str, &str)]) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-anchors-{}-{sequence}",
-        std::process::id()
-    ));
+    let root =
+        std::env::temp_dir().join(format!("xirang-anchors-{}-{sequence}", std::process::id()));
     for (relative, contents) in sources.iter().chain(documents) {
         let path = root.join(relative);
         fs::create_dir_all(path.parent().expect("parent")).expect("fixture dir");
@@ -126,7 +124,7 @@ fn a_manifest_anchor_resolves_and_other_kinds_stay_out() {
         &[(
             "docs/note.md",
             "the members list is `Cargo.toml:2`, prose is `docs/note.md:9`, \
-             the tool is `tools/nichlink-publish:88`\n",
+             the tool is `tools/xirang-publish:88`\n",
         )],
         &[("kernel/src/probe.rs", "fn probe() {}\n")],
     );

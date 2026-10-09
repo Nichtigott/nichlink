@@ -36,7 +36,7 @@ fn package(label: &str) -> (PathBuf, String) {
 /// Publish the two files the build writes, so the report has something to read.
 /// 发布构建写下的那两个文件，让报告有东西可读。
 fn publish(root: &Path, name: &str, all: bool) {
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     std::fs::create_dir_all(&out).expect("build output");
     let faces = face_views(root, name).expect("faces derive");
     let id = faces[0].id;
@@ -101,7 +101,7 @@ fn a_missing_build_is_unknown_rather_than_guessed() {
     let reply = explain(&root, &json!({"node": "root/button"})).expect("the report renders");
     assert!(reply.contains("scope unknown"), "{reply}");
     assert!(reply.contains("pruning unknown"), "{reply}");
-    assert!(reply.contains("nichlink check"), "{reply}");
+    assert!(reply.contains("xirang check"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -113,7 +113,7 @@ fn a_missing_build_is_unknown_rather_than_guessed() {
 #[test]
 fn a_face_with_no_tracked_symbol_is_not_reported_as_stripped() {
     let (root, name) = package("no-symbol");
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     std::fs::create_dir_all(&out).expect("build output");
     let faces = face_views(&root, &name).expect("faces derive");
     std::fs::write(
@@ -232,24 +232,24 @@ fn every_report_spells_the_freshness_word_that_one_place_produces() {
         (
             "explain/stale",
             explain(&stale, &json!({"node": "root/label"})).expect("explain renders"),
-            "\nbuild stale (run `nichlink check`)",
+            "\nbuild stale (run `xirang check`)",
         ),
         (
             "overlay/stale",
             crate::mcp::overlay::overlay(&stale, &json!({})).expect("overlay renders"),
-            "\nbuild stale (run `nichlink check`)",
+            "\nbuild stale (run `xirang check`)",
         ),
         (
             "converge/stale",
             crate::mcp::converge::converge(&stale, &json!({"node": "root/label"}))
                 .expect("converge renders"),
-            "\nbuild stale (run `nichlink check`)",
+            "\nbuild stale (run `xirang check`)",
         ),
         (
             "diff records/stale",
             crate::mcp::diff::diff(&stale, &json!({"records": true}))
                 .expect("the records diff renders"),
-            "\nbuild stale (run `nichlink check`)",
+            "\nbuild stale (run `xirang check`)",
         ),
         // The tree diff has no build line at all when no evidence was ever published:
         // it answers with the command that produces one instead. The fixture above
@@ -260,7 +260,7 @@ fn every_report_spells_the_freshness_word_that_one_place_produces() {
         (
             "diff/stale",
             crate::mcp::diff::diff(&stale_build, &json!({})).expect("the tree diff renders"),
-            "\nbuild stale (run `nichlink check`)",
+            "\nbuild stale (run `xirang check`)",
         ),
     ] {
         if !reply.contains(expected) {
@@ -320,7 +320,7 @@ fn the_report_says_who_implements_the_slot() {
     std::fs::write(
         root.join("src/lib.rs"),
         "pub const FRAMEWORK: FrameworkId = FrameworkId::new(\"evidence.fixture\");\n\
-         nichlink_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
+         xirang_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
          cut(crate::button::NODE_ID) graft(fast_button::fast::NODE_ID),\n);\n",
     )
     .expect("the entry");

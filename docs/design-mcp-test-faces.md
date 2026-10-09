@@ -1,6 +1,6 @@
 # 设计：测试面（哪个特性面是红的）
 
-维护者的评测把这条空缺量出来了：第 1 轮第 11 轮的缺陷**在默认面隐形**（`cargo test --workspace --offline` 全绿，红只在 `--all-features`；`studio` 不在 `nichlink-toolchain` 的 `default = ["build", "run"]` 里，默认面根本不编译那个文件），而**两端（我们的桥与 codegraph）都答不了"红在哪个面"** —— 两组都靠自己把特性面加宽才看见红。
+维护者的评测把这条空缺量出来了：第 1 轮第 11 轮的缺陷**在默认面隐形**（`cargo test --workspace --offline` 全绿，红只在 `--all-features`；`studio` 不在 `xirang-toolchain` 的 `default = ["build", "run"]` 里，默认面根本不编译那个文件），而**两端（我们的桥与 codegraph）都答不了"红在哪个面"** —— 两组都靠自己把特性面加宽才看见红。
 
 ## 1. 为什么现在答不了
 
@@ -16,10 +16,10 @@
 - 全部特性名（`features` 的键，含 `dep:`/`/` 形态要原样标注）；
 - 每个 target 的 `required-features`。
 
-`nichlink.status` 里多一节，形状例如：
+`xirang.status` 里多一节，形状例如：
 
 ```
-faces  nichlink-toolchain: default=[build, run] all=[authoring, build, cli, …, studio]  required=[nichlink-dev -> [dev-supervisor]]
+faces  xirang-toolchain: default=[build, run] all=[authoring, build, cli, …, studio]  required=[xirang-dev -> [dev-supervisor]]
 note   a file compiled only under a non-default feature cannot fail on the default face: run
        `cargo test --all-features` (or `--features <name>`) before believing a green default run
 ```
@@ -28,7 +28,7 @@ note   a file compiled only under a non-default feature cannot fail on the defau
 
 ### B. 观测到的测试面（需维护者单独拍板）
 
-`nichlink.check`（名字待定）：显式 opt-in 地在成员目录里跑一条**固定**命令，只回摘要。要点是把"跑测试"带来的新面积压到最小：
+`xirang.check`（名字待定）：显式 opt-in 地在成员目录里跑一条**固定**命令，只回摘要。要点是把"跑测试"带来的新面积压到最小：
 
 - **显式请求**：默认不跑；请求要说出面的选择（`--all-features` / 具名特性 / 默认面）——与写入路径同一条纪律（默认预览、动作要请求说出来）。
 - **硬超时 + 明确未知**：超时 ⇒ 印 `unknown (timed out after <d>)`，**不是** pass ✓（本仓"宁可拒绝也不给看似合理的答案"那条教义）。
@@ -56,10 +56,10 @@ note   a file compiled only under a non-default feature cannot fail on the defau
 
 候选 **A** 与 **B** 都已实现（同一批）：
 
-- **A**：新模块 `toolchain/src/mcp/src/faces.rs`（从 `workspace::metadata_json` 读 Cargo 自己的看法，命令拼法仍只有一份），`nichlink.status` 末尾多一节。真树上实测输出：
-  `faces  nichlink-toolchain: default=[build, run] all=[authoring, build, cli, dev-supervisor, evidence, mcp, …]`
+- **A**：新模块 `toolchain/src/mcp/src/faces.rs`（从 `workspace::metadata_json` 读 Cargo 自己的看法，命令拼法仍只有一份），`xirang.status` 末尾多一节。真树上实测输出：
+  `faces  xirang-toolchain: default=[build, run] all=[authoring, build, cli, dev-supervisor, evidence, mcp, …]`
   加那条盲区备注 —— 第 11 轮那个盲区现在在调用方跑测试**之前**就写在答案里了。
-- **B**：新工具 `nichlink.check {face, timeout_ms?, root?}`（目录第 22 项），四条钉子：失败运行如实报出退出码/结果行/失败测试名；`timeout_ms` 到点 ⇒ 印 `unknown (timed out…只杀直接子进程…日志在…)` **而不是 pass**；没有 `test result:` 行 ⇒ 印"什么都没跑，这不是通过"；不说 `face` ⇒ 按名拒绝（没有默认面）。输出走**文件**而不是管道（没人排空的管道会填满并让子进程死锁，本仓已经付过一次代价）。
+- **B**：新工具 `xirang.check {face, timeout_ms?, root?}`（目录第 22 项），四条钉子：失败运行如实报出退出码/结果行/失败测试名；`timeout_ms` 到点 ⇒ 印 `unknown (timed out…只杀直接子进程…日志在…)` **而不是 pass**；没有 `test result:` 行 ⇒ 印"什么都没跑，这不是通过"；不说 `face` ⇒ 按名拒绝（没有默认面）。输出走**文件**而不是管道（没人排空的管道会填满并让子进程死锁，本仓已经付过一次代价）。
 - 判据同 §3：静态清单与观测结果在答案里可分辨（`faces` 行 vs `check` 行的命令与退出码）✓；自我描述同批改（`tools/list` 描述 + 模块文档）✓。
 
 ## 6. 相关记录

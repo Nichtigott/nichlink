@@ -8,12 +8,12 @@
 
 | 臂 | 仪器 | 会话 | 逐题日志 | 答案 |
 | --- | --- | --- | --- | --- |
-| `ours` | `nichlink-mcp`（本仓 MCP 桥，18 个读工具 + check/verify） | `aa54ec58-44bf-4f88-a2ed-d0dd11614b93` | `target/round9/logs/<id>.jsonl` | `target/round9/answers/<id>.md` |
+| `ours` | `xirang-mcp`（本仓 MCP 桥，18 个读工具 + check/verify） | `aa54ec58-44bf-4f88-a2ed-d0dd11614b93` | `target/round9/logs/<id>.jsonl` | `target/round9/answers/<id>.md` |
 | `cg` | `codegraph` 1.6.1（CLI：`init/files/query/node/callers/callees/explore/affected`） | `225f5295-20fb-4d73-8bb7-375b9ee71a5b` | `target/probe-cg26/logs/<id>.txt` | `target/probe-cg26/answers/<id>.md` |
 
 **同题同树同形状**：26 道题、24 棵树（`g1`≡`s3`、`g2`≡`s5` 的字节副本）、两侧各自一会话、同模型同模板。
 **题面**：`target/round9/BRIEF.md` §4（四道注入缺陷 `r1`–`r4` · 八道情景 `s1`–`s8` · 四关 `g1`–`g4` · 范围型 `h1` ·
-五族 `fa`–`fe` · 四道 hardbug 类）。**判据与预设**在 `tools/nichlink-mcp-eval scenario-plan`（第七轮那套）。
+五族 `fa`–`fe` · 四道 hardbug 类）。**判据与预设**在 `tools/xirang-mcp-eval scenario-plan`（第七轮那套）。
 
 ## 二、数据在哪（全部只读；**不要改任何题树、日志、答案**）
 

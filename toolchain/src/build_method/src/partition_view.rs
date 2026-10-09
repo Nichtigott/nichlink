@@ -1,22 +1,22 @@
 //! What a host's declared crate partition is, and what is on disk for it (audit `M7`, P3.6).
 //! 宿主的 crate 分区是什么样，以及它在磁盘上已经有什么（审计 `M7`，P3.6）。
 //!
-//! This is the one reader both authoring surfaces use: `nichlink crates` prints it, and Studio's
+//! This is the one reader both authoring surfaces use: `xirang crates` prints it, and Studio's
 //! partition screen draws it, so the two cannot disagree about what a declaration means, what is
 //! already written, or whether a package could be published.
-//! 这是两个创作面共用的唯一读取器：`nichlink crates` 打印它，Studio 的分区屏绘制它，因此两者不可能对
+//! 这是两个创作面共用的唯一读取器：`xirang crates` 打印它，Studio 的分区屏绘制它，因此两者不可能对
 //! "声明是什么意思、已经写了什么、某个包能不能发布"给出不同答案。
 //!
-//! It reads the **published** records (`target/nichlink/out`), not a fresh derivation, for the same
+//! It reads the **published** records (`target/xirang/out`), not a fresh derivation, for the same
 //! reason the authoring write path does: the plan is what the build published, and a screen that
 //! derived its own would describe a tree the writer is not about to write.
-//! 它读的是**已发布的记录**（`target/nichlink/out`），而不是现推导一遍，理由与创作写入路径相同：计划就是
+//! 它读的是**已发布的记录**（`target/xirang/out`），而不是现推导一遍，理由与创作写入路径相同：计划就是
 // 构建发布出来的东西，而一个自己推导的画面会描述一棵写入方并不打算写的树。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 use super::HostCut;
 use super::crate_facade::{PlannedFacade, plan_facade};
@@ -33,7 +33,7 @@ use super::shape_decl::read_shape_declaration;
 /// for one of them to read a directory the build never wrote.
 /// CLI、桥与 Studio 共用一份实现：这条路径有三份拷贝，就是三次"其中一个读到的目录构建从没写过"的机会。
 pub(crate) fn build_out_dir(package_root: &Path) -> PathBuf {
-    package_root.join("target/nichlink/out")
+    package_root.join("target/xirang/out")
 }
 
 /// The graft cuts the host entry declares, for a generated package to carry.
@@ -118,7 +118,7 @@ pub(crate) fn plan(package_root: &Path) -> Result<Option<PartitionPlan>, String>
     let out_dir = build_out_dir(package_root);
     let rows = super::read_pruning_manifest(&out_dir).map_err(|error| {
         format!(
-            "{error}\nway forward: run `nichlink check` first — the plan reads the faces the build published"
+            "{error}\nway forward: run `xirang check` first — the plan reads the faces the build published"
         )
     })?;
     let faces: Vec<(String, String, NodeId)> = rows
@@ -573,7 +573,7 @@ fn publish_notes(package: &str, directory: &Path, on_disk: OnDisk) -> Vec<String
         .lines()
         .filter(|line| line.contains("path =") && !line.contains("version ="))
         .filter_map(|line| line.split('=').next().map(|name| name.trim().to_owned()))
-        .filter(|name| name != "nichlink-toolchain" && !name.is_empty() && !name.starts_with('#'))
+        .filter(|name| name != "xirang-toolchain" && !name.is_empty() && !name.starts_with('#'))
         .collect();
     if !path_only.is_empty() {
         notes.push(format!(

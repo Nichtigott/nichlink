@@ -34,7 +34,7 @@ Design (following `toolchain/tests/runtime_face_preset_parts.rs`):
 
 In `src/control/object/button/button.rs`:
 ```rust
-use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
+use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
 
 /// Button 的内部结构：它自己声明的那一层零件。
 /// The Button's internal structure: the parts layer it declares for itself.
@@ -160,9 +160,9 @@ Let me write the files.
 ```
 **examples/tree.rs** — 11 lines, 1 symbol · no other indexed file depends on it
 
-1	//! 运行 `cargo run -p nichlink-example-control-button --example tree` 打印示例的
+1	//! 运行 `cargo run -p xirang-example-control-button --example tree` 打印示例的
 2	//! 注册树。
-3	//! Run `cargo run -p nichlink-example-control-button --example tree` to print the
+3	//! Run `cargo run -p xirang-example-control-button --example tree` to print the
 4	//! example's registration tree.
 5	
 6	fn main() {
@@ -225,12 +225,12 @@ Let me write the files.
 44	#[test]
 45	#[ignore = "runs a separate cargo build; CI runs it explicitly"]
 46	fn the_ide_mirror_type_checks_with_nested_faces() {
-47	    let target = std::env::temp_dir().join("nichlink-ide-mirror-target");
+47	    let target = std::env::temp_dir().join("xirang-ide-mirror-target");
 48	    // The nested-face host is the one that failed; the mirror-only host guards
 49	    // the other direction, where a face declares no registry to own.
 50	    // 嵌套面宿主是失败的那一个；只有镜像的宿主守住另一侧——注册面没有注册机可拥有。
-51	    check_under_rust_analyzer("nichlink-example-control-button", &target);
-52	    check_under_rust_analyzer("nichlink-example-control-button-graft", &target);
+51	    check_under_rust_analyzer("xirang-example-control-button", &target);
+52	    check_under_rust_analyzer("xirang-example-control-button-graft", &target);
 53	}
 54
 ```
@@ -245,7 +245,7 @@ Let me write the files.
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
 6	
 7	pub struct Button;
 8	

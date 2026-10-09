@@ -34,7 +34,7 @@ pub(crate) struct SourceFile {
     /// 本模块只**搬运**它们，不判定它们。哪些臂不可达是对掩码文本的词法判断，而本工作区只有一份那份
     /// 判断的实现（`kernel::source`），因此再词法一遍的执行面就是第二条会漂移的规则——`functions`
     /// 来自 `function_symbols` 是同一条理由。
-    pub(crate) branches: nichlink_kernel::source::BranchFacts,
+    pub(crate) branches: xirang_kernel::source::BranchFacts,
 }
 
 pub(crate) fn required_path(arguments: &Value) -> Result<String, String> {
@@ -105,7 +105,7 @@ fn load_filtered_file(
             relative,
             source: text,
             functions: Vec::new(),
-            branches: nichlink_kernel::source::branch_facts(""),
+            branches: xirang_kernel::source::branch_facts(""),
         });
     }
     Ok(index_file(relative, text))
@@ -213,7 +213,7 @@ struct StdSourceTree {
     root: PathBuf,
 }
 
-impl nichlink_kernel::source::SourceTree for StdSourceTree {
+impl xirang_kernel::source::SourceTree for StdSourceTree {
     fn is_directory(&self, path: &Path) -> bool {
         path.is_dir() && is_safe_child(&self.root, path)
     }
@@ -244,25 +244,25 @@ fn visit_rs(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     let tree = StdSourceTree {
         root: fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf()),
     };
-    nichlink_kernel::source::collect_rust_sources(
+    xirang_kernel::source::collect_rust_sources(
         &tree,
         directory,
-        nichlink_kernel::source::SourceWalk {
+        xirang_kernel::source::SourceWalk {
             skip_target: true,
-            ..nichlink_kernel::source::SourceWalk::EVERYTHING
+            ..xirang_kernel::source::SourceWalk::EVERYTHING
         },
-        |_, _| nichlink_kernel::source::Keep::Yes,
+        |_, _| xirang_kernel::source::Keep::Yes,
         paths,
     )?;
-    // The write path's own recoverable trash lives under `.nichlink/` and holds
+    // The write path's own recoverable trash lives under `.xirang/` and holds
     // `.rs` files, so without this filter a deleted fact keeps answering `status`
     // and `search` from its backup — the bridge indexing its own private state.
-    // 写入路径自己的可恢复回收目录在 `.nichlink/` 下，而里面就是 `.rs` 文件；没有这道过滤，一个被
+    // 写入路径自己的可恢复回收目录在 `.xirang/` 下，而里面就是 `.rs` 文件；没有这道过滤，一个被
     // 删掉的东西会一直从它的备份里回答 `status` 与 `search`——桥在索引自己的私有状态。
     paths.retain(|path| {
         !path
             .components()
-            .any(|component| component.as_os_str() == nichlink_kernel::lexicon::NICHLINK_DIR)
+            .any(|component| component.as_os_str() == xirang_kernel::lexicon::XIRANG_DIR)
     });
     Ok(())
 }
@@ -337,13 +337,13 @@ pub(crate) fn load_one(root: &Path, relative: &str) -> Result<SourceFile, String
 /// 读取这棵树携带的一份文本文件：台账、清单、构建日志。
 ///
 /// `read` used to refuse anything that was not Rust source, and the one file the second question was
-/// entirely about — `.nichlink/adopted/entries` — is not Rust. The arm went to `cat`, which is
+/// entirely about — `.xirang/adopted/entries` — is not Rust. The arm went to `cat`, which is
 /// outside this tool's `--log`, so the ledger work left the account altogether (W8, h2 step 42: "The
 /// `read` tool refuses non-Rust files (exit 1). Fine — I used `cat` for the ledger").
 /// The rule now: **any UTF-8 text file inside the root is readable; a `.rs` file additionally gets
 /// the symbol index**. The refusal that remains is the one that is about the file rather than about
 /// its extension, and it names what `read` can print so the caller's next move is not a guess.
-/// `read` 过去拒绝一切非 Rust 源码的东西，而第二个问题整个围绕的那份文件——`.nichlink/adopted/entries`
+/// `read` 过去拒绝一切非 Rust 源码的东西，而第二个问题整个围绕的那份文件——`.xirang/adopted/entries`
 /// ——恰恰不是 Rust。那一臂于是去用 `cat`，而 `cat` 在本工具的 `--log` 之外，于是台账那段工作整个离开了
 /// 账本（W8 h2 第 42 步原文：「The `read` tool refuses non-Rust files (exit 1). Fine — I used `cat` for
 /// the ledger」）。现在的规则是：**根内的任何 UTF-8 文本文件都可读；`.rs` 文件额外给出符号索引**。
@@ -406,7 +406,7 @@ fn read_source(root: &Path, path: &Path) -> Result<String, String> {
 /// 一个被索引的条目：文本，加上这份索引搬运的两种词法读数。
 fn index_file(relative: String, source: String) -> SourceFile {
     SourceFile {
-        branches: nichlink_kernel::source::branch_facts(&source),
+        branches: xirang_kernel::source::branch_facts(&source),
         functions: parse_functions(&source),
         relative,
         source,
@@ -426,7 +426,7 @@ fn index_file(relative: String, source: String) -> SourceFile {
 /// 和报告同一个文件的调用方（`preview` 的声明锚点、`converge_trace` 的记录路径）拼成两种样子。
 /// 内核做折叠的理由与显示时相同：身份用的是原始字节，只有**展示**出来的东西才可以归一化。
 pub(crate) fn portable_path(path: &Path) -> String {
-    nichlink_kernel::declaration::portable_path(&path.to_string_lossy())
+    xirang_kernel::declaration::portable_path(&path.to_string_lossy())
 }
 
 pub(crate) fn is_safe_child(root: &Path, path: &Path) -> bool {
@@ -449,7 +449,7 @@ pub(crate) fn resolve_root(base: &Path, requested: Option<&str>) -> Result<PathB
         )
     })?;
     if !candidate.starts_with(&base) {
-        return Err("requested root must stay inside NICH_LINK_PACKAGE_ROOT".to_owned());
+        return Err("requested root must stay inside XIRANG_PACKAGE_ROOT".to_owned());
     }
     if !candidate.is_dir() {
         return Err(format!(
@@ -461,10 +461,10 @@ pub(crate) fn resolve_root(base: &Path, requested: Option<&str>) -> Result<PathB
 }
 
 fn parse_functions(source: &str) -> Vec<Function> {
-    nichlink_kernel::source::function_symbols(source)
+    xirang_kernel::source::function_symbols(source)
         .into_iter()
         .map(|function| Function {
-            calls: nichlink_kernel::source::direct_calls(&function.body, &function.name),
+            calls: xirang_kernel::source::direct_calls(&function.body, &function.name),
             name: function.name,
             line: function.line as usize,
             end_line: function.end_line as usize,

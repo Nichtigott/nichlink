@@ -45,7 +45,7 @@ fn both_spellings_of_the_input_keep_the_function_name() {
         if let Some(declared) = declared {
             face.values.insert("handle".to_owned(), declared.to_owned());
         }
-        let snapshot = AuthoringContext::new("/tmp/nichlink-snapshot-probe", "probe")
+        let snapshot = AuthoringContext::new("/tmp/xirang-snapshot-probe", "probe")
             .scope(|| face.to_snapshot())
             .expect("a face with every required key converts");
         assert_eq!(snapshot.handle, expected, "{label}: the handle field");

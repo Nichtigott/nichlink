@@ -1,14 +1,14 @@
 //! Where one face stands relative to the build's own manifest.
 //! 一个面相对构建自己的清单处于什么状态。
 //!
-//! `nichlink.diff` states the whole delta and `nichlink.search` annotates each hit
+//! `xirang.diff` states the whole delta and `xirang.search` annotates each hit
 //! with the same verdict, and the verdict is one rule: a face the build published
 //! is `ok`, a face it never saw is `added since build`, and a face whose *source*
 //! the build recorded under a different identity is `re-identified`. Two copies of
 //! that rule would let the diff and the search disagree about the same face, which
 //! is exactly the drift the tree vocabulary exists to prevent — so it lives here,
 //! once, and both tools read it.
-//! `nichlink.diff` 说出整份差异，`nichlink.search` 给每个命中标注同一个结论，而这个结论是一条规则：
+//! `xirang.diff` 说出整份差异，`xirang.search` 给每个命中标注同一个结论，而这个结论是一条规则：
 //! 构建发布过的面是 `ok`，构建从未见过的面是 `added since build`，而构建把它的**源码**记在另一个身份
 //! 之下的面是 `re-identified`。这条规则有两份副本，就会让 diff 与 search 对同一个面给出不同说法——
 //! 而这正是这棵树的词汇要消除的漂移——因此它只住在这里，两个工具都读它。
@@ -17,7 +17,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use crate::build_method::{FaceView, PruningRow, read_pruning_manifest};
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 use crate::mcp::build_evidence::out_dir;
 
@@ -52,13 +52,13 @@ impl FaceStatus {
     /// 这个状态在任何被打印的地方所用的那个词。
     ///
     /// `status` unifies the *rule*, and this unifies the *word*: without it the
-    /// same face came back `reidentified` from `nichlink.diff`'s count line and
-    /// `re-identified` from `nichlink.search`'s annotation, which is the drift
+    /// same face came back `reidentified` from `xirang.diff`'s count line and
+    /// `re-identified` from `xirang.search`'s annotation, which is the drift
     /// the tree vocabulary exists to prevent. The count line names its buckets
     /// before any face is in hand, so it reads the constants above — the words
     /// still live here and nowhere else.
-    /// `status` 统一的是**规则**，这里统一的是**词形**：没有它，同一个面会从 `nichlink.diff`
-    /// 的计数行回来成 `reidentified`、从 `nichlink.search` 的标注回来成 `re-identified`——
+    /// `status` 统一的是**规则**，这里统一的是**词形**：没有它，同一个面会从 `xirang.diff`
+    /// 的计数行回来成 `reidentified`、从 `xirang.search` 的标注回来成 `re-identified`——
     /// 而这正是这棵树的词汇要消除的漂移。计数行在任何面到手之前就说出它的桶名，因此它读上面的
     /// 常量；词形仍然只住在这里。
     pub(crate) fn label(&self) -> &'static str {
@@ -158,8 +158,8 @@ impl TreeDelta {
              reads identities as `{reader}`. Identity is the namespace plus the source path plus the \
              name, so the same face has two different ids here — comparing them would report every \
              face as moved, which is what this refuses to do.\n\
-             way forward: run `nichlink check` in this tree (it republishes under `{reader}`), or set \
-             NICH_LINK_NAMESPACE={published} and ask again",
+             way forward: run `xirang check` in this tree (it republishes under `{reader}`), or set \
+             XIRANG_NAMESPACE={published} and ask again",
             out_dir(root).display()
         ))
     }

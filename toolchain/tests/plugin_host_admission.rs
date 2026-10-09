@@ -17,13 +17,13 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ed25519_dalek::{Signer, SigningKey};
-use nichlink_toolchain::plugin_host::{
+use xirang_toolchain::plugin_host::{
     Ed25519Verifier, OFFICIAL_LOCK, PLUGIN_LOCK_DIRECTORY, PluginAdmission, TrustedPublicKey,
     plugin_catalog,
 };
 #[cfg(feature = "wasm")]
-use nichlink_toolchain::plugin_host::{USER_LOCK, lane_for};
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::plugin_host::{USER_LOCK, lane_for};
+use xirang_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginPolicy, PluginRevocation, PluginSource, PluginTrustPolicy,
     RegistrationInfo, RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -32,21 +32,21 @@ use nichlink_toolchain::run_method::{
 // the imports are gated with it rather than left unused in a feature-less build.
 // 本文件里通道词汇只经 Wasm 表抵达，因此这些导入与它一同门控，而不是在无特性构建里悬空。
 #[cfg(feature = "wasm")]
-use nichlink_toolchain::run_method::{PluginAssurance, PluginChannel};
+use xirang_toolchain::run_method::{PluginAssurance, PluginChannel};
 
 /// A module that answers `health` with `ok` and echoes its input.
 /// 一个以 `ok` 回答 `health` 并回显输入的小模块。
 const ECHO: &str = r#"(module
   (memory (export "memory") 1)
   (data (i32.const 0) "ok")
-  (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-  (func (export "nichlink_echo") (param i32 i32) (result i64)
+  (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+  (func (export "xirang_echo") (param i32 i32) (result i64)
     (i64.extend_i32_u (local.get 1))))"#;
 
 /// The framework every fixture targets.
 /// 每个夹具针对的框架。
 fn framework() -> FrameworkId {
-    FrameworkId::new("nichlink.test")
+    FrameworkId::new("xirang.test")
 }
 
 /// One fixed signing key, so a fingerprint is stable across assertions.
@@ -82,7 +82,7 @@ fn registration(manifest: PluginManifest) -> RegistrationInfo {
     RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
+        parent: xirang_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",
@@ -173,7 +173,7 @@ fn package_root() -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-admission-{}-{sequence}",
+        "xirang-admission-{}-{sequence}",
         std::process::id()
     ));
     std::fs::create_dir_all(&root).expect("fixture root");
@@ -217,10 +217,8 @@ fn admission(root: &Path, key: &SigningKey) -> PluginAdmission<Ed25519Verifier> 
 /// A table with one slot that admits exactly `channels`.
 /// 一张只接纳 `channels` 的单槽表。
 #[cfg(feature = "wasm")]
-fn table(channels: &'static [PluginChannel]) -> nichlink_toolchain::plugin_host::WasmPluginTable {
-    use nichlink_toolchain::plugin_host::{
-        WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable,
-    };
+fn table(channels: &'static [PluginChannel]) -> xirang_toolchain::plugin_host::WasmPluginTable {
+    use xirang_toolchain::plugin_host::{WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable};
     let slot = WasmPluginSlot::new(
         "test",
         framework(),

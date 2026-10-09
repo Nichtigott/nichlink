@@ -14,7 +14,7 @@
 2. **`步/输出/推理/上下文` 四栏不是该题的净代价**（README §三）：本批是一会话跑 26 题、且我们臂**一道题一条 bash 里连发多次桥调用**（`full/ours/h4-one-file-many-algorithms.md` 里 `h4` 的第 2 条直接标"会话里未定位（共享/装置步）"）。同一题的"当时推理"经常写的是**别的题**（例：`brief/ours/h1-supply-chain.md ①1` 挂的推理整段在规划 `h3`/`h4`，`brief/ours/h4-one-file-many-algorithms.md ①1` 挂的推理整段在总结 `h3`）。凡本文引"推理"，都注明它实际在讲哪一题；讲本题的推理取证自 `full/` 的具体步（多为 step 145–153 那几步）。
 3. **两侧的"读文件"记在不同口袋**：我们臂的 `grep -n ''`/`sed -n`/`for f in …` 逐文件读**不进桥日志**（在 `full/ours/<id>.md` 的"其它调用"里），cg 臂的 `node <file>` **在日志里**、算仪器调用。因此"4 vs 10"这类差额里有一部分只是**记账口径**，逐题会点出来。
 
-**出题台给的理想路径**（`python3 tools/nichlink-mcp-hardbug plan` 逐字 + `docs/design-hardbug-bench-spec.md` 对应节）：
+**出题台给的理想路径**（`python3 tools/xirang-mcp-hardbug plan` 逐字 + `docs/design-hardbug-bench-spec.md` 对应节）：
 
 | 题 | 理想路径（plan 逐字） | 规格补充（spec 行号） | 判据落在哪 |
 | --- | --- | --- | --- |
@@ -33,7 +33,7 @@
 `consistency {parent:root/control}` → `why {at:src/control/object/toggle/toggle.rs:15}` → `callgraph {function:offset}` → `check {face:default}`。
 
 - **①1 `consistency --parent root/control`**（日志第 1 条，step 149）——**理想路径的那一次**，只是省了 `--by api`。逐字给了整个同族与离群：
-  `family root/control · member nichlink-example-control-button · 9 member(s)`、
+  `family root/control · member xirang-example-control-button · 9 member(s)`、
   `  toggle                   1 call(s): to_world`、
   `  outlier     toggle: does not call \`to_local\`, which the other siblings call; calls \`to_world\`, which no sibling calls`、
   `outliers: 1 of 9`；并自曝边界：``and `api` compares the names called, not the units or the arithmetic — an outlier is a place to look, not a defect``；
@@ -102,8 +102,8 @@
 - **①5 `check --face default`**：`verdict  passed (cargo exit 0)`（`brief/ours/h2-claim-unkept.md ①5`）——本题"树是绿的"这条题面要求的证据。
 - **决定性的一步＝①1＋①4**：这两次正好是两条真值（"谁缺哪条声明"＋"哪条采信在哪个文件失效"）。①2 与 ①3 是 ①1 的 `next` 行引出来的（①1 的 next 逐字：`` `conformance {anchor: "root/control/panel"}` says whether that lease still holds and where it lapsed ``），而 ①1 自己的正文**已经答过**同一件事（`adoption lapsed at src/control/object/panel/panel.rs …`）。①2 的 next 引出的 ①4 才是没答过的那半。
 
-**codegraph 的路径**：7 次仪器调用（`logs/h2-claim-unkept.txt` 7 条 `=== CMD`）+ 3 次非桥（`cat .nichlink/adopted/entries` 455 B；`cargo test` 1013 B；`sha256sum` + 逐兄弟 `diff` 2225 B）＝
-`init .` → `files` → **非桥** `cat …/.nichlink/adopted/entries` → **非桥** `cargo test` → `node host/src/control/registry_rule/registry_rule.rs` → `node host/src/control/object/spinner/spinner.rs` → `node host/src/control/control.rs` → `query REGISTRATION_RULE` → `callers REGISTRATION_RULE` → **非桥** `sha256sum button/button.rs panel/panel.rs && for o in …; do diff button/button.rs $o/$o.rs; done`。
+**codegraph 的路径**：7 次仪器调用（`logs/h2-claim-unkept.txt` 7 条 `=== CMD`）+ 3 次非桥（`cat .xirang/adopted/entries` 455 B；`cargo test` 1013 B；`sha256sum` + 逐兄弟 `diff` 2225 B）＝
+`init .` → `files` → **非桥** `cat …/.xirang/adopted/entries` → **非桥** `cargo test` → `node host/src/control/registry_rule/registry_rule.rs` → `node host/src/control/object/spinner/spinner.rs` → `node host/src/control/control.rs` → `query REGISTRATION_RULE` → `callers REGISTRATION_RULE` → **非桥** `sha256sum button/button.rs panel/panel.rs && for o in …; do diff button/button.rs $o/$o.rs; done`。
 
 - 台账那半来自**读文件 + 自己比**：`cat` 逐字两行，两行指纹**逐字相同**
   `root/control/button|the reference sibling shape|traced once|nich|2026-10-01T10:00:00+08:00|src/control/object/button/button.rs|edc72845…|the shape every sibling follows` /
@@ -145,7 +145,7 @@
 - **①2 `registry`**：`faces 10`，其中 `root/control/dial                        Dial           control/object/dial/dial.rs          e1070833a032e106f9cdd0eff2149bc2`——证明**源码侧有它**（派生树第 10 个面）。
 - **①3 `why --at src/control/object/dial/dial.rs:15`（理想路径的那一次，理想行号是 spec 实测的 `:16`）**：唯一能下结论的那一行逐字——
   `  wiring     no declared cut in /home/nich/…/h3-cross-file-chain/host/src/lib.rs names \`root/control/dial\` — the entry declares 8 cut(s), and a face no cut names is one the build replaces with nothing (\`grafts\` lists them)`；
-  同一返回还给 `  siblings   8 file(s) under src/control/object define \`offset\` too: …`、`  callers    0 in this root`、`  pins       no test names \`offset\``、以及两条"不知道"：`  scope      scope unknown (no source_scope.tsv; run \`nichlink check\`)` / `  pruning    pruning unknown (no pruning_manifest.tsv; run \`nichlink check\`)`（`brief/ours/h3-cross-file-chain.md ①3`）。
+  同一返回还给 `  siblings   8 file(s) under src/control/object define \`offset\` too: …`、`  callers    0 in this root`、`  pins       no test names \`offset\``、以及两条"不知道"：`  scope      scope unknown (no source_scope.tsv; run \`xirang check\`)` / `  pruning    pruning unknown (no pruning_manifest.tsv; run \`xirang check\`)`（`brief/ours/h3-cross-file-chain.md ①3`）。
 - **决定性的一步＝①3**。它的上线事实（"没有切口点名 dial"）就是答案的机制句；答案 ④ 逐字引它（`brief/ours/h3-cross-file-chain.md` 交付答案 ④）。
 - **①1 为什么必须存在**：题面**没有点名是哪个部件**（只说"a widget"），所以必须先跑一次拿到 `` `dial` is declared and does not ship ``。**①2 的存在理由**是"源码侧没问题、差的是发布那一步"（答案 ③ 逐字引 `faces 10`）。
 - **行号来自 shell**：答案的 `root cause` 要给 `文件:行号`，而 ①3 的 `wiring` 行只给入口文件路径（不给人 8 条切口的行）。agent 于是先自问 **"Let me see the full cut list to name a precise line … Let me print the file's plan block to give exact lines and to identify the insertion point."**、**"Root cause file:line: `host/src/lib.rs:48-…` — I need the line where the dial cut is missing … Let me get the exact text."**（`full/ours/h3-cross-file-chain.md L362/L364`），再在 ①1 那一步并行发的 shell 里读了 `host/tests/shipped.rs`、`graft/src/lib.rs`、`ls graft/src/`（`full/ours/h3-cross-file-chain.md` 的"调用 `bash`（step 151）"），最终落成 `:48-66` 与插入点 `:65/:66`。
@@ -161,7 +161,7 @@
 
 1. **信息差（结构性，解释大部分 13 vs 3）**：`why` 的 `wiring` 行是桥**从入口计划＋构建期作用域推出来的**一句判定；codegraph 里这条因果链**没有任何载体**——计划文本是宏调用、`NODE_ID` 是宏生成的、作用域不是 Rust 符号。所以 cg 侧必须"读计划文本 → 读测试 → 读宿主注释 → 自己推构建期行为"，本类"必拒捷径"里的"去看计划产物"在它那里**没有计划产物可看**。
 2. **流程差（我们侧，可省 1 次）**：①2 `registry` 只为证"源码侧有 dial"；①3 的同一返回里已经有 `siblings 8 file(s) … define offset too`、`callers 0 in this root`，且 `wiring` 行本身就说明"它在派生树里、只是没有切口"。把 `wiring` 行写全（"this face is derived but no cut names it"）即可省掉 `registry`（3 → 2）。
-3. **规格与装置的落差（两侧都受影响）**：规格说理想一次会给出 `scope not-selected (mode=auto)` + `wiring …`（`docs/design-hardbug-bench-spec.md`:36-39），但我们 ①3 拿到的是 `scope unknown (no source_scope.tsv; run \`nichlink check\`)`——**而 ①1 的 `check` 就在同一步里先跑过**。按时间戳核对：本题 `logs/h3-cross-file-chain.jsonl` 的 mtime 是 21:35:50、答案 `answers/h3-cross-file-chain.md` 是 21:38:37，而该树 `host/target/nichlink/out/` 里现存的那批产物（`source_scope.tsv`/`pruning_manifest.tsv`/`graft_plan.tsv`/`generated_lib.rs`）时间戳是 **22:47:45**、连 `check-default.log` 都是 22:46:41（都不是我们那两次调用的产物）⇒ 答题当时该目录里没有这些证据可读（`h1`/`h2` 两棵树至今也只有 `check-default.log`）。也就是说：本轮的树多数**没有被构建发布过证据**，理想路径里"scope"那半在装置上不成立，真正决定答案的是"wiring"那半。
+3. **规格与装置的落差（两侧都受影响）**：规格说理想一次会给出 `scope not-selected (mode=auto)` + `wiring …`（`docs/design-hardbug-bench-spec.md`:36-39），但我们 ①3 拿到的是 `scope unknown (no source_scope.tsv; run \`xirang check\`)`——**而 ①1 的 `check` 就在同一步里先跑过**。按时间戳核对：本题 `logs/h3-cross-file-chain.jsonl` 的 mtime 是 21:35:50、答案 `answers/h3-cross-file-chain.md` 是 21:38:37，而该树 `host/target/xirang/out/` 里现存的那批产物（`source_scope.tsv`/`pruning_manifest.tsv`/`graft_plan.tsv`/`generated_lib.rs`）时间戳是 **22:47:45**、连 `check-default.log` 都是 22:46:41（都不是我们那两次调用的产物）⇒ 答题当时该目录里没有这些证据可读（`h1`/`h2` 两棵树至今也只有 `check-default.log`）。也就是说：本轮的树多数**没有被构建发布过证据**，理想路径里"scope"那半在装置上不成立，真正决定答案的是"wiring"那半。
 4. **记账口径**：cg 的 13 里有 `init` 1 次、`files` 2 次（1 次重复）、`node` 6 次（其中 `host/src/lib.rs` 重复一次）、`callers` 2 次（软失败）、`query` 2 次；我们 3 次全是零副作用的只读判定（外加 shell 读了 `tests/shipped.rs`、`graft/`、`src/lib.rs`，不进日志）。
 
 **代价**（README §三）：我们 3/4/6,521/13,740/1,193,088 · codegraph 13/1/1,981/2,305/164,352。
@@ -172,7 +172,7 @@
 **引导含义**：
 
 1. **`why` 的 `wiring` 行要给行号（或给插入点）**——这是本题唯一可省下一次 shell 读的地方，而交付格式明确要 `文件:行号`。建议在该行尾补"8 cut(s) at src/lib.rs:50,52,54,56,58,60,62,64；no cut names `root/control/dial`（追加点在 :64 之后）"。依据：①3 逐字（只给文件路径）+ `full/ours/h3-cross-file-chain.md L362/L364`（"I need the line where the dial cut is missing … Let me get the exact text."）+ 答案 root cause `src/lib.rs:48-66`。
-2. **`scope`/`pruning` 两行与 `check` 的联动要修**：现状是"`scope unknown (no source_scope.tsv; run \`nichlink check\`)`"，而 `check` 跑完（①1）仍不产出该文件 ⇒ 这句指引是空转，且规格里承诺的 `scope not-selected` 永远看不到。可实施：`why` 读不到构建证据时，写"this tree has no published build evidence（`target/nichlink/out/` 里没有 `source_scope.tsv`）；the `wiring` line is the answer"；或让 `check` 在写 `check-<face>.log` 的同时把这次运行的作用域证据落在同一目录（`toolchain/src/mcp/src/check.rs:269` 已经用同一个 `out_dir(root)`）。依据：①3 逐字；①1 的 `log …/target/nichlink/out/check-default.log`；本树该目录当时的实际内容（只有 `check-default.log`）。
+2. **`scope`/`pruning` 两行与 `check` 的联动要修**：现状是"`scope unknown (no source_scope.tsv; run \`xirang check\`)`"，而 `check` 跑完（①1）仍不产出该文件 ⇒ 这句指引是空转，且规格里承诺的 `scope not-selected` 永远看不到。可实施：`why` 读不到构建证据时，写"this tree has no published build evidence（`target/xirang/out/` 里没有 `source_scope.tsv`）；the `wiring` line is the answer"；或让 `check` 在写 `check-<face>.log` 的同时把这次运行的作用域证据落在同一目录（`toolchain/src/mcp/src/check.rs:269` 已经用同一个 `out_dir(root)`）。依据：①3 逐字；①1 的 `log …/target/xirang/out/check-default.log`；本树该目录当时的实际内容（只有 `check-default.log`）。
 3. **流程表把 `registry` 那一步写成"可选"**：①3 的信息已足够回答"源码在、发布不在"，`registry` 只在需要"派生树 vs 发布树"字面对照时才要（本题答案 ③ 引了它）。这能直接省掉我们侧 1 次（3 → 2，正好等于"1 次症状 + 1 次理想调用"的下界）。
 4. **（对 cg 类的能力缺口，解释差距用）**：`callers <face>::NODE_ID` 这种"宏生成名字"的查询以 **exit 0** 返回 "not found"（逐字），于是"图里没有宏展开"这件事在退出码上不可见；若要让这类 agent 少走弯路，schema 应把"宏生成的注册面名/计划文本"作为一等公民，或在 `node <file>` 的头部标注"此文件的宏调用内容未进图"。
 
@@ -229,7 +229,7 @@
 1. **`consistency --parent` 的 `outlier` 行补上离群对象的文件**（`h1` 引导 1）——本题三个后续事实（`toggle.rs:16`、契约行 `:14`、两族算术）里有两处最后是 shell 读出来的。
 2. **`callgraph` 的 `limit` 不要把"族里不一致的那些定义"截掉**（`h1` 引导 2；逐字 `4 of 9 definitions withheld … toggle.rs`）。
 3. **`adopted`/`conformance` 的 `next` 行只指向"本条还没判过"的问题，并把 `lapsed` 的两枚指纹印出来**（`h2` 引导 1/2；`conformance` 无 `--anchor` 的"每个锚点一行"能力已在源码里，next 文案没跟上）。
-4. **`why` 的 `wiring` 行给行号；`scope`/`pruning` 的"run `nichlink check`"文案与 `check` 实际产出对齐**（`h3` 引导 1/2）。
+4. **`why` 的 `wiring` 行给行号；`scope`/`pruning` 的"run `xirang check`"文案与 `check` 实际产出对齐**（`h3` 引导 1/2）。
 5. **`check --census` 的分支明细行默认保留（或写进流程表/理想路径行）**（`h4` 引导 1/2；`CENSUS_SAMPLE = 5` 的抽样会把唯一那句判据顶掉）。
 
 四题的差距形态并不一样，落到归因上是三类：
@@ -240,7 +240,7 @@
 ## 没能判定 / 口径存疑
 
 1. **`h2` 的"违禁 fix"在记分版与交付版之间不一致**（已在上文 `h2` 的"质量"里点明）。README §四的判定按记分版；我核对的两份当前交付文件（`target/round9/answers/h2-claim-unkept.md`、`target/probe-cg26/answers/h2-claim-unkept.md`）都已改成"需要人、不是改代码"。**我没有能力从现有材料判定记分发生在哪一版**——`target/probe-cg26/CORRECTIONS.md` §1 只说"原 … 或删掉该失效条目"，未给记分快照的时间戳。这一条不影响 README 的判定（它明说"不改判定"），但读者若只看交付文件会以为那句违禁不存在。
-2. **`h2` 理想路径的两步是否覆盖全部真值，我判不了**。规格写"`conformance --anchor <标本>`（判在不在、在哪失效）+ `consistency --specimen <标本>` … 两次调用内给全"（spec:212-213），但本轮实测：`conformance --anchor root/control/button` 的返回**没有提到 panel 的失效**（`brief/ours/h2-claim-unkept.md ①2` 全文），失效那半只在 `adopted`（①1）或 `conformance --anchor root/control/panel`（①3）里。若严格按标注的 `<specimen>` 执行这两次调用，答案是**拿不到**"哪条采信在哪个文件失效"的。我倾向认为 plan 那行是 `adopted`（或 `conformance` 无 anchor 视图）的简写——因为出题台自证用的两条命令正是 `consistency --specimen <specimen>` 与 `conformance --anchor <lapsed anchor>`（`tools/nichlink-mcp-hardbug` 的 `prove()` 里逐字 `truth["lapsed"]["anchor"]`）——但这是**推断**，标在这里。
+2. **`h2` 理想路径的两步是否覆盖全部真值，我判不了**。规格写"`conformance --anchor <标本>`（判在不在、在哪失效）+ `consistency --specimen <标本>` … 两次调用内给全"（spec:212-213），但本轮实测：`conformance --anchor root/control/button` 的返回**没有提到 panel 的失效**（`brief/ours/h2-claim-unkept.md ①2` 全文），失效那半只在 `adopted`（①1）或 `conformance --anchor root/control/panel`（①3）里。若严格按标注的 `<specimen>` 执行这两次调用，答案是**拿不到**"哪条采信在哪个文件失效"的。我倾向认为 plan 那行是 `adopted`（或 `conformance` 无 anchor 视图）的简写——因为出题台自证用的两条命令正是 `consistency --specimen <specimen>` 与 `conformance --anchor <lapsed anchor>`（`tools/xirang-mcp-hardbug` 的 `prove()` 里逐字 `truth["lapsed"]["anchor"]`）——但这是**推断**，标在这里。
 3. **`h4` 那句 branch 判据在默认 `check` 下会不会被抽掉，我是按实现推的**：`check.rs:310` 的 `CENSUS_SAMPLE = 5` 与 325-372 的抽样规则（保留栏头 + 前 5 行 + 每栏 `not covered` 行）判定它会被 `… withheld …` 替代；我**没有**对 h4 树重跑默认 `check` 去实证（那会在题树里写 `check-default.log`，违反"只读"）。结论方向我有把握（该行是数据行、不是栏头、也不在前 5 行内），但"恰好被抽掉"这一步是推断。
-4. **`h3` 的 `scope not-selected` 在当时的树上是否可能出现，我判不了**。规格说它实测到了（spec:36-39），而我们 ①3 拿到的是 `scope unknown (no source_scope.tsv)`；本树 `target/nichlink/out/` 的 `source_scope.tsv` 时间戳是 22:47，而本题日志（三条调用）的 mtime 是 21:35:50 ⇒ 我们那次 `check` 不晚于 21:35:50，读不到 22:47 才出现的证据。中间是谁在 22:46-22:47 把构建产物补出来的（复核者？维护者？），我没有证据，只按"答题当时读不到"来写。
+4. **`h3` 的 `scope not-selected` 在当时的树上是否可能出现，我判不了**。规格说它实测到了（spec:36-39），而我们 ①3 拿到的是 `scope unknown (no source_scope.tsv)`；本树 `target/xirang/out/` 的 `source_scope.tsv` 时间戳是 22:47，而本题日志（三条调用）的 mtime 是 21:35:50 ⇒ 我们那次 `check` 不晚于 21:35:50，读不到 22:47 才出现的证据。中间是谁在 22:46-22:47 把构建产物补出来的（复核者？维护者？），我没有证据，只按"答题当时读不到"来写。
 5. **"白跑"（`repeat`）我只对 `h3` 的 cg 侧给了结论**（`files` 与 `node host/src/lib.rs` 各重复一次，逐字同参），因为这三条可从日志单独判定；其余三题两侧我逐条比过，没有同工具同参数的重复。但 README §三表里的"仪器调用数"不含 `init` 的分类，cg 的 10/7/13/9 都**含**各自 1 次 `init`（cg 自报的"含 1 次 init ⇒ N−1 步"与此一致）——引用时不要跨口径混算。

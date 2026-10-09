@@ -36,7 +36,7 @@ Now g3, fa, fb (host trees), then fd, fe.
 
 **g3**: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" (add an internal layer to this object, without touching its registration tree and public paths; explain why you believe it's untouched; gate must be green).
 
-The g3 tree: 160K, 13 files, 102 nodes. Let me look: it's a nichlink control-button host with `.nichlink`, examples, src, tests, build.rs, Cargo.toml. Let me read its structure and lib.rs, control.rs, and one object file.
+The g3 tree: 160K, 13 files, 102 nodes. Let me look: it's a xirang control-button host with `.xirang`, examples, src, tests, build.rs, Cargo.toml. Let me read its structure and lib.rs, control.rs, and one object file.
 
 Plan for g3:
 1. Read the tree (files, lib.rs, control.rs, an object file) via codegraph.
@@ -54,7 +54,7 @@ For g3 I need a "before" baseline of the registration outline. Since g3 is initi
 
 Let me explore g3's tree first.
 
-**fa**: "我要加一个新对象，和现有的差不多" — add a new object similar to an existing one. In the round-9 fa tree (restored to the clean host), the deliverable: what I did, basis, command sequence, total calls; gate green after. So: add a new face (e.g. `Dial` like the existing `Button`) to the host — a new file `src/control/object/<new>/<new>.rs` with the `control_object!` macro, and (for a grafted slot) maybe also the graft side; plus (per the entry-plan rule I learned in h3) the entry must name the new face if it's an object the app publishes... Hmm! In the fa tree, is the new object required to be in the graft plan? Let me look at the fa tree's structure: it has src/, examples/, tests/, .nichlink, build.rs. fa is the "control-button" host (chromium README example). Let me read its lib.rs and the tests to see what "adding an object" requires (maybe there's a test that enumerates the tree, e.g. `tests/` asserting the outline).
+**fa**: "我要加一个新对象，和现有的差不多" — add a new object similar to an existing one. In the round-9 fa tree (restored to the clean host), the deliverable: what I did, basis, command sequence, total calls; gate green after. So: add a new face (e.g. `Dial` like the existing `Button`) to the host — a new file `src/control/object/<new>/<new>.rs` with the `control_object!` macro, and (for a grafted slot) maybe also the graft side; plus (per the entry-plan rule I learned in h3) the entry must name the new face if it's an object the app publishes... Hmm! In the fa tree, is the new object required to be in the graft plan? Let me look at the fa tree's structure: it has src/, examples/, tests/, .xirang, build.rs. fa is the "control-button" host (chromium README example). Let me read its lib.rs and the tests to see what "adding an object" requires (maybe there's a test that enumerates the tree, e.g. `tests/` asserting the outline).
 
 **fb**: "这个对象内部还不够" — deepen the object's inside: add the internal layer (Parts) — like g3! Hmm, g3 and fb are similar. g3's phrasing: "给这个对象加一层内部结构，但不要动它的注册树和公开路径" — the "不要动公开路径" constraint. fb: "这个对象内部还不够" (the object's inside isn't enough) → add internal structure. So fb = same operation, without the explicit "don't touch public paths" constraint (but obviously you shouldn't break the tree).
 

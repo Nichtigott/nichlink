@@ -78,7 +78,7 @@
 - **它一次 cargo 都没跑**：s2 的 nonbridge 自述是「0 次 / 0 字节 own + 1 次共享（`diff -r`）」（`target/probe-cg26/answers/s2.md` 末行）。"默认面全绿"是**推出来的**（那条测试默认面不编译），不是**跑出来的**。
 
 **两侧差异与归因**：
-1. **"面"这个枚举在谁手里**：我们这边 `status` 直接印 `faces ledger-core: default=[] all=[audit]`，`check --face <name>` 是一个**可寻址的动词**；codegraph 完全没有面的概念——预设原话即：「结构上无此能力：它没有「面」的概念，也没有按特性跑测试的入口」（`tools/nichlink-mcp-eval:936`）。所以它只能把"面"重建成"读 cfg + 与已知绿的参照树做字节 diff"。
+1. **"面"这个枚举在谁手里**：我们这边 `status` 直接印 `faces ledger-core: default=[] all=[audit]`，`check --face <name>` 是一个**可寻址的动词**；codegraph 完全没有面的概念——预设原话即：「结构上无此能力：它没有「面」的概念，也没有按特性跑测试的入口」（`tools/xirang-mcp-eval:936`）。所以它只能把"面"重建成"读 cfg + 与已知绿的参照树做字节 diff"。
 2. **"绿"的证据等级**：我们的是 `verdict  passed (cargo exit 0)`（工具代跑），它的是"那条测试默认面不编译 ⇒ 不可能红"。两种都能得出正确答案，但**只有我们这一侧的红是被观测到的**：`failed …` + panic 行原文（`brief/ours/s2.md ①2`）。
 3. **面名需要跨题继承**：我们的 s2 日志里只有 3 条 `check`，没有 `status`——面名是从同会话 `s1`/`s3` 的 `status` 复用来的。这不是缺陷，但意味着**单看 s2 这道题的日志，工具并没有告诉 agent 这个树有哪些面**。
 
@@ -131,7 +131,7 @@
    补一条**跨全会话**的旁证：`ℹ No callers found for "X"` 是 codegraph 表达"零调用者"的唯一形状，全轮 26 题里出现了 11 次（`audit_unused`、`write_count`、`band_word`、`state_word`、`ControlHandle`、`write_totals`、`REGISTRATION_RULE` …），**没有一次是打在 `#[test]` 函数上的**（`target/probe-cg26/logs/*.txt` 全量检索）。也就是说：**这条信息不是"工具说错了"，而是"从来没被问过"**——而它之所以没被问，是因为工具的符号清单里没有"哪些是测试入口"这一栏。
 5. **对照面：我们这边同一句话是工具主动印的，而且印在正确的那一刻。** `orphans` 视图在给出孤儿的同时印出 `note 5 function(s) in test files have no static caller either; the test harness calls them, so they are counted here rather than listed above`（`brief/ours/s3.md ①3`）。agent 不需要问，只需要抄；答案里也确实只做了抄写（`target/round9/answers/s3.md:11`）。
 
-**结论（归因）**：这是**信息差**（工具输出里有没有"测试入口"这条边界），不是"它更笨"。判据也支持这个定性——预设自己写明：「两臂的工具都默认排测试文件，缺的那一半是**工具边界**，不是答错，但**边界必须被说出来**」（`tools/nichlink-mcp-eval:942`）。差别在于：**我们的工具把边界说出来了，codegraph 的工具没有；于是同样的"默认排除测试文件"，一侧的答案自动带上边界，另一侧必须靠复核者补。**
+**结论（归因）**：这是**信息差**（工具输出里有没有"测试入口"这条边界），不是"它更笨"。判据也支持这个定性——预设自己写明：「两臂的工具都默认排测试文件，缺的那一半是**工具边界**，不是答错，但**边界必须被说出来**」（`tools/xirang-mcp-eval:942`）。差别在于：**我们的工具把边界说出来了，codegraph 的工具没有；于是同样的"默认排除测试文件"，一侧的答案自动带上边界，另一侧必须靠复核者补。**
 
 **代价**（任务书 §3）：仪器 **3 vs 20** · 输出 **2,727 vs 0** tok · 推理 **4,495 vs 0** 字符 · 累计上下文 **163,840 vs 0**（cg 侧三栏为 0 是状态机归属问题：本题的 20 条调用多发生在共享/装置步，会话里未定位到该题自己的推理——见"没能判定" §3）。
 
@@ -143,7 +143,7 @@
    这样"引用一行即可得分"从 3 步调用缩到 1 步，也把 `5` 这个数字固定在输出里（现在是 `5 function(s)`，同样够用）。
 2. **给测试入口一个可枚举视图，堵住"清单是从哪来的"这个漏洞。** cg 侧的失败机制是"它列了 12 个生产符号，没有一个工具输出告诉它该列 17 个"。我们侧虽然靠 `note` 补上了，但同样没有可枚举的入口清单——`18 function(s) indexed`（`brief/ours/s3.md ①2`）不等于"哪 5 个是入口"。可实施：`callgraph --orphans` 增加 `--include-tests`（或 `orphans all`）直接把 5 条列出来，并在默认视图里点明"另有 N 条，用 `--include-tests` 列出"。
 3. **把这条边界写进 `check --census` 的列头**（现在是 `test-reachable: 1 of 12 production function(s) no test can reach (18 function(s) indexed in this tree…)`）。可实施：改成 `test-reachable: 1 of 12 production function(s) no test can reach; +5 harness-invoked #[test] entries are entries, not targets (18 indexed)`——让"12 vs 18 的差"在**同一行**里被解释掉，因为现在这个差要靠读者自己去 `not covered` 段找（`brief/ours/s3.md ①2` 的 `a test-looking file … seeds the walk`）。
-4. **对"如何引导 AI"的一般化**（可写进提示词或答案模板）：凡是可达性/孤儿类问题，答案模板固定要求一句"入口边界"——`#[test]`/`main`/`#[no_mangle]`/框架回调属于入口，不在"被到达"的问域内。依据：预设 F1 的判分口径是"边界必须被说出来"（`tools/nichlink-mcp-eval:942`），而工具把它说出来的时候（我们）得分、没说的时候（cg）掉分——**这条分数完全由工具输出决定，不应留给模型自觉。**
+4. **对"如何引导 AI"的一般化**（可写进提示词或答案模板）：凡是可达性/孤儿类问题，答案模板固定要求一句"入口边界"——`#[test]`/`main`/`#[no_mangle]`/框架回调属于入口，不在"被到达"的问域内。依据：预设 F1 的判分口径是"边界必须被说出来"（`tools/xirang-mcp-eval:942`），而工具把它说出来的时候（我们）得分、没说的时候（cg）掉分——**这条分数完全由工具输出决定，不应留给模型自觉。**
 
 ---
 
@@ -167,7 +167,7 @@
 - 差异归因：**它没有"按文本检索一行 `use`"这种动词**。它证明"到不了"的方式是**逐方法 `callers` 的补集**（三个方法都只回 `report.rs`），我们证明"到得了"的方式是**一整行 `use` 的全文命中**（`member ledger-report (1 lines)`）。两条路都对，但我们的那次 `search` 是**单点、可引用的**，它的三次 `callers` 是**分散、需要读者自己求交**的。
 
 **两侧差异与归因**：
-1. **多出来的那次 `affected` 是我们自己的噪声源**：我们的 4 次里第 1 次就把 3 个（其中 2 个错的）测试文件摆上来，随后用 `search`+`read` 两次去纠正它（`brief/ours/s4.md ①1/①3/①4`）。codegraph 这一题反而**没有**这个弯路——它没用 `affected`（预设也记着「`affected` 四题全假阴性（历史实测）」，`tools/nichlink-mcp-eval:950`）。**净效果是：我们的 4 次里有 1 次是自找的纠错，它的 7 次里有 3 次是逐符号补集。**
+1. **多出来的那次 `affected` 是我们自己的噪声源**：我们的 4 次里第 1 次就把 3 个（其中 2 个错的）测试文件摆上来，随后用 `search`+`read` 两次去纠正它（`brief/ours/s4.md ①1/①3/①4`）。codegraph 这一题反而**没有**这个弯路——它没用 `affected`（预设也记着「`affected` 四题全假阴性（历史实测）」，`tools/xirang-mcp-eval:950`）。**净效果是：我们的 4 次里有 1 次是自找的纠错，它的 7 次里有 3 次是逐符号补集。**
 2. **行号归属的一处小账**：cg 的答案把三个 `#[test]` 标成 `report.rs:20/35/44`（那是 `fn` 行，`#[test]` 属性在 19/34/43），任务书 §4 记为「`s4` 把 `#[test]` 行号写成了 `fn` 行号」；我们的 `read` 输出带 `symbols 11: \`store\` lines 11-17` 这种符号区间、`#[test]` 行靠逐行读（`brief/ours/s4.md ①4`）。这是**引用精度**的差，不影响判定。
 
 **代价**（任务书 §3）：仪器 **4 vs 7** · 输出 **1,801 vs 966** tok · 推理 **530 vs 0** 字符 · 累计上下文 **125,184 vs 120,832**。

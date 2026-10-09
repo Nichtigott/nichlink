@@ -36,8 +36,8 @@ pub struct GraftState {
     /// Whether the focused compose row is accepting typed input.
     /// 撰写区当前行是否正在接受键入。
     pub editing: bool,
-    /// Plans already written under `.nichlink/external-grafts/`.
-    /// 已写在 `.nichlink/external-grafts/` 下的计划。
+    /// Plans already written under `.xirang/external-grafts/`.
+    /// 已写在 `.xirang/external-grafts/` 下的计划。
     pub plans: Vec<GraftPlanRow>,
     /// Index of the highlighted plan row.
     /// 当前高亮计划行的下标。
@@ -63,8 +63,8 @@ pub struct GraftState {
     pub inherited_children: usize,
 }
 
-/// One plan already written under `.nichlink/external-grafts/`.
-/// `.nichlink/external-grafts/` 下已写好的一个计划。
+/// One plan already written under `.xirang/external-grafts/`.
+/// `.xirang/external-grafts/` 下已写好的一个计划。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GraftPlanRow {
     /// Selector naming the external implementation.

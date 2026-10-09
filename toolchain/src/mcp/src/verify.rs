@@ -1,7 +1,7 @@
 //! Re-run the kernel's validation and report the tree delta it just published.
 //! 重新运行内核的校验，并报告它刚刚发布的树差异。
 //!
-//! The convergence loop's last rung: `nichlink.apply` writes a face, and this says
+//! The convergence loop's last rung: `xirang.apply` writes a face, and this says
 //! whether the kernel still accepts the tree afterwards. It drives the *same* entry
 //! the CLI's `check` drives (`check_for`), so a verdict here and a verdict there
 //! cannot drift, and it publishes the build evidence as a side effect — which is what
@@ -9,7 +9,7 @@
 //! from the last build. A failed verdict is the answer, not a tool failure: the reply
 //! says `verdict failed` and carries the diagnostics, while the reply's `isError`
 //! stays false because the verification itself succeeded.
-//! 收敛闭环的最后一级：`nichlink.apply` 写下一个面，而这里回答内核之后是否仍然接受这棵树。它驱动
+//! 收敛闭环的最后一级：`xirang.apply` 写下一个面，而这里回答内核之后是否仍然接受这棵树。它驱动
 //! CLI 的 `check` 所驱动的**同一个入口**（`check_for`），因此这里的判断与那里的判断不可能漂移；它还
 //! 顺带发布构建证据——这正是下面那份差异描述的是"刚刚被校验的那棵树"、而不是"上次构建的那棵树"的原因。
 //! 判断失败是答案而不是工具故障：回复写出 `verdict failed` 并带上诊断，而回复的 `isError` 仍为 false，
@@ -37,12 +37,12 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
     }
     // The name this run publishes under is the *readers'* namespace, not Cargo's
     // package name: `diff` and `search` resolve identities through
-    // `registry::namespace`, which honours `NICH_LINK_NAMESPACE`. Stamping the Cargo
+    // `registry::namespace`, which honours `XIRANG_NAMESPACE`. Stamping the Cargo
     // name here made every face in a verified tree come back `re-identified` there —
     // a freshly checked tree reported as one whose every identity moved
     // (audit `LGC-LG-13`). One namespace for the writer and the readers.
     // 本次运行用于发布的那个名是**读取者**的命名空间，而不是 Cargo 的包名：`diff` 与 `search`
-    // 经 `registry::namespace` 解析身份，而它会认可 `NICH_LINK_NAMESPACE`。在这里盖上 Cargo 名，
+    // 经 `registry::namespace` 解析身份，而它会认可 `XIRANG_NAMESPACE`。在这里盖上 Cargo 名，
     // 会让刚校验过的树在那边把每个面都报成 `re-identified`（审计 `LGC-LG-13`）。写入方与读取方
     // 用同一个命名空间。
     let package = crate::mcp::registry::namespace(root)?;
@@ -87,9 +87,9 @@ pub(crate) fn verify(root: &Path, arguments: &Value) -> Result<String, String> {
             bounded(&rejection).trim_end()
         ),
     };
-    // The delta is the same report `nichlink.diff` gives, and it is meaningful here
+    // The delta is the same report `xirang.diff` gives, and it is meaningful here
     // precisely because the call above just refreshed the build's side of it.
-    // 这份差异就是 `nichlink.diff` 给出的同一份报告，而它在这里有意义，正是因为上面那次调用刚刚刷新
+    // 这份差异就是 `xirang.diff` 给出的同一份报告，而它在这里有意义，正是因为上面那次调用刚刚刷新
     // 了它在构建一侧的数据。
     //
     // Only the arguments this tool declares reach it. Forwarding the whole request let an
@@ -120,7 +120,7 @@ fn bounded(text: &str) -> String {
         text,
         MAX_DIAGNOSTIC_LINES,
         "diagnostic lines",
-        "run `nichlink check` for the whole list",
+        "run `xirang check` for the whole list",
     )
 }
 

@@ -1,5 +1,5 @@
-//! The versioned `nichlink.trace` artifact: a recorded `CallTrace` as text.
-//! 带版本的 `nichlink.trace` artifact：以文本保存的已记录 `CallTrace`。
+//! The versioned `xirang.trace` artifact: a recorded `CallTrace` as text.
+//! 带版本的 `xirang.trace` artifact：以文本保存的已记录 `CallTrace`。
 //!
 //! The document is line-oriented `key=value`, exactly like `graft.plan`: unknown
 //! keys and other versions are refused rather than guessed. Record fields are
@@ -29,8 +29,8 @@ mod parse;
 
 pub use self::io::*;
 
-/// The only `nichlink.trace` layout this build understands.
-/// 本版本唯一能读懂的 `nichlink.trace` 版式。
+/// The only `xirang.trace` layout this build understands.
+/// 本版本唯一能读懂的 `xirang.trace` 版式。
 pub const TRACE_ARTIFACT_VERSION: u32 = 1;
 
 /// One recorded frame, flattened for text.
@@ -59,8 +59,8 @@ pub struct TraceFrame {
     pub source: Option<SourceLocation>,
 }
 
-/// A recorded `CallTrace` as the versioned `nichlink.trace` document.
-/// 已记录 `CallTrace` 的带版本 `nichlink.trace` 文档。
+/// A recorded `CallTrace` as the versioned `xirang.trace` document.
+/// 已记录 `CallTrace` 的带版本 `xirang.trace` 文档。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceArtifact {
     /// Layout version; must equal `TRACE_ARTIFACT_VERSION`.
@@ -86,8 +86,8 @@ pub struct TraceArtifact {
     pub edges: Vec<DataEdge>,
 }
 
-/// Why a `nichlink.trace` document was refused.
-/// `nichlink.trace` 文档被拒绝的原因。
+/// Why a `xirang.trace` document was refused.
+/// `xirang.trace` 文档被拒绝的原因。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TraceArtifactError {
     /// Document declares a layout this build cannot read.

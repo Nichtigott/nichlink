@@ -104,18 +104,18 @@ fn is_test_only(crate_root: &Path, path: &Path) -> bool {
 /// Whether a file declares at least one test item.
 /// 文件是否至少声明了一个测试条目。
 ///
-/// The search runs on [`nichlink_kernel::source::mask_non_code`], so a `#[test]` written
+/// The search runs on [`xirang_kernel::source::mask_non_code`], so a `#[test]` written
 /// inside a doc comment, a string literal or a raw string is not a test item — the shipped
 /// tree has all three, and reading them as tests would report a support file as a
 /// misplaced test.
-/// 搜索跑在 [`nichlink_kernel::source::mask_non_code`] 上，因此写在文档注释、字符串字面量或原始
+/// 搜索跑在 [`xirang_kernel::source::mask_non_code`] 上，因此写在文档注释、字符串字面量或原始
 /// 字符串里的 `#[test]` 不是测试条目——出厂树里这三种都有，把它们读成测试会把一个支撑文件报成
 /// 放错位置的测试。
 fn has_test_item(path: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(path) else {
         return false;
     };
-    let masked = nichlink_kernel::source::mask_non_code(&text);
+    let masked = xirang_kernel::source::mask_non_code(&text);
     masked
         .lines()
         .any(|line| line.trim_start().starts_with("#[test]"))

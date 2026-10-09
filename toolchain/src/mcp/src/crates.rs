@@ -1,12 +1,12 @@
-//! `nichlink.crates` — the crate partition a host declares, and the three writers that make it real.
-//! `nichlink.crates` —— 宿主声明的 crate 分区，以及把它变成现实的三个写入方。
+//! `xirang.crates` — the crate partition a host declares, and the three writers that make it real.
+//! `xirang.crates` —— 宿主声明的 crate 分区，以及把它变成现实的三个写入方。
 //!
 //! A host declares at its package root which subtrees become crates of their own (`add_crates.rs`),
-//! and `nichlink crates` plus Studio's partition screen already turn that declaration into packages.
+//! and `xirang crates` plus Studio's partition screen already turn that declaration into packages.
 //! The bridge is the third surface, and it answers the same question with the same reader
 //! (`build_method::partition_view`) and writes with the same writer — so an agent can plan a split,
 //! see what is on disk, judge whether it could be published, and only then write it.
-//! 宿主在包根声明哪些子树各自成为一个 crate（`add_crates.rs`），而 `nichlink crates` 与 Studio 的分区屏
+//! 宿主在包根声明哪些子树各自成为一个 crate（`add_crates.rs`），而 `xirang crates` 与 Studio 的分区屏
 //! 已经能把这份声明变成包。桥是第三个执行面，它用**同一个**读取器（`build_method::partition_view`）回答
 //! 同一个问题、用**同一个**写入方写入——于是代理可以先规划一次拆分、看清磁盘上有什么、判断能不能发布，
 //! 然后才写。
@@ -87,9 +87,9 @@ pub(crate) fn crates(root: &Path, arguments: &Value) -> Result<String, String> {
              `Shape {{ package_prefix, crates: &[Crate::named(\"x\").at(&[…::SUBTREE])] }}`——\
              那个文件存在之后 `plan` 就能描述它。\n",
             root.display(),
-            nichlink_kernel::lexicon::ADD_CRATES_FILE,
+            xirang_kernel::lexicon::ADD_CRATES_FILE,
             root.display(),
-            nichlink_kernel::lexicon::ADD_CRATES_FILE,
+            xirang_kernel::lexicon::ADD_CRATES_FILE,
         ));
     };
     let report = describe(&view);

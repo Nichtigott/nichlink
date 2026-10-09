@@ -19,7 +19,7 @@ use serde_json::Value;
 use crate::mcp::callgraph::is_call_to;
 use crate::mcp::source_index::{SourceFile, display_list, load_sources};
 use crate::mcp::truncation::withheld;
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 /// How many tests one changed file may name before the reply says how many it withheld.
 /// 一个改动过的文件最多点名多少个测试，超出后回复要说出扣下了多少。
@@ -53,7 +53,7 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
             .collect::<Vec<_>>(),
         _ => {
             return Err(
-                "nichlink.affected requires `files`: one path, a list of paths, or repeated \
+                "xirang.affected requires `files`: one path, a list of paths, or repeated \
                  `--files` flags from the one-shot client"
                     .to_owned(),
             );
@@ -142,7 +142,7 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
                     .dir
                     .strip_prefix(root)
                     .map(|relative| {
-                        nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
+                        xirang_kernel::declaration::portable_path(&relative.to_string_lossy())
                     })
                     .unwrap_or_else(|_| member.name.clone());
                 for candidate in other.iter().filter(|candidate| is_test_file(candidate)) {
@@ -250,7 +250,7 @@ pub(crate) fn affected(root: &Path, arguments: &Value) -> Result<String, String>
 /// "这次改动波及什么"，而替换件是构建的问题（由 `grafts` 回答）。
 fn plan_layer(member: &Path, source: &str) -> Vec<String> {
     let plans = member
-        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::XIRANG_DIR)
         .join(lexicon::EXTERNAL_GRAFT_DIR);
     if !plans.is_dir() {
         return Vec::new();
@@ -331,9 +331,7 @@ fn owner_of(root: &Path, path: &str) -> (String, Option<std::path::PathBuf>) {
         let prefix = member
             .dir
             .strip_prefix(root)
-            .map(|relative| {
-                nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
-            })
+            .map(|relative| xirang_kernel::declaration::portable_path(&relative.to_string_lossy()))
             .unwrap_or_else(|_| member.name.clone());
         if path == prefix || path.starts_with(&format!("{prefix}/")) {
             return (format!("{prefix}/"), Some(member.dir));

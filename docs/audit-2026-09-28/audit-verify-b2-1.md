@@ -29,14 +29,14 @@
 
 - **副本**：`rsync -a --exclude target --exclude .git /home/nich/Moirai_N3/nichlink/ /tmp/nk-t9/`（41 MB）。所有变异、夹具、探针只存在于副本；真实树全程只读（唯一写入是本文件）。
 - **我的夹具**：`/tmp/nk-t9/conventions/tests/t9_probe.rs`（集成测试 = crate 之外的独立 crate，只能取公开面），19 条用例，逐条自建 synth 根（`Cargo.toml` + 成员目录 + 夹具文件），驱动上面那组真实入口。**没有复用作者任何测试或夹具**；期望值由我自己按 CommonMark / rustc / GitHub 语义推出。
-- **变异**：7 组，各把修复改回旧行为（旧行为取自 t1/t2/t4 自述 + 代码注释里的"旧形态"），跑 `cargo test -p nichlink-conventions --offline`（作者钉子）与 `--test t9_probe`（我的夹具）两遍，用**文件 sha256 前后对比**证明还原零残留。为避免陈旧产物，变异后 `touch` 相关文件再跑（第二轮的两个代表性变异还额外取了断言原文，且 hash 稳定那次的结果才计入）。
+- **变异**：7 组，各把修复改回旧行为（旧行为取自 t1/t2/t4 自述 + 代码注释里的"旧形态"），跑 `cargo test -p xirang-conventions --offline`（作者钉子）与 `--test t9_probe`（我的夹具）两遍，用**文件 sha256 前后对比**证明还原零残留。为避免陈旧产物，变异后 `touch` 相关文件再跑（第二轮的两个代表性变异还额外取了断言原文，且 hash 稳定那次的结果才计入）。
 - **真工具矩阵**：G-09/G-11/G-12 用**真实脚本 + 真实树**跑（只读调用）；G-10 用自建 harness `/tmp/nk-t9-g10`（脚本副本 + 假 `cargo`（exit 0）+ 真 `nm` + 三个自造工件）。
 
 **探针自身的 bug（照实披露，均不影响结论）**
 1. 第一版 G-09 变异跑在错误的 cwd（脚本按自身路径推 root，副本没有 `Cargo.toml`）→ awk 报错，不作证据；改用同根对照后重跑。
 2. 第一版伪造 BSD `date` 用 `exec /usr/bin/date`，而本机（NixOS）没有 `/usr/bin/date` → 回退分支拿到空串、报算术错；那是**我的假 date** 的 bug，不是工具的。改为委托 `command -v date` 的真路径后，同一仿真 exit 0、`startup_ms=0`（数字）。
 3. 我第一版工作流解析脚本不跳注释行，于是把 ci.yml 里那句提到 `--publish` 的**注释**当成了上传步骤；门禁自己跳注释（`steps()` 里 `trimmed.starts_with('#')` 直接跳过），所以那次"发现"是我的解析器造的，不作证据。
-4. **共享 `target/` 的陈旧产物泄漏（不是我的探针 bug，但会让门禁结果假红）**：第一轮真实树门禁里 `cargo test --workspace` 红在 `core/tests/plugin_lock_provenance.rs` 两条 X-1 钉子上，报错是 `PluginLockError { line: 1, message: "has an empty provenance column" }`——而这句话在真实树 `grep -rn` **0 命中**，只存在于 t11 的变异副本 `/tmp/t11-mut/core/…/catalog.rs` 与 `/tmp/t11-mut2/…`（他们把 X-1 改成"拒绝"语义做的反证）。判别法照队长给的两条：① 两次日志的测试二进制不同（红那次 `plugin_lock_provenance-9efa651de66d2c42`，单跑那次 `plugin_lock_provenance-c8adfee13b15a41c`）⇒ 红那次链的是别人变异构建出的 `libnichlink` 产物；② 那句错误串在真实树 0 命中。**该次运行作废**，判定改用独立 `CARGO_TARGET_DIR=/tmp/t9-target` 的重量（§7）。
+4. **共享 `target/` 的陈旧产物泄漏（不是我的探针 bug，但会让门禁结果假红）**：第一轮真实树门禁里 `cargo test --workspace` 红在 `core/tests/plugin_lock_provenance.rs` 两条 X-1 钉子上，报错是 `PluginLockError { line: 1, message: "has an empty provenance column" }`——而这句话在真实树 `grep -rn` **0 命中**，只存在于 t11 的变异副本 `/tmp/t11-mut/core/…/catalog.rs` 与 `/tmp/t11-mut2/…`（他们把 X-1 改成"拒绝"语义做的反证）。判别法照队长给的两条：① 两次日志的测试二进制不同（红那次 `plugin_lock_provenance-9efa651de66d2c42`，单跑那次 `plugin_lock_provenance-c8adfee13b15a41c`）⇒ 红那次链的是别人变异构建出的 `libxirang` 产物；② 那句错误串在真实树 0 命中。**该次运行作废**，判定改用独立 `CARGO_TARGET_DIR=/tmp/t9-target` 的重量（§7）。
 
 ## 2. 组 A：t1
 
@@ -58,7 +58,7 @@ zz-md-indented.md         4 空格缩进的非法 Rust                     → �
 zz-md-inline.md           行内 `std::fs` 与 ``a `b` c``             → 静默（正规）
 ```
 
-绿：`cargo test -p nichlink-conventions --offline --test t9_probe` 全绿（`markdown_fences_pair_by_character_and_length` 断言恰好命中上述 4 个文件，`unclosed` 那条的 error 含 `unterminated`）。另一条 `doc_comment_fences_pair_the_same_way`：`///` 注释里同时放 ```rust（合法）、~~~rust（非法）、```text（非法），断言**只报 1 条且行号=7**（tilde 开围栏那一行）——即文档注释半边与 markdown 半边同一套配对。
+绿：`cargo test -p xirang-conventions --offline --test t9_probe` 全绿（`markdown_fences_pair_by_character_and_length` 断言恰好命中上述 4 个文件，`unclosed` 那条的 error 含 `unterminated`）。另一条 `doc_comment_fences_pair_the_same_way`：`///` 注释里同时放 ```rust（合法）、~~~rust（非法）、```text（非法），断言**只报 1 条且行号=7**（tilde 开围栏那一行）——即文档注释半边与 markdown 半边同一套配对。
 
 红（M1，变异 = 旧规则：`starts_with("```")` 前缀 + `trim_start_matches` 取 info + 任何围栏行都闭合）：
 
@@ -96,15 +96,15 @@ thread 'markdown_fences_pair_by_character_and_length' ... FAILED      （我的�
 
 ### 2.3 G-05 非发布成员的版本要求 —— 证实
 
-夹具（根 `[workspace.package] version = "0.1.6"`）：已发布成员写 0.1.6 → 静默；`publish = false` 成员写 `nichlink-run-method = "0.1.5"` → **1 条**（`…/unpublished/Cargo.toml`，理由含 0.1.5）；`publish = false` 成员只写 path 依赖（无版本）→ 静默。
+夹具（根 `[workspace.package] version = "0.1.6"`）：已发布成员写 0.1.6 → 静默；`publish = false` 成员写 `xirang-run-method = "0.1.5"` → **1 条**（`…/unpublished/Cargo.toml`，理由含 0.1.5）；`publish = false` 成员只写 path 依赖（无版本）→ 静默。
 
 **独立复现"只有这条门禁看得见它"**：在副本里把 `examples/control-button/Cargo.toml` 的 `version = "0.1.6"` 改成 `0.1.5`（无 git 操作，改完逐字节还原）后：
 
 ```
-$ tools/nichlink-publish --check-table ; echo exit=$?
+$ tools/xirang-publish --check-table ; echo exit=$?
 dependency table matches the manifests (9 crates)
 exit=0
-$ cargo test -p nichlink-conventions --offline --lib release_version::release_version_tests::the_shipped_manifests
+$ cargo test -p xirang-conventions --offline --lib release_version::release_version_tests::the_shipped_manifests
 test ...the_shipped_manifests_name_one_version ... FAILED      （panicked at conventions/src/release_version_tests.rs:168）
 ```
 
@@ -112,11 +112,11 @@ test ...the_shipped_manifests_name_one_version ... FAILED      （panicked at co
 
 ### 2.4 G-07 naming 剥注释 —— 证实（含邻域披露 F-3）
 
-夹具：`build_method/src/scaffold/probe.rs` 里的 `// … nichlink-linecomment = …`、`/* … nichlink-blockcomment = … */`、以及**字符串字面量里**的 `nichlink-ghost = {{ package = \"nichlink-elsewhere\" }}`；`.github/workflows/ci.yml` 里的注释 `# cargo test -p nichlink-commented is history` 与两条真要求（`-p nichlink-ghost`、`--package=nichlink-elsewhere`）。
+夹具：`build_method/src/scaffold/probe.rs` 里的 `// … xirang-linecomment = …`、`/* … xirang-blockcomment = … */`、以及**字符串字面量里**的 `xirang-ghost = {{ package = \"xirang-elsewhere\" }}`；`.github/workflows/ci.yml` 里的注释 `# cargo test -p xirang-commented is history` 与两条真要求（`-p xirang-ghost`、`--package=xirang-elsewhere`）。
 
 绿：恰好 3 条发现（模板键名 1 + 工作流 2），三条注释一条都没报。红（M4，变异 = 原文不剥注释）：作者的 `a_name_in_a_comment_is_not_a_requirement` 红（3 → 我这边会多出注释里的名字），我的夹具同向红；还原零残留。
 
-**F-3（前置邻域，非 G-07 引入）**：`requirement_names`（`conventions/src/naming.rs:328`）匹配的是未转义的 `package = "`，而真实模板写的是转义引号（`build_method/src/scaffold/project.rs:115`：`package = \"nichlink-run-method\"`）——那半边在真实拼法下不匹配。今天被同一个名字的**依赖键**掩盖（键名与包名相同，:115 两处都如此），所以真实树 0 发现不受影响；但一条**重命名**的内部依赖（`kernel = { package = "nichlink-core" }`）写在模板字符串里就是隐形的。我的两条夹具分别演示了：未转义（raw string）→ 报；转义 → 不报。严重度 low–medium，属 G-07 边界之外，供挂账决策。
+**F-3（前置邻域，非 G-07 引入）**：`requirement_names`（`conventions/src/naming.rs:328`）匹配的是未转义的 `package = "`，而真实模板写的是转义引号（`build_method/src/scaffold/project.rs:115`：`package = \"xirang-run-method\"`）——那半边在真实拼法下不匹配。今天被同一个名字的**依赖键**掩盖（键名与包名相同，:115 两处都如此），所以真实树 0 发现不受影响；但一条**重命名**的内部依赖（`kernel = { package = "xirang-core" }`）写在模板字符串里就是隐形的。我的两条夹具分别演示了：未转义（raw string）→ 报；转义 → 不报。严重度 low–medium，属 G-07 边界之外，供挂账决策。
 
 ### 2.5 G-08 属性栈含文档注释 —— 证实
 
@@ -158,7 +158,7 @@ test ...the_shipped_manifests_name_one_version ... FAILED      （panicked at co
 --check-table 单独                          exit=0  dependency table matches the manifests (9 crates)
 ```
 
-红（变异 = 删掉 `tools/nichlink-publish:134` 起的互斥守卫，在同一个 scratch 根里对照跑）：变异体 `--workspace-version --check-table` → **exit 0 打印 0.1.6**（表从未核对）、`--workspace-version --publish --yes` → exit 0；同根未变异副本分别 exit 2。变异只在副本里，真实脚本的 md5 未变。
+红（变异 = 删掉 `tools/xirang-publish:134` 起的互斥守卫，在同一个 scratch 根里对照跑）：变异体 `--workspace-version --check-table` → **exit 0 打印 0.1.6**（表从未核对）、`--workspace-version --publish --yes` → exit 0；同根未变异副本分别 exit 2。变异只在副本里，真实脚本的 md5 未变。
 
 ### 3.2 G-10 release-audit 符号审计 —— 证实（队长点名的那半，我自建夹具）
 
@@ -189,19 +189,19 @@ symbol_audit=… (1 artifacts, each with defined symbols)      ← 两个从未�
 ### 3.3 G-11 visual `--help` —— 证实
 
 ```
-$ tools/nichlink-visual --help ; echo exit=$?
+$ tools/xirang-visual --help ; echo exit=$?
 exit=0   39 行
 grep -c 'Why tmux' → 1        grep -c '是面板的纯文本' → 1
 头部注释块 36 行（去掉行首 `# ` 后）逐行出现在输出里：缺失 0 行
 ```
 
-红（变异 = 换回写死的 `sed -n '2,26p'`，`tools/nichlink-visual:125`）：输出 **28 行**，`Why tmux` 0、`是面板的纯文本` 0，句子在 `target/visual` 那句中途截断。变异在副本里，真实脚本未动。
+红（变异 = 换回写死的 `sed -n '2,26p'`，`tools/xirang-visual:125`）：输出 **28 行**，`Why tmux` 0、`是面板的纯文本` 0，句子在 `target/visual` 那句中途截断。变异在副本里，真实脚本未动。
 
 ### 3.4 G-12 GNU 专属写法 —— 证实（静态 + 定向仿真），完整 rehearsal 未复跑
 
 - 静态：`grep -rn "sed -i" tools/` → 0；`grep -rn "date +%s%3N" tools/` → 0；`for s in tools/*; do sh -n $s; done` → 全部解析通过。
-- `date +%s%N` 只剩一处（`tools/nichlink-release-audit:142`），且是**带探测的**形式（`ns=$(date +%s%N 2>/dev/null) || ns=` + `case '' | *[!0-9]*)` 回退整秒）。我在 G-10 harness 里用伪造 BSD `date`（`%s%N` 打印字面 `1727000000N`）跑整条工具：**exit 0、`startup_ms=0`（仍是数字）**；把同一条旧写法单独放到同一仿真下：`sh: 1727000000N: value too great for base (error token is …)`——正是 t2 描述的旧失败模式。
-- rehearsal：`tools/nichlink-external-rehearsal:79`–`:81` 用 `sed … > "$manifest.repointed"` + `mv`，并对 `ROOT` 转义 `\`、`&`、`|`（`sed 's/\\/\\\\/g; s/&/\\&/g; s/|/\\|/g'`）；`sed -i` 0 命中。**我没有重跑整条 external rehearsal**（它会在检出之外从零构建示例宿主，代价大且与 t2 的仿真重复）。
+- `date +%s%N` 只剩一处（`tools/xirang-release-audit:142`），且是**带探测的**形式（`ns=$(date +%s%N 2>/dev/null) || ns=` + `case '' | *[!0-9]*)` 回退整秒）。我在 G-10 harness 里用伪造 BSD `date`（`%s%N` 打印字面 `1727000000N`）跑整条工具：**exit 0、`startup_ms=0`（仍是数字）**；把同一条旧写法单独放到同一仿真下：`sh: 1727000000N: value too great for base (error token is …)`——正是 t2 描述的旧失败模式。
+- rehearsal：`tools/xirang-external-rehearsal:79`–`:81` 用 `sed … > "$manifest.repointed"` + `mv`，并对 `ROOT` 转义 `\`、`&`、`|`（`sed 's/\\/\\\\/g; s/&/\\&/g; s/|/\\|/g'`）；`sed -i` 0 命中。**我没有重跑整条 external rehearsal**（它会在检出之外从零构建示例宿主，代价大且与 t2 的仿真重复）。
 
 ## 4. 组 C：t4
 
@@ -235,7 +235,7 @@ a disjunction: [] / an inequality: [] / an operator the gate does not enumerate:
 + 我的探针 guards_off_the_shape_whitelist_are_reported、input_reads_are_read_in_both_spellings_and_not_in_prose 红
 ```
 
-**反过火：现有 `ci.yml`/`release.yml` 仍绿（真实树 0 发现），为什么**：`ci.yml` 里**没有任何上传步骤**——它跑的是 `tools/nichlink-publish --check-table`（:137）与不带 `--publish` 的 `tools/nichlink-publish`（:144），"提到 `--publish`"的是它们上面的**注释**，而 `steps()`（`conventions/src/release_workflow.rs:523`）把 `#` 开头的行直接跳过，注释因此读不成上传步骤；`release.yml` 的三个上传/上传后步骤写的就是白名单的两种形状：`:66` 是 tag 判断单独，`:122`、`:136` 是 `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')`。**未改任何工作流写法**。
+**反过火：现有 `ci.yml`/`release.yml` 仍绿（真实树 0 发现），为什么**：`ci.yml` 里**没有任何上传步骤**——它跑的是 `tools/xirang-publish --check-table`（:137）与不带 `--publish` 的 `tools/xirang-publish`（:144），"提到 `--publish`"的是它们上面的**注释**，而 `steps()`（`conventions/src/release_workflow.rs:523`）把 `#` 开头的行直接跳过，注释因此读不成上传步骤；`release.yml` 的三个上传/上传后步骤写的就是白名单的两种形状：`:66` 是 tag 判断单独，`:122`、`:136` 是 `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')`。**未改任何工作流写法**。
 
 ### 4.2 N-2 `takes_input` 结构化判定 —— 证实
 
@@ -243,7 +243,7 @@ a disjunction: [] / an inequality: [] / an operator the gate does not enumerate:
 
 ### 4.3 N-3 doc_anchors 扩面 —— 部分证实（行为证实，数字复现不出）
 
-绿：合成根里同一条 md 里放 9 个锚点——`probe/src/lib.rs:1`、`Cargo.toml:3`、`.github/workflows/ci.yml:2` 解析成功；`probe/src/lib.rs:99`、`Cargo.toml:999`、`.github/workflows/ci.yml:99` 被报；`README.md:1` 与 `tools/nichlink-publish:88`（`.md` 目标与无扩展名脚本）**不报**（与模块头写的代价一致）。`doc_anchors::findings` 恰好返回那 3 条失效锚点。
+绿：合成根里同一条 md 里放 9 个锚点——`probe/src/lib.rs:1`、`Cargo.toml:3`、`.github/workflows/ci.yml:2` 解析成功；`probe/src/lib.rs:99`、`Cargo.toml:999`、`.github/workflows/ci.yml:99` 被报；`README.md:1` 与 `tools/xirang-publish:88`（`.md` 目标与无扩展名脚本）**不报**（与模块头写的代价一致）。`doc_anchors::findings` 恰好返回那 3 条失效锚点。
 
 真实树：`doc_anchors::findings(workspace_root())` **0 发现**。我另外把门禁**实际读到的文件集**独立重算了一遍（`markdown_files` = 根级 `*.md` + `docs/**` 去掉 `audit*`/`design*` + 各成员的两份 README，合计 **33** 份）：其中指向清单/工作流的候选锚点今天只有 **1 处**（`.toml` 1、`.yml/.yaml` 0）；把 record 文档也算上（门禁**不读**它们）则是 124 处（85 `.toml` + 39 `.yml/.yaml`）。
 
@@ -276,21 +276,21 @@ a disjunction: [] / an inequality: [] / an operator the gate does not enumerate:
 
 ## 7. 五条门禁（哈希钉住）
 
-跑前先把 12 个相关文件（`conventions/src/{lib,doc_blocks,size,naming,release_version,release_workflow,doc_anchors}.rs`、`tools/{nichlink-publish,nichlink-release-audit,nichlink-visual,nichlink-external-rehearsal}`、`AGENTS.md`）sha256 存到 `/tmp/t9-pin-before.txt`，跑完 `sha256sum -c` **全部 OK**（零漂移）：
+跑前先把 12 个相关文件（`conventions/src/{lib,doc_blocks,size,naming,release_version,release_workflow,doc_anchors}.rs`、`tools/{xirang-publish,xirang-release-audit,xirang-visual,xirang-external-rehearsal}`、`AGENTS.md`）sha256 存到 `/tmp/t9-pin-before.txt`，跑完 `sha256sum -c` **全部 OK**（零漂移）：
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo test -p nichlink-conventions --offline` | exit 0；`113 passed; 0 failed` |
+| `cargo test -p xirang-conventions --offline` | exit 0；`113 passed; 0 failed` |
 | `cargo test --workspace --offline` | exit 0；55 个 test 目标全 ok、0 FAILED |
 | `cargo fmt --all -- --check` | exit 0；零输出 |
-| `tools/nichlink-publish --check-table` | exit 0；`dependency table matches the manifests (9 crates)` |
+| `tools/xirang-publish --check-table` | exit 0；`dependency table matches the manifests (9 crates)` |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | exit 0 |
 
 **并发窗口的处理（按队长要求：别人跑出的结果作废重跑）**
 
 - 上面这一轮（19:4x）是**第一次**全绿：`/tmp/t9-gate-b.log` 里 55 个 `test result: ok`、0 条 FAILED，且 `new_project_and_explicit_root_face_compile ... ok` 在列。12 个文件 sha256 跑前=跑后。
 - 之后重跑同一命令时红过一次，红点是 `core/tests/plugin_lock_provenance.rs`，错误串在真实树 0 命中、只存在于 t11 的变异副本 ⇒ **共享 `target/` 泄漏的变异产物**（§1 第 4 条），该次**作废**。
-- 再后来用独立 `CARGO_TARGET_DIR=/tmp/t9-target` 重跑：`cargo test -p nichlink-conventions --offline` exit 0、`cargo clippy` exit 0；`cargo test --workspace --offline` 只红在 `studio::app::tests::project::new_project_and_explicit_root_face_compile`——生成的项目 `cargo check --offline` 解析 `nichlink-run-method = "^0.1.6"` 时，本地 cargo git 缓存里只有 0.1.5，这正是队长报备的离线缓存环境artifact（副本/冷 target 下红、真实树绿），**不是回归**。
+- 再后来用独立 `CARGO_TARGET_DIR=/tmp/t9-target` 重跑：`cargo test -p xirang-conventions --offline` exit 0、`cargo clippy` exit 0；`cargo test --workspace --offline` 只红在 `studio::app::tests::project::new_project_and_explicit_root_face_compile`——生成的项目 `cargo check --offline` 解析 `xirang-run-method = "^0.1.6"` 时，本地 cargo git 缓存里只有 0.1.5，这正是队长报备的离线缓存环境artifact（副本/冷 target 下红、真实树绿），**不是回归**。
 - 最后在共享 `target/` 上 `touch core/src/registry_core/plugin/catalog/catalog.rs`（内容不变，sha256 仍 `89048325…`）强制 core 重建后重跑：`cargo test --workspace --offline` **EXIT=0、55 个 test 目标全 ok、0 FAILED**（`/tmp/t9-g-b3.log`）。**判定取这一轮**。
 - 我自己的变异全程跑在 `/tmp/nk-t9`（自带 `/tmp/nk-t9/target`，未设 `CARGO_TARGET_DIR`），因此从未写进真实树的 `target/`；泄漏来自别人的副本。
 
@@ -307,8 +307,8 @@ a disjunction: [] / an inequality: [] / an operator the gate does not enumerate:
 
 ## 9. 未覆盖范围
 
-1. **`tools/nichlink-external-rehearsal` 的完整 BSD 仿真复跑**：只做了静态复核（无 `sed -i`、临时文件 + `mv`、转义 `\ & |`、`sh -n` 通过）+ `date` 回退的定向仿真。
-2. **G-10 的 `nm` 整个缺失**（mini PATH）与 **`readelf` / `.inventory` 分支**、`NICH_LINK_FULL_BINARY`/`NICH_LINK_MINIMAL_BINARY` 分支（t2 自述的邻域缺口）我没有另造夹具——只在三种工件（好/零符号/nonobject）上验证。
+1. **`tools/xirang-external-rehearsal` 的完整 BSD 仿真复跑**：只做了静态复核（无 `sed -i`、临时文件 + `mv`、转义 `\ & |`、`sh -n` 通过）+ `date` 回退的定向仿真。
+2. **G-10 的 `nm` 整个缺失**（mini PATH）与 **`readelf` / `.inventory` 分支**、`XIRANG_FULL_BINARY`/`XIRANG_MINIMAL_BINARY` 分支（t2 自述的邻域缺口）我没有另造夹具——只在三种工件（好/零符号/nonobject）上验证。
 3. **t1 的棘轮性能**（is_mounted_as_test 从 ~20s 回到 ~5s）我没有计时对比。
 4. **其它成员的并发编辑**：窗口内真实树 `conventions/src/lib.rs` 被改过一次（19:38:46，补 G-08 第二条钉子）。§7 的门禁全部跑在"哈希钉住"的那份树上，但 §2 里 M5 首轮的 hash 比对受这次并发影响（已在 §2.5 说明并按第二轮结果判定）。
 5. 我只验证了三组修复本身；**没有**复核 t1/t2/t4 自述里那些"顺带修掉"的邻域（例如 t4 的 `AGENTS.md` 描述、t1 的 `examples` 逐字节断言），那些不在本任务 acceptance 内。

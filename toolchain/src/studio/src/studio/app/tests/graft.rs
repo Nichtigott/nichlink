@@ -18,7 +18,7 @@ fn graft_composes_an_external_overlay_plan_without_touching_source() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-external-graft-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-external-graft-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(root.clone(), root.join("Cargo.toml"), "external-graft-test");
 
@@ -139,7 +139,7 @@ fn graft_refuses_a_selector_that_already_exists() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-graft-collision-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-graft-collision-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(
         root.clone(),
@@ -191,7 +191,7 @@ fn graft_warns_about_an_undeclared_slot_after_writing_the_plan() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-graft-undeclared-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-graft-undeclared-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(
         root.clone(),
@@ -266,7 +266,7 @@ fn graft_reads_the_declared_slot_from_the_host_entry() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-graft-declared-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-graft-declared-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(
         root.clone(),

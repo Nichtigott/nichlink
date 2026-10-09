@@ -7,7 +7,7 @@
 // 这些导入供下面按特性门控的模块使用（它们经 `use super::*` 再导入），因此用同一个条件
 // 门控；否则在没有适配器特性时 `-D warnings` 会把它们当作未使用而拒绝。
 #[cfg(any(feature = "wasm", feature = "process-tools"))]
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -21,12 +21,12 @@ use nichlink_toolchain::run_method::{
 fn artifact(
     bytes: Vec<u8>,
     mode: PluginMode,
-) -> nichlink_toolchain::run_method::VerifiedPluginArtifact {
+) -> xirang_toolchain::run_method::VerifiedPluginArtifact {
     let checksum = Box::leak(sha256_hex(&bytes).into_boxed_str());
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
+        parent: xirang_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",
@@ -60,7 +60,7 @@ fn artifact(
             name: "plugin-test",
             crate_name: "plugin_test",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.test"),
+            framework: FrameworkId::new("xirang.test"),
             source: PluginSource::User,
             mode,
             checksum,
@@ -87,14 +87,14 @@ fn artifact(
 #[cfg(feature = "wasm")]
 mod wasm_faults {
     use super::*;
-    use nichlink_toolchain::plugin_host::{
+    use xirang_toolchain::plugin_host::{
         ValidationChannel, WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable,
     };
 
     fn slot() -> WasmPluginSlot {
         WasmPluginSlot::new(
             "test",
-            FrameworkId::new("nichlink.test"),
+            FrameworkId::new("xirang.test"),
             PluginMode::Extension,
             FlowContract::NONE,
             &[ValidationChannel::Local],
@@ -117,8 +117,8 @@ mod wasm_faults {
         (module
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_echo") (param i32 i32) (result i64)
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_echo") (param i32 i32) (result i64)
             (i64.extend_i32_u (local.get 1)))
         )
     "#;
@@ -169,8 +169,8 @@ mod wasm_faults {
     fn activate_pending_reports_a_failed_activation() {
         let bad = r#"(module
           (memory (export "memory") 1)
-          (func (export "nichlink_abi_version") (result i32) (i32.const 99))
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#;
+          (func (export "xirang_abi_version") (result i32) (i32.const 99))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2)))"#;
         let table = table(bad, WasmLimits::default());
         let error = table
             .activate_pending("test")
@@ -197,8 +197,8 @@ mod wasm_faults {
         let bad = wat::parse_str(
             r#"(module
               (memory (export "memory") 1)
-              (func (export "nichlink_abi_version") (result i32) (i32.const 99))
-              (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#,
+              (func (export "xirang_abi_version") (result i32) (i32.const 99))
+              (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2)))"#,
         )
         .expect("valid WAT");
         let table =
@@ -300,8 +300,8 @@ mod wasm_faults {
     fn incompatible_abi_is_rejected_before_instance_is_published() {
         let wat = r#"(module
           (memory (export "memory") 1)
-          (func (export "nichlink_abi_version") (result i32) (i32.const 99))
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2)))"#;
+          (func (export "xirang_abi_version") (result i32) (i32.const 99))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2)))"#;
         let bytes = wat::parse_str(wat).expect("valid WAT");
         let error = match WasmBackend::default()
             .load_wasm_backend(artifact(bytes, PluginMode::Extension))
@@ -321,10 +321,10 @@ mod wasm_faults {
         let wat = r#"(module
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
           (func $spin (param i32 i32) (result i64)
             (call $spin (local.get 0) (local.get 1)))
-          (export "nichlink_spin" (func $spin))
+          (export "xirang_spin" (func $spin))
         )"#;
         let table = table(
             wat,
@@ -345,8 +345,8 @@ mod wasm_faults {
         let wat = r#"(module
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_large") (param i32 i32) (result i64) (i64.const 4294967396)
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_large") (param i32 i32) (result i64) (i64.const 4294967396)
           )
         )"#;
         let table = table(
@@ -373,8 +373,8 @@ mod wasm_faults {
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
           (table 1 funcref)
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
         )"#;
         let bytes = wat::parse_str(wat).expect("valid WAT");
         let artifact = artifact(bytes, PluginMode::Extension);
@@ -411,8 +411,8 @@ mod wasm_faults {
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
           (table 100000000 funcref)
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
         )"#;
         let bytes = wat::parse_str(wat).expect("valid WAT");
         let artifact = artifact(bytes, PluginMode::Extension);
@@ -449,8 +449,8 @@ mod wasm_faults {
         let wat = r#"(module
           (memory (export "memory") 65536)
           (data (i32.const 0) "ok")
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
         )"#;
         let bytes = wat::parse_str(wat).expect("valid WAT");
         assert!(
@@ -484,8 +484,8 @@ mod wasm_faults {
         let wat = r#"(module
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
         )"#;
         let bytes = wat::parse_str(wat).expect("valid WAT");
         let artifact = artifact(bytes, PluginMode::Extension);
@@ -557,8 +557,8 @@ mod wasm_faults {
               (memory (export "memory") 1)
               (data (i32.const 0) "ok")
               (table 1 funcref)
-              (func $f (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-              (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+              (func $f (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+              (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
               (elem func {entries})
             )"#
         );
@@ -590,8 +590,8 @@ mod wasm_faults {
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
           (table 4 funcref)
-          (func $f (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (func $f (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
           (elem func $f $f $f)
         )"#;
         let table = table(wat, WasmLimits::default());
@@ -608,8 +608,8 @@ mod wasm_faults {
         let wat = r#"(module
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_grow") (param i32 i32) (result i64)
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_grow") (param i32 i32) (result i64)
             (drop (memory.grow (i32.const 1000))) (i64.const 2))
         )"#;
         let table = table(
@@ -630,11 +630,11 @@ mod wasm_faults {
 #[cfg(feature = "process-tools")]
 mod process_faults {
     use super::*;
-    use nichlink_toolchain::plugin_host::{
-        PluginInstance, ProcessBackend, ProcessLimits, ProcessProgram,
-    };
     use std::path::{Path, PathBuf};
     use std::time::Duration;
+    use xirang_toolchain::plugin_host::{
+        PluginInstance, ProcessBackend, ProcessLimits, ProcessProgram,
+    };
 
     fn executable(script: &str) -> (tempfile::TempDir, std::path::PathBuf) {
         use std::io::Write;
@@ -680,7 +680,7 @@ mod process_faults {
         assert!(
             matches!(
                 outcome,
-                Err(nichlink_toolchain::plugin_host::HostError::Timeout)
+                Err(xirang_toolchain::plugin_host::HostError::Timeout)
             ),
             "a child that is still running must report Timeout, got {outcome:?}"
         );
@@ -696,7 +696,7 @@ mod process_faults {
             .unwrap();
         assert!(matches!(
             plugin.call("run", &[]),
-            Err(nichlink_toolchain::plugin_host::HostError::Process(_))
+            Err(xirang_toolchain::plugin_host::HostError::Process(_))
         ));
         drop(dir);
     }
@@ -865,10 +865,7 @@ mod process_faults {
             .expect_err("a cut-off frame is not an answer");
         let text = error.to_string();
         assert!(
-            matches!(
-                error,
-                nichlink_toolchain::plugin_host::HostError::Process(_)
-            ),
+            matches!(error, xirang_toolchain::plugin_host::HostError::Process(_)),
             "a broken frame is a process-level failure, got {error:?}"
         );
         // The whole message is pinned, not just its parts: the operation, how much of the
@@ -904,10 +901,7 @@ mod process_faults {
             .call("run", &[])
             .expect_err("a declared frame that never started is not an answer");
         assert!(
-            matches!(
-                error,
-                nichlink_toolchain::plugin_host::HostError::Process(_)
-            ),
+            matches!(error, xirang_toolchain::plugin_host::HostError::Process(_)),
             "a broken frame is a process-level failure, got {error:?}"
         );
         assert_eq!(
@@ -982,7 +976,7 @@ mod process_faults {
         assert!(
             matches!(
                 outcome,
-                Err(nichlink_toolchain::plugin_host::HostError::Timeout)
+                Err(xirang_toolchain::plugin_host::HostError::Timeout)
             ),
             "no frame by the deadline is a Timeout, got {outcome:?}"
         );
@@ -1004,7 +998,7 @@ mod process_faults {
         );
         assert!(matches!(
             loaded.call("run", &[]),
-            Err(nichlink_toolchain::plugin_host::HostError::Limit(_))
+            Err(xirang_toolchain::plugin_host::HostError::Limit(_))
         ));
     }
 
@@ -1032,7 +1026,7 @@ mod process_faults {
         assert!(
             matches!(
                 outcome,
-                Err(nichlink_toolchain::plugin_host::HostError::Timeout)
+                Err(xirang_toolchain::plugin_host::HostError::Timeout)
             ),
             "expected the deadline to win, got {outcome:?}"
         );
@@ -1086,7 +1080,7 @@ mod process_faults {
         assert!(
             matches!(
                 outcome,
-                Err(nichlink_toolchain::plugin_host::HostError::Process(_))
+                Err(xirang_toolchain::plugin_host::HostError::Process(_))
             ),
             "expected the child's failure, got {outcome:?}"
         );
@@ -1124,9 +1118,9 @@ mod process_faults {
             concat!(
                 "#!/bin/sh\n",
                 "bits=\"\"\n",
-                "if [ -n \"$NICHLINK_TEST_MARKER\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "if [ -n \"$XIRANG_TEST_MARKER\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
                 "if [ -n \"$HOME\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
-                "if [ \"$PWD\" = \"$NICHLINK_TEST_CWD\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
+                "if [ \"$PWD\" = \"$XIRANG_TEST_CWD\" ]; then bits=\"${bits}1\"; else bits=\"${bits}0\"; fi\n",
                 "printf '\\003\\000\\000\\000'\n",
                 "printf '%s' \"$bits\"\n"
             ),
@@ -1142,8 +1136,8 @@ mod process_faults {
         .load_process_backend(
             artifact(&probe),
             ProcessProgram::new(&probe)
-                .environment("NICHLINK_TEST_MARKER", "set-by-host")
-                .environment("NICHLINK_TEST_CWD", directory.path().display().to_string())
+                .environment("XIRANG_TEST_MARKER", "set-by-host")
+                .environment("XIRANG_TEST_CWD", directory.path().display().to_string())
                 .current_dir(directory.path()),
         )
         .unwrap();

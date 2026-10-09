@@ -4,13 +4,13 @@
 
 ## 从旧的多功能布局迁移
 
-注册协议位于 `nichlink-kernel`；构建发现、身份缓存、scope 和 `StaticPlan` 位于 `nichlink-toolchain`；MIR 和数据流证据位于 `nichlink-toolchain`；TUI 位于 `nichlink-toolchain`；隔离插件执行位于 `nichlink-toolchain`；统一命令行入口（`nichlink new/check/build/snippets/explain/grafts/studio/mcp`）位于 `nichlink-toolchain`。
+注册协议位于 `xirang-kernel`；构建发现、身份缓存、scope 和 `StaticPlan` 位于 `xirang-toolchain`；MIR 和数据流证据位于 `xirang-toolchain`；TUI 位于 `xirang-toolchain`；隔离插件执行位于 `xirang-toolchain`；统一命令行入口（`xirang new/check/build/snippets/explain/grafts/studio/mcp`）位于 `xirang-toolchain`。
 
 应用通过 `Registry::root_for_namespace` 提供自己的根 Registry。release 使用宿主生成的 `StaticPlan`，本 workspace 不提供固定的 `root_registry`。
 
 ## 外部声明
 
-跨 crate 声明使用 `nichlink_toolchain::run_method::external_object!`。B3b 之后只有 `kind` 必填，其余字段全部可选，并按生成的紧凑形式取默认值：`source` 取声明文件、`registry_name` 取模块名末段、`parent` 取包根、`handle` 取 `kind`、`preset`/`parts` 取 `NoPreset`/`NoParts`、`plugin` 取 `None`、`exports`/`requires`/`provides`/`runtime_checks` 取空。没有版本字段，也没有目标框架字段：框架属于注册机而不属于注册面。`registry_rule` 默认取 `RegistrationRule::ANY`，而不是宿主的兄弟规则解析器——该解析器（`super::registry_rule::REGISTRATION_RULE`）是构建只会在宿主自己的生成树里、注册面旁边生成的相对路径；外部 crate 没有这个兄弟模块，因此拥有注册机的外部面得到宽松的 `ANY`，要收窄必须显式写出规则。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
+跨 crate 声明使用 `xirang_toolchain::run_method::external_object!`。B3b 之后只有 `kind` 必填，其余字段全部可选，并按生成的紧凑形式取默认值：`source` 取声明文件、`registry_name` 取模块名末段、`parent` 取包根、`handle` 取 `kind`、`preset`/`parts` 取 `NoPreset`/`NoParts`、`plugin` 取 `None`、`exports`/`requires`/`provides`/`runtime_checks` 取空。没有版本字段，也没有目标框架字段：框架属于注册机而不属于注册面。`registry_rule` 默认取 `RegistrationRule::ANY`，而不是宿主的兄弟规则解析器——该解析器（`super::registry_rule::REGISTRATION_RULE`）是构建只会在宿主自己的生成树里、注册面旁边生成的相对路径；外部 crate 没有这个兄弟模块，因此拥有注册机的外部面得到宽松的 `ANY`，要收窄必须显式写出规则。开发构建只有在宿主显式启用 `collector: debug` 时才发现这些声明；core 本身不依赖 inventory。release 应通过已验证插件 artifact 或应用自有输入保留外部注册面。
 
 ## 注册面按真实路径载入
 
@@ -27,8 +27,8 @@
 只有 `#[path]` 对 IDE 还不够。rust-analyzer 只在 `mod` 声明位于文件或展开的顶层时才应用该属性，因此声明在生成内联模块里的注册面——根以下的每一个面——永远进不了 crate：没有补全、没有跳转、没有悬停，尽管 `cargo` 与 `rustc` 都能看到它。所以每个这样的面还会得到一份仅供 IDE 的视角：
 
 - 真实声明由 `cfg(not(rust_analyzer))` 把关；
-- 顶层再加一条 `#[cfg(rust_analyzer)] #[path = "..."] mod __nichlink_ra_<路径>;`，在 rust-analyzer 真正应用 `#[path]` 的位置载入同一个文件；
-- 在注册面的真实位置加 `#[cfg(rust_analyzer)] use crate::__nichlink_ra_<路径> as <名字>;`，重建它的模块路径，可见性与真实声明一致（叶子面是 `pub`，容器面是 `pub(crate)`）。
+- 顶层再加一条 `#[cfg(rust_analyzer)] #[path = "..."] mod __xirang_ra_<路径>;`，在 rust-analyzer 真正应用 `#[path]` 的位置载入同一个文件；
+- 在注册面的真实位置加 `#[cfg(rust_analyzer)] use crate::__xirang_ra_<路径> as <名字>;`，重建它的模块路径，可见性与真实声明一致（叶子面是 `pub`，容器面是 `pub(crate)`）。
 
 两种工具各自只看到其中一份声明，因此 `rustc` 读到的树与改动前完全一致，用户可见行为不变。`build_method` 会输出 `cargo::rustc-check-cfg=cfg(rust_analyzer)`，让多出来的 cfg 保持安静。
 
@@ -37,7 +37,7 @@
 手写声明过去会因为一个分隔符而失败：`kind: Tool;` 报 `no rules expected ';'`，字段顺序写反同样失败。现在两个读取者都宽容，并且共用同一个切分器（`split_face_fields`），因此构建步骤与编译器读到的字段永远一致：
 
 - `,` 与 `;` 都算分隔符，漏写分隔符会在下一个 `name:` 处收尾，末尾多余的分隔符被忽略，顺序任意；
-- 词表里没有的字段、或重复给出的字段，由 `nichlink-macro` 前端报在该 token 上，并列出可接受的字段；
+- 词表里没有的字段、或重复给出的字段，由 `xirang-macro` 前端报在该 token 上，并列出可接受的字段；
 - 合法声明永远不会走到该前端：它是宏阶梯的最后一条 arm，展开与从前逐字节一致。
 
 有一条限制要说清：前端的诊断挂到转发 token 的那个生成别名上，面文件以"宏调用处"的形式附注。`macro_rules!` 这一跳会丢掉作者 token 的 span，因此手写注册面无法把脱字符精确落在出错的那个 token 上。
@@ -68,7 +68,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
 
 ## Studio 与插件宿主
 
-使用 `cargo run --manifest-path studio/Cargo.toml` 启动 Studio；`1`～`3` 切换 Search、Inspect、Data。`watch` 由 `nichlink-dev` 提供，它是非默认 `dev-supervisor` 特性下的工作区专用二进制：会在源码、Cargo 或插件目录变化时重建子 Studio 进程，因此需要本检出（`cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch`），`cargo install nichlink-toolchain` 也不会安装它。
+使用 `cargo run --manifest-path studio/Cargo.toml` 启动 Studio；`1`～`3` 切换 Search、Inspect、Data。`watch` 由 `xirang-dev` 提供，它是非默认 `dev-supervisor` 特性下的工作区专用二进制：会在源码、Cargo 或插件目录变化时重建子 Studio 进程，因此需要本检出（`cargo run -p xirang-toolchain --features dev-supervisor --bin xirang-dev -- watch`），`cargo install xirang-toolchain` 也不会安装它。
 
 插件宿主只接受 `VerifiedPluginArtifact`。Wasm slot 在编译期声明；进程适配器需显式启用 `process-tools`。现有 `PluginManifest` 流程合同和 lock 记录保持兼容。
 # Graft overlay 迁移
@@ -76,7 +76,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
 当前 graft 模型是不可变覆盖层。宿主保留原始源码，只在入口声明外部实现：
 
 ```rust
-let plan = nichlink_toolchain::run_method::graft_plan!(framework,
+let plan = xirang_toolchain::run_method::graft_plan!(framework,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/layout"] full graft "layout_v2",
 );
@@ -92,16 +92,16 @@ let effective = base.overlay(&plan, &external)?;
 
 ## `graft.plan` 记录
 
-`.nichlink/external-grafts/<selector>/graft.plan` 是创作记录，既不是编译器读取的声明，
+`.xirang/external-grafts/<selector>/graft.plan` 是创作记录，既不是编译器读取的声明，
 也不是一次 `overlay` 调用。它的版式未变（`version=1`、`target`、`target_path`、`graft`、
 `full`），但现在有了读取方：kernel 的 `GraftPlanDocument` 负责解析与渲染，遇到不认识的
 版本或键就拒绝而不是猜，并且是这套版式唯一的定义处。记录现在也是覆盖的**输入**：
-`nichlink_toolchain::run_method::apply_recorded_grafts` 读取 `.nichlink/external-grafts/`，
+`xirang_toolchain::run_method::apply_recorded_grafts` 读取 `.xirang/external-grafts/`，
 `Registry::overlay_recorded` 把每条记录与静态声明对账、施加，并报告每一处调整；优先级
-策略与哪些报告是致命错误见 [`graft.zh-CN.md`](graft.zh-CN.md)。`nichlink-toolchain` 新增
+策略与哪些报告是致命错误见 [`graft.zh-CN.md`](graft.zh-CN.md)。`xirang-toolchain` 新增
 `declared_grafts`/`host_entry_source`，供创作界面查询构建会发布哪些槽位。
 
-`nichlink_toolchain::run_method::ExternalGraftPlanFile` 不再把 `target`、`graft`、`full` 暴露为
+`xirang_toolchain::run_method::ExternalGraftPlanFile` 不再把 `target`、`graft`、`full` 暴露为
 公开字段；它携带解析后的 `GraftPlanDocument` 与选择器，并通过 `target()`、
 `target_path()`、`graft()`、`full()`、`plan_path()` 回答。`root` 仍是公开的 `PathBuf`
 字段（没有 `root()` 方法），`selector` 与 `document` 同样是公开字段。新增读取、列出、

@@ -15,11 +15,11 @@ is why every ceiling is an order-of-magnitude guard rather than a grade.
 ## Registration scale
 
 `run_method/examples/scale_audit.rs`, run through
-`tools/nichlink-scale-audit` (which adds `peak_rss_kb` when GNU `time` is
+`tools/xirang-scale-audit` (which adds `peak_rss_kb` when GNU `time` is
 available):
 
 ```sh
-cargo run --release -p nichlink-toolchain --example scale_audit -- 10000 100000
+cargo run --release -p xirang-toolchain --example scale_audit -- 10000 100000
 ```
 
 | Nodes | Register (ms) | Index (ms) | Entries | Pages | Static-face bytes |
@@ -36,7 +36,7 @@ an order-of-magnitude regression fails the run instead of printing a larger
 number. A genuinely slower machine can raise them without editing the file:
 
 ```sh
-NICHLINK_SCALE_REGISTER_US=120 NICHLINK_SCALE_INDEX_US=60 tools/nichlink-scale-audit
+XIRANG_SCALE_REGISTER_US=120 XIRANG_SCALE_INDEX_US=60 tools/xirang-scale-audit
 ```
 
 If a legitimate change moves the baseline, update the table above and the
@@ -45,9 +45,9 @@ what the code costs.
 
 ## Release artifacts
 
-`tools/nichlink-release-audit` builds the workspace in release mode and then
+`tools/xirang-release-audit` builds the workspace in release mode and then
 walks `target/release`, recording bytes and defined symbols per artifact into
-`target/nichlink-audit/release/artifacts.tsv`. It also **fails** when any linked
+`target/xirang-audit/release/artifacts.tsv`. It also **fails** when any linked
 artifact still carries an `.inventory` linker section, which is the release
 promise that the shipping binary holds a static plan rather than a registration
 inventory.
@@ -56,9 +56,9 @@ Last run: exit 0, no artifact carried the section, and the shipped binaries were
 
 | Artifact | Bytes | Defined symbols |
 | --- | --- | --- |
-| `nichlink` | 4 782 240 | 6 140 |
-| `cargo-nichlink` | 4 802 024 | 6 186 |
-| `libnichlink_macro.so` | 1 184 160 | 5 085 |
+| `xirang` | 4 782 240 | 6 140 |
+| `cargo-xirang` | 4 802 024 | 6 186 |
+| `libxirang_macro.so` | 1 184 160 | 5 085 |
 
 Startup, measured by the same script on the same machine: `startup_ms=176`. The
 script prints it rather than asserting it, because process start on a loaded CI
@@ -76,7 +76,7 @@ table may grow. Measured with a counting global allocator, in
 `plugin-host/tests/wasm_table_cost.rs`:
 
 ```sh
-cargo test --release -p nichlink-toolchain --test wasm_table_cost -- --nocapture
+cargo test --release -p xirang-toolchain --test wasm_table_cost -- --nocapture
 ```
 
 | Declaration | Peak bytes allocated | Note |
@@ -100,7 +100,7 @@ allocator in `examples/control-button/tests/static_plan_allocations.rs`, which
 holds exactly one test because the counter is process-global:
 
 ```sh
-cargo test -p nichlink-example-control-button --test static_plan_allocations -- --nocapture
+cargo test -p xirang-example-control-button --test static_plan_allocations -- --nocapture
 ```
 
 | Phase | Allocations | Bytes |
@@ -134,11 +134,11 @@ comparing two totals.
 
 ### 注册规模
 
-`run_method/examples/scale_audit.rs`，经 `tools/nichlink-scale-audit` 运行（安装了 GNU `time`
+`run_method/examples/scale_audit.rs`，经 `tools/xirang-scale-audit` 运行（安装了 GNU `time`
 时它还会给出 `peak_rss_kb`）：
 
 ```sh
-cargo run --release -p nichlink-toolchain --example scale_audit -- 10000 100000
+cargo run --release -p xirang-toolchain --example scale_audit -- 10000 100000
 ```
 
 | 节点数 | 注册 (ms) | 索引 (ms) | 条目 | 页 | 静态面字节 |
@@ -152,7 +152,7 @@ cargo run --release -p nichlink-toolchain --example scale_audit -- 10000 100000
 因此数量级的退化会让这次运行失败，而不是打印一个更大的数字。确实更慢的机器可以不改文件而抬高它们：
 
 ```sh
-NICHLINK_SCALE_REGISTER_US=120 NICHLINK_SCALE_INDEX_US=60 tools/nichlink-scale-audit
+XIRANG_SCALE_REGISTER_US=120 XIRANG_SCALE_INDEX_US=60 tools/xirang-scale-audit
 ```
 
 如果某项正当改动移动了基线，请把上表与上限一起更新：一条永不重新推导的上限会慢慢变成关于
@@ -160,8 +160,8 @@ NICHLINK_SCALE_REGISTER_US=120 NICHLINK_SCALE_INDEX_US=60 tools/nichlink-scale-a
 
 ### 发布产物
 
-`tools/nichlink-release-audit` 以 release 模式构建整个工作区，然后遍历 `target/release`，
-把每个产物的字节数与已定义符号数记入 `target/nichlink-audit/release/artifacts.tsv`。当任何已链接
+`tools/xirang-release-audit` 以 release 模式构建整个工作区，然后遍历 `target/release`，
+把每个产物的字节数与已定义符号数记入 `target/xirang-audit/release/artifacts.tsv`。当任何已链接
 产物仍带着 `.inventory` 链接段时它还会**失败**，而这正是"发布产物持有静态计划、而不是注册
 清单"这条承诺。
 
@@ -169,9 +169,9 @@ NICHLINK_SCALE_REGISTER_US=120 NICHLINK_SCALE_INDEX_US=60 tools/nichlink-scale-a
 
 | 产物 | 字节 | 已定义符号 |
 | --- | --- | --- |
-| `nichlink` | 4 782 240 | 6 140 |
-| `cargo-nichlink` | 4 802 024 | 6 186 |
-| `libnichlink_macro.so` | 1 184 160 | 5 085 |
+| `xirang` | 4 782 240 | 6 140 |
+| `cargo-xirang` | 4 802 024 | 6 186 |
+| `libxirang_macro.so` | 1 184 160 | 5 085 |
 
 同一脚本在同一台机器上测得启动：`startup_ms=176`。脚本只打印它而不断言它，因为负载高的 CI
 runner 上进程启动更多说明的是 runner 而不是二进制；那里真正要紧的断言是链接段那条，它与机器无关。
@@ -185,7 +185,7 @@ runner 上进程启动更多说明的是 runner 而不是二进制；那里真�
 `plugin-host/tests/wasm_table_cost.rs`：
 
 ```sh
-cargo test --release -p nichlink-toolchain --test wasm_table_cost -- --nocapture
+cargo test --release -p xirang-toolchain --test wasm_table_cost -- --nocapture
 ```
 
 | 声明 | 分配峰值字节 | 说明 |
@@ -205,7 +205,7 @@ cargo test --release -p nichlink-toolchain --test wasm_table_cost -- --nocapture
 计数式全局分配器实测（该文件恰好只有一条测试，因为计数器是进程全局的）：
 
 ```sh
-cargo test -p nichlink-example-control-button --test static_plan_allocations -- --nocapture
+cargo test -p xirang-example-control-button --test static_plan_allocations -- --nocapture
 ```
 
 | 阶段 | 分配次数 | 字节 |

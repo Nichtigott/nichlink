@@ -9,10 +9,7 @@
 use super::*;
 
 pub(super) fn draw_brand(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let mut art = NICH_LINK_MARK
-        .into_iter()
-        .map(Line::from)
-        .collect::<Vec<_>>();
+    let mut art = XIRANG_MARK.into_iter().map(Line::from).collect::<Vec<_>>();
     art.push(Line::from(vec![
         // The legend states what was actually loaded. `LIVE` means a trace
         // artifact passed the identity checks in `app::trace`; with no artifact it

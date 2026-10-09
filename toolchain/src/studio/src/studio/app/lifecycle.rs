@@ -117,7 +117,7 @@ impl App {
             ),
         };
         app.install_trace();
-        if let Ok(query) = std::env::var("NICH_LINK_INITIAL_QUERY") {
+        if let Ok(query) = std::env::var("XIRANG_INITIAL_QUERY") {
             app.overlay = Some(Overlay::Search(SearchState {
                 query,
                 ..SearchState::default()

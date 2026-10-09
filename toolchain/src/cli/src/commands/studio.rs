@@ -1,16 +1,16 @@
-//! `nichlink studio`: launch the Studio TUI for a named project.
-//! `nichlink studio`：为指定项目启动 Studio TUI。
+//! `xirang studio`: launch the Studio TUI for a named project.
+//! `xirang studio`：为指定项目启动 Studio TUI。
 //!
 //! Split out of `lib.rs` like the other subcommands: the argv shape is this
 //! command's own, while the TUI and its project resolution live in
-//! `nichlink-toolchain`. The subcommand used to drop its arguments, so
-//! `nichlink studio <path>` opened the working directory even though Studio's
+//! `xirang-toolchain`. The subcommand used to drop its arguments, so
+//! `xirang studio <path>` opened the working directory even though Studio's
 //! own error text tells the reader to pass a path; the path now reaches
-//! `launch_with`, which resolves it exactly like `nichlink-toolchain <path>` does.
+//! `launch_with`, which resolves it exactly like `xirang-toolchain <path>` does.
 //! 与其他子命令一样从 `lib.rs` 拆出：参数形状归本命令，TUI 与其项目解析归属
-//! `nichlink-toolchain`。该子命令此前丢弃自己的参数，因此即便 Studio 自己的错误文本让读者
-//! 传一个路径，`nichlink studio <path>` 打开的仍是当前目录；现在该路径会到达
-//! `launch_with`，其解析方式与 `nichlink-toolchain <path>` 完全一致。
+//! `xirang-toolchain`。该子命令此前丢弃自己的参数，因此即便 Studio 自己的错误文本让读者
+//! 传一个路径，`xirang studio <path>` 打开的仍是当前目录；现在该路径会到达
+//! `launch_with`，其解析方式与 `xirang-toolchain <path>` 完全一致。
 
 use std::io::Write;
 use std::path::PathBuf;

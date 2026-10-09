@@ -1,5 +1,5 @@
-//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-//! NichLink example: the README Control/Button two-level tree as a real host
+//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+//! XiRang example: the README Control/Button two-level tree as a real host
 //! library.
 //!
 //! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -8,7 +8,7 @@
 //! step generated; face code stays ordinary Rust and no parent keeps a child
 //! roster.
 
-nichlink_toolchain::run_method::host!();
+xirang_toolchain::run_method::host!();
 
 // 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 // 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -24,7 +24,7 @@ nichlink_toolchain::run_method::host!();
 
 /// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 /// The example's host identity. A graft requires both sides to share it.
-pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 
 // 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 // 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -45,7 +45,7 @@ pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-bu
 // 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 //   cut "root/control/button" graft "button_fast"
 // The string form still works and needs no link, but tooling cannot complete it.
-nichlink_toolchain::run_method::static_graft_plan!(
+xirang_toolchain::run_method::static_graft_plan!(
     FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
@@ -62,7 +62,7 @@ nichlink_toolchain::run_method::static_graft_plan!(
 /// 它走工具链的具名入口，因此这个示例同时是 `host_registry!()` 的端到端消费者——而由于本 crate 是工作区
 /// 成员，工作区门禁会编译并测试它："宿主拿得到自己的注册机"这条钉子，就是这个函数跑起来。
 pub fn base_registry() -> Registry {
-    nichlink_toolchain::host_registry!().expect("example faces register")
+    xirang_toolchain::host_registry!().expect("example faces register")
 }
 
 /// 打印注册树的逻辑路径，供示例二进制和集成测试共用。

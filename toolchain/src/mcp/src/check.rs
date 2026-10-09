@@ -4,12 +4,12 @@
 //! This is the one tool that runs a process, and it exists because the alternative was measured and
 //! found wanting: a defect compiled only under a non-default feature cannot fail on the default
 //! face, so a green default run is not evidence about that feature, and neither this bridge nor the
-//! control tool could say which face a red run would appear on. `nichlink.status` answers the
+//! control tool could say which face a red run would appear on. `xirang.status` answers the
 //! static half (which faces exist, which one is the default); this answers the other half by
 //! **observing** a run instead of guessing one. The design is `docs/design-mcp-test-faces.md`.
 //! 这是唯一会跑进程的工具，它存在的理由是：另一条路被量过、而且不够用——只在非默认特性下编译的缺陷在
 //! 默认面上不可能失败，因此默认面全绿不是关于那个特性的证据，而桥与对照工具都答不了"红会出现在哪个面"。
-//! `nichlink.status` 答静态那一半（有哪些面、哪个是默认面），这里用**观测**一次运行来答另一半，而不是
+//! `xirang.status` 答静态那一半（有哪些面、哪个是默认面），这里用**观测**一次运行来答另一半，而不是
 //! 猜它。设计见 `docs/design-mcp-test-faces.md`。
 //!
 //! Three rules keep observation honest, and each one is a pin:
@@ -305,10 +305,10 @@ pub(crate) fn check(root: &Path, arguments: &Value) -> Result<String, String> {
         }
     }
     // The log is the second reason a tree gets a `target/`: `out_dir(root)` is *inside* the tree, so
-    // even with cargo redirected the tool would leave `<root>/target/nichlink/out/` behind. When the
+    // even with cargo redirected the tool would leave `<root>/target/xirang/out/` behind. When the
     // caller names a tree-external target, the log rides with it.
     // 日志是"树里长出 `target/`"的第二个原因：`out_dir(root)` 在树**内**，所以即使 cargo 被改道，工具
-    // 仍会留下 `<root>/target/nichlink/out/`。调用方指定了树外 target 时，日志跟着它走。
+    // 仍会留下 `<root>/target/xirang/out/`。调用方指定了树外 target 时，日志跟着它走。
     let log = match arguments.get("target_dir").and_then(Value::as_str) {
         Some(directory) => std::path::Path::new(directory).join(format!("check-{face}.log")),
         None => out_dir(root).join(format!("check-{face}.log")),
@@ -523,7 +523,7 @@ fn next_step(
             let lowered = line.to_lowercase();
             // The check's own spelling, taken from the kernel rather than typed here.
             // 这条校验自己的拼写，取自内核而不是在这里手打。
-            lowered.contains(nichlink_kernel::RuntimeCheckSpec::CoordinatesInViewport.name())
+            lowered.contains(xirang_kernel::RuntimeCheckSpec::CoordinatesInViewport.name())
                 || lowered.contains("coordinate")
                 || lowered.contains("viewport")
         });

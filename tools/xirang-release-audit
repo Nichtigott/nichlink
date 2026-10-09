@@ -10,7 +10,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
 cargo build --workspace --release --all-targets
 
-audit_dir=target/nichlink-audit/release
+audit_dir=target/xirang-audit/release
 mkdir -p "$audit_dir"
 printf 'artifact\tbytes\tdefined_symbols\n' >"$audit_dir/artifacts.tsv"
 # Every artifact nm could not audit is listed here, with the reason, and a
@@ -103,9 +103,9 @@ find target/release/build -name function_manifest.tsv -type f -print \
       awk -v package="$package" 'NR == 1 { next } { print package "\t" $0 }' "$manifest"
     done >"$audit_dir/node_functions.tsv"
 
-if [ -n "${NICH_LINK_FULL_BINARY:-}" ] || [ -n "${NICH_LINK_MINIMAL_BINARY:-}" ]; then
-  full=${NICH_LINK_FULL_BINARY:?NICH_LINK_FULL_BINARY must be set with NICH_LINK_MINIMAL_BINARY}
-  minimal=${NICH_LINK_MINIMAL_BINARY:?NICH_LINK_MINIMAL_BINARY must be set with NICH_LINK_FULL_BINARY}
+if [ -n "${XIRANG_FULL_BINARY:-}" ] || [ -n "${XIRANG_MINIMAL_BINARY:-}" ]; then
+  full=${XIRANG_FULL_BINARY:?XIRANG_FULL_BINARY must be set with XIRANG_MINIMAL_BINARY}
+  minimal=${XIRANG_MINIMAL_BINARY:?XIRANG_MINIMAL_BINARY must be set with XIRANG_FULL_BINARY}
   [ -f "$full" ] && [ -f "$minimal" ] || {
     echo "full/minimal binary paths must point to files" >&2
     exit 1
@@ -147,7 +147,7 @@ now_ms() {
 }
 
 start=$(now_ms)
-cargo run --quiet --release -p nichlink-toolchain --example scale_audit -- 10000 >/dev/null
+cargo run --quiet --release -p xirang-toolchain --example scale_audit -- 10000 >/dev/null
 end=$(now_ms)
 printf 'startup_ms=%s\n' "$(( end - start ))"
 # Still the closing line, and still only reachable when every artifact was

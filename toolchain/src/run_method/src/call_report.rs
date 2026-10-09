@@ -24,11 +24,11 @@ pub fn render_frame(registry: &Registry, tick: u64, event: &str) -> String {
 /// promise a complete logical call tree, which this function cannot produce: it
 /// builds a disabled trace on purpose rather than turning the registration tree
 /// into a fake call graph, and it reads no process policy either — a report has
-/// no reason to depend on `NICH_LINK_TRACE`.
+/// no reason to depend on `XIRANG_TRACE`.
 /// 没有 trace 可读时，这一入口只能列出与查询匹配的注册面（`… no call event recorded yet`）；
 /// 调用树需要调用方自己记录的 trace，即 [`render_call_report_for_trace`]。首句过去承诺渲染完整
 /// 逻辑调用树，而本函数做不到：它有意构造一条关闭的 trace，而不是把注册树伪装成调用图；它也不读
-/// 进程策略——报告没有理由依赖 `NICH_LINK_TRACE`。
+/// 进程策略——报告没有理由依赖 `XIRANG_TRACE`。
 pub fn render_call_report(registry: &Registry, query: Option<&str>) -> String {
     // A headless report has no execution event by definition. Do not turn the
     // registration tree into a fake call graph; callers must provide a trace.

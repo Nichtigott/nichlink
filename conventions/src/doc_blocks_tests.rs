@@ -114,7 +114,7 @@ fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-doc-blocks-{}-{}-{sequence}",
+        "xirang-doc-blocks-{}-{}-{sequence}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

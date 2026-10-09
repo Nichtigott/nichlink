@@ -16,7 +16,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fd
 tree   12 rust file(s), 18 function(s)
 elapsed 1201 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/xirang/out/check-default.log
 exit   101
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -75,7 +75,7 @@ face   audit
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fd
 tree   12 rust file(s), 18 function(s)
 elapsed 1000 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/nichlink/out/check-audit.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/xirang/out/check-audit.log
 exit   101
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -99,7 +99,7 @@ census: 1 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `audit_unused` (crates/core/src/audit.rs:14)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 5 of 14 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"audit","timeout_ms":300000} → exit 0
+evidence xirang.check {"face":"audit","timeout_ms":300000} → exit 0
 
 ```
 
@@ -137,7 +137,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fd
 tree   12 rust file(s), 18 function(s)
 elapsed 600 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -156,7 +156,7 @@ census: 1 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `audit_unused` (crates/core/src/audit.rs:14)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 4 of 13 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"default","timeout_ms":300000} → exit 0
+evidence xirang.check {"face":"default","timeout_ms":300000} → exit 0
 
 ```
 
@@ -186,7 +186,7 @@ face   audit
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fd
 tree   12 rust file(s), 18 function(s)
 elapsed 600 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/nichlink/out/check-audit.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/xirang/out/check-audit.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -205,7 +205,7 @@ census: 1 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `audit_unused` (crates/core/src/audit.rs:14)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 4 of 13 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"audit","timeout_ms":300000} → exit 0
+evidence xirang.check {"face":"audit","timeout_ms":300000} → exit 0
 
 ```
 

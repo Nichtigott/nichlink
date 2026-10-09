@@ -1,5 +1,5 @@
-//! Pins for `nichlink.crates`: the preview discipline and the three writers (audit `M7`, P4).
-//! `nichlink.crates` 的钉子：预览纪律与三个写入方（审计 `M7`，P4）。
+//! Pins for `xirang.crates`: the preview discipline and the three writers (audit `M7`, P4).
+//! `xirang.crates` 的钉子：预览纪律与三个写入方（审计 `M7`，P4）。
 
 use crate::build_method::crate_plan::crates_dir;
 use std::fs;
@@ -15,7 +15,7 @@ fn host(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let area = std::env::temp_dir().join(format!(
-        "nichlink-mcp-crates-{label}-{}-{sequence}",
+        "xirang-mcp-crates-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&area);
@@ -26,7 +26,7 @@ fn host(label: &str) -> PathBuf {
     fs::create_dir_all(root.join("src/panel/frame")).expect("the host's sources");
     fs::write(
         root.join("src/lib.rs"),
-        "nichlink_toolchain::run_method::host!();\n",
+        "xirang_toolchain::run_method::host!();\n",
     )
     .expect("the entry");
     fs::write(
@@ -51,19 +51,19 @@ fn host(label: &str) -> PathBuf {
         root.join("Cargo.toml"),
         format!(
             "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n\
-             [dependencies]\nnichlink-toolchain = {{ path = {:?} }}\n",
+             [dependencies]\nxirang-toolchain = {{ path = {:?} }}\n",
             env!("CARGO_MANIFEST_DIR")
         ),
     )
     .expect("the host manifest");
     fs::write(
         root.join("add_crates.rs"),
-        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+        "use xirang_toolchain::run_method::{Crate, Shape};\n\n\
          pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n\
          crates: &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])],\n};\n",
     )
     .expect("the declaration");
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     fs::create_dir_all(&out).expect("the records directory");
     let mut manifest = String::from(
         "# node\tsource\tsymbol\tpath\tkind\tregistry_name\tparent\tsource_hash\tfields\tcalls\t\

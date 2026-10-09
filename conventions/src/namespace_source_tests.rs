@@ -9,7 +9,7 @@ fn tree(label: &str) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-namespace-source-{label}-{}-{sequence}",
+        "xirang-namespace-source-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -49,7 +49,7 @@ fn a_face_file_reading_the_package_name_is_found() {
     assert_eq!(found[0].file, "src/button.rs");
     assert_eq!(found[0].line, 5, "the parent expression's line");
     assert!(
-        found[0].reason().contains("NICHLINK_NAMESPACE"),
+        found[0].reason().contains("XIRANG_NAMESPACE"),
         "the reason names the replacement"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -64,13 +64,13 @@ fn owning_the_constant_is_not_a_finding() {
     // A test crate that owns its constant and declares no face at all.
     std::fs::write(
         root.join("src/non_face.rs"),
-        "pub const NICHLINK_NAMESPACE: &str = env!(\"CARGO_PKG_NAME\");\n",
+        "pub const XIRANG_NAMESPACE: &str = env!(\"CARGO_PKG_NAME\");\n",
     )
     .expect("non-face");
     // A face file that owns it as well: the definition line is allowed.
     std::fs::write(
         root.join("src/host.rs"),
-        "pub const NICHLINK_NAMESPACE: &str = env!(\"CARGO_PKG_NAME\");\n\npub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+        "pub const XIRANG_NAMESPACE: &str = env!(\"CARGO_PKG_NAME\");\n\npub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),\n}\n",
     )
     .expect("face");
     let found = findings_in(

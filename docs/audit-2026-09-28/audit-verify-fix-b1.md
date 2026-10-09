@@ -28,7 +28,7 @@ cd /tmp/vs-probe && cargo build --offline
 ./target/debug/vs-probe identity_pair <target> ab|ba    # B1-3（冷/热 × 两种包顺序）
 ```
 
-`identity_pair` 的夹具是**它自己搭的**：两个包 pkg-a / pkg-b，各有 `src/control/**`（从 `examples/control-button/src/control` 复制），因此共享同一条相对路径 `control/object/button/button.rs` 而命名空间不同；探针按 `NodeId::from_namespaced_path(<包名>, <相对路径>, <kind>)` **自己算期望身份**，再与管道为每个包写出的 unit 文件（`<CARGO_TARGET_DIR>/nichlink/cache/units/<该包自己的 fingerprint>.tsv`）里的 `node` 字段比对。
+`identity_pair` 的夹具是**它自己搭的**：两个包 pkg-a / pkg-b，各有 `src/control/**`（从 `examples/control-button/src/control` 复制），因此共享同一条相对路径 `control/object/button/button.rs` 而命名空间不同；探针按 `NodeId::from_namespaced_path(<包名>, <相对路径>, <kind>)` **自己算期望身份**，再与管道为每个包写出的 unit 文件（`<CARGO_TARGET_DIR>/xirang/cache/units/<该包自己的 fingerprint>.tsv`）里的 `node` 字段比对。
 
 ---
 
@@ -52,7 +52,7 @@ $ ./target/debug/vs-probe admission | tail -4      # 变异体
 deny_survives=false allow_complete=true
 PROBE_ADMISSION=FAIL
 rendered_source=crate::Admission::new(&["ui", "ui/controls"], &[])   ← deny 被丢，写回即放宽门禁
-$ cargo test -p nichlink-core --offline --all-features --lib both_lists
+$ cargo test -p xirang-core --offline --all-features --lib both_lists
 test …both_lists_survive_the_read_and_write_round_trip ... FAILED
 test result: FAILED. 1 passed; 1 failed
 ```
@@ -85,7 +85,7 @@ unterminated_lock_append=Ok("Ok")
 unterminated_parses_two=false text="…extensionuser|framework.two|beta|…"   ← 两条粘成一条
 refusal_left_entry_untouched=false
 PROBE_LOCK=FAIL
-$ cargo test -p nichlink-studio --offline --all-features --lib lock_writes
+$ cargo test -p xirang-studio --offline --all-features --lib lock_writes
 … an_official_append_that_would_duplicate_an_identity_is_refused_not_written ... FAILED
 … a_duplicate_user_identity_is_never_written_unreadably ... FAILED
 … a_lock_without_a_trailing_newline_is_never_glued_to_the_next_record ... FAILED
@@ -136,7 +136,7 @@ $ ./target/debug/vs-probe identity_pair /tmp/vs-probe/tgt-mut ab   # 变异体 �
 pkg=pkg-a recorded=e0851ccb2e814e296cc08172825125dd match=true
 pkg=pkg-b recorded=e0851ccb2e814e296cc08172825125dd expected=325377c4eabe871a18a82f717f1a9494 match=false
 PROBE_IDENTITY=FAIL          ← 复现旧 CRITICAL：第二个包拿到第一个包的身份，并把它写进了落盘的 unit
-$ cargo test -p nichlink-build-method --offline identity_cache
+$ cargo test -p xirang-build-method --offline identity_cache
 … an_entry_is_readable_only_in_the_namespace_it_was_primed_for ... FAILED
    assertion `left == right` failed: another package's entry is not reachable
    left: Some(e0851ccb2e814e296cc08172825125dd)  right: None
@@ -158,7 +158,7 @@ test result: FAILED. 2 passed; 2 failed
 | `toolchain/src/runtime/src/authoring/context.rs:33` | `thread_local! ACTIVE_CONTEXT: RefCell<Option<AuthoringContext>>` | 不需要 | 线程局部 + 作用域安装，且 `AuthoringContext{package_root, namespace}` **自带命名空间** |
 | `toolchain/src/studio/src/studio/app/project_context.rs:24` | `thread_local! PROJECT_CONTEXT` | 不需要 | 同上：`select_project` 把 `{root, manifest, namespace}` 一起装进本线程 |
 | `toolchain/src/runtime/src/runtime/trace/snapshot/parse.rs:295` | `Mutex<BTreeSet<&'static str>>`（字符串 interner） | 不需要 | 去重的是 artifact 文本里的字符串，不是身份 |
-| `toolchain/src/build_time/src/scope_view.rs:203`、`toolchain/src/build_time/src/graft_plan_check.rs:450`、`toolchain/src/build_time/src/face_view.rs:309`、`toolchain/src/build_time/src/package.rs:116`、`toolchain/src/runtime/src/authoring/filesystem.rs:29`、`:57`、`toolchain/src/runtime/src/runtime/trace/snapshot/io.rs:119`、`toolchain/src/mcp/src/preview.rs:33`、`toolchain/src/mcp/src/source_index.rs:229`、`toolchain/src/bin/nichlink-dev.rs:289` | `AtomicU64` 序号 | 不需要 | 只发临时文件名，不带身份 |
+| `toolchain/src/build_time/src/scope_view.rs:203`、`toolchain/src/build_time/src/graft_plan_check.rs:450`、`toolchain/src/build_time/src/face_view.rs:309`、`toolchain/src/build_time/src/package.rs:116`、`toolchain/src/runtime/src/authoring/filesystem.rs:29`、`:57`、`toolchain/src/runtime/src/runtime/trace/snapshot/io.rs:119`、`toolchain/src/mcp/src/preview.rs:33`、`toolchain/src/mcp/src/source_index.rs:229`、`toolchain/src/bin/xirang-dev.rs:289` | `AtomicU64` 序号 | 不需要 | 只发临时文件名，不带身份 |
 
 - 没有发现 `LazyLock` / `OnceCell` / `lazy_static!` / `Mutex<HashMap<…>>` 形态的缓存；`core/` 里**没有**任何进程级 `static` 缓存。
 - 一处**值得记的邻近风险**（不是缺陷）：`package_namespace()` 在**没有**运行作用域时会读那个进程级 pin，因此任何"直接调 `package_namespace()` 的旁路代码"都会粘在第一个包上；当前的每一条生产路径都经过 `run_as_package`（`toolchain/src/build_time/src/lib.rs:234`）或线程局部上下文，所以现在成立——这条不变量没有门禁钉住，建议后续加一条断言或注释。
@@ -176,8 +176,8 @@ test result: FAILED. 2 passed; 2 failed
 | 1 | `cargo fmt --all -- --check` | **exit 0** |
 | 2 | `cargo test --workspace --offline` | **exit 0**：**52** 个 test result 全 `ok`、`0 failed`、累计 **756 passed**（`test result: FAILED` 0 次） |
 | 3 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | **exit 0**（`error` 0 行） |
-| 4 | `cargo test -p nichlink-conventions --offline` | **exit 0**：`99 passed; 0 failed` |
-| 5 | `tools/nichlink-publish --check-table` | **exit 0**：`dependency table matches the manifests (9 crates)` |
+| 4 | `cargo test -p xirang-conventions --offline` | **exit 0**：`99 passed; 0 failed` |
+| 5 | `tools/xirang-publish --check-table` | **exit 0**：`dependency table matches the manifests (9 crates)` |
 
 **跑前确认**：我在 18:33–18:36 反复探测在途写者，确认当时**另有成员在跑 `cargo test`**（见开头披露），所以我的门禁没有抢到"全仓静默"窗口，改用**源文件哈希钉住**代替：跑前/跑后 8 个相关文件哈希完全相同，且期间**没有任何 `.rs` 被写**（`git status` 里只有 docs/ 下的他人产物变化）。因此这五条门禁结果对应的是**同一份、未被任何人改动的源码状态**；并发只发生在共享 `target/` 的编译缓存上（cargo 自身加锁串行化），不改变结论。若评审要求"全仓零在途"的强静默窗口，需要在没有其他成员运行时重跑一遍——这不改变本轮任何判定。
 

@@ -20,7 +20,7 @@ arm-mcp：用当前桥回答 26 道题（装置已自证题目态）
 
 **26 道题**：`r1 r2 r3 r4`（四道注入缺陷，各自 `cargo test --offline` **恰 1 条红**）· `s1`–`s8`（八道情景，**只读**）· `g1`（问在 `s3` 上）· `g2`（问在 `s5` 上）· `g3`（可改）· `g4`（只读）· `h1`（可改，范围型）· `fa fb fc fd fe`（五族，题面只有用户那一句话；`fc` 交付后台账必须还在）· 四道 hardbug 类（`h1-supply-chain` `h2-claim-unkept` `h3-cross-file-chain` `h4-one-file-many-algorithms`，各自树根有自己的 `BRIEF.md`）。
 
-**工具**：`./target/debug/nichlink-mcp`（当前检出，含 T-24/T-25/T-26）。`--root target/round9/trees/<id>`（**不许指到树外**，否则向上解析落到本检出上）；每次调用带 `--log target/round9/logs/<id>.jsonl`。
+**工具**：`./target/debug/xirang-mcp`（当前检出，含 T-24/T-25/T-26）。`--root target/round9/trees/<id>`（**不许指到树外**，否则向上解析落到本检出上）；每次调用带 `--log target/round9/logs/<id>.jsonl`。
 
 **交付**：每题 `target/round9/answers/<id>.md`（≤ 30 行：症状 / 根因或结论带 `文件:行号` / 最小修或改动清单 / 反证 / 调用清单，末行 `总调用：成功 N / 被拒 M`）。**凡把几道题放进同一条 shell 命令**（允许，省轮数），必须在 `target/round9/batching.md` 逐行写下'哪几道题共享了哪一次调用'——否则逐题 token 无法归因。
 
@@ -57,10 +57,10 @@ I'll start by claiming the task and reading the brief.
 3: 第八轮有 **11 道题的题面不成立**（拷成了上一轮的完工态）⇒ 本轮把这 11 道**正回题目态**，并**自证**过
 4: （该红的红、该绿的绿，见 `TREES.json` 每棵树的 `state`）。对照臂**复用第七轮冻结结果，不重跑**。
 5: ## 1. 工具与根
-6: - 工具：`./target/debug/nichlink-mcp`（当前检出构建）。每次调用带 `--log target/round9/logs/<id>.jsonl`。
+6: - 工具：`./target/debug/xirang-mcp`（当前检出构建）。每次调用带 `--log target/round9/logs/<id>.jsonl`。
 7: - **每道题一个根**：`--root target/round9/trees/<id>`（`<id>` 见 §4 清单）。**不要**指到 `trees/` 或本检出，
 8:   否则向上解析会落在树外（第八轮 A4 就是这么错的）。
-9: - 题树里 `nichlink-toolchain` 的 path 依赖**已指向当前检出**（`…/nichlink/toolchain`）⇒ 树里 `cargo test`
+9: - 题树里 `xirang-toolchain` 的 path 依赖**已指向当前检出**（`…/xirang/toolchain`）⇒ 树里 `cargo test`
 10:   用的就是本轮的被测框架。
 11: ## 2. 记录（硬要求）
 12: 每次调用往 `target/round9/logs/<id>.jsonl` 追一行 `{"request": …, "response": …, "exit": N}`；每题一份
@@ -122,7 +122,7 @@ Let me mark in_progress and start exploring.
 ### step 2（turn 1）· `bash`
 
 ```
-{"command": "ls -la /home/nich/Moirai_N3/nichlink/target/round9/ ; echo '--- trees'; ls /home/nich/Moirai_N3/nichlink/target/round9/trees/ ; echo '--- mcp bin'; ls -la /home/nich/Moirai_N3/nichlink/target/debug/nichlink-mcp", "description": "List round9 root, trees, and MCP binary"}
+{"command": "ls -la /home/nich/Moirai_N3/nichlink/target/round9/ ; echo '--- trees'; ls /home/nich/Moirai_N3/nichlink/target/round9/trees/ ; echo '--- mcp bin'; ls -la /home/nich/Moirai_N3/nichlink/target/debug/xirang-mcp", "description": "List round9 root, trees, and MCP binary"}
 ```
 
 **结果**：
@@ -163,7 +163,7 @@ s6
 s7
 s8
 --- mcp bin
--rwxr-xr-x 2 nich users 103465056 10月  2 21:15 /home/nich/Moirai_N3/nichlink/target/debug/nichlink-mcp
+-rwxr-xr-x 2 nich users 103465056 10月  2 21:15 /home/nich/Moirai_N3/nichlink/target/debug/xirang-mcp
 
 ```
 
@@ -189,7 +189,7 @@ Let me mark in_progress and start exploring.
 2:   "built_at": "2026-10-02",
 3:   "hash_algorithm": "sha256；跳过 {target,.codegraph,.git}；按相对路径排序；逐文件 update(rel) ++ 0x00 ++ update(str(len(bytes))) ++ 0x00 ++ update(bytes) ++ 0x00",
 4:   "root_rule": "--root = target/round9/trees/<id>（每棵树自带 Cargo.toml/工作区 ⇒ 向上解析不会跑到本检出）",
-5:   "toolchain_rule": "树里 nichlink-toolchain 的 path 依赖指向当前检出 /home/nich/Moirai_N3/nichlink/toolchain（已 sed 统一）",
+5:   "toolchain_rule": "树里 xirang-toolchain 的 path 依赖指向当前检出 /home/nich/Moirai_N3/nichlink/toolchain（已 sed 统一）",
 6:   "trees": {
 7:     "r1": {
 8:       "state": "injected defect 1 (inverted-guard) — 恰 1 条红：the_filter_keeps_only_entries_at_or_above_the_floor",
@@ -297,14 +297,14 @@ health_check.rs
 ### step 4（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink && ./target/debug/nichlink-mcp --help 2>&1 | head -60; echo \"EXIT=$?\"", "description": "Show nichlink-mcp help"}
+{"command": "cd /home/nich/Moirai_N3/nichlink && ./target/debug/xirang-mcp --help 2>&1 | head -60; echo \"EXIT=$?\"", "description": "Show xirang-mcp help"}
 ```
 
 **结果**：
 ```
-nichlink-mcp                 serve the stdio bridge (JSON-RPC 2.0)
-nichlink-mcp --list          the workflow table and one line per tool
-nichlink-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage error
+xirang-mcp                 serve the stdio bridge (JSON-RPC 2.0)
+xirang-mcp --list          the workflow table and one line per tool
+xirang-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage error
                              (the tool's own verdict is in its output, e.g. `check`'s first line)
     [--json '<object>'] [--root <path>] [--<key> <value> …]
 EXIT=0
@@ -313,7 +313,7 @@ EXIT=0
 
 **该步推理**：
 ```
-Now, let me understand the tool. The `nichlink-mcp` binary — how is it invoked? It's a stdio MCP bridge. So requests come as JSON-RPC lines on stdin, responses on stdout. Let me check the log format by looking at how the tool works. Let me check `nichlink-mcp --help`.
+Now, let me understand the tool. The `xirang-mcp` binary — how is it invoked? It's a stdio MCP bridge. So requests come as JSON-RPC lines on stdin, responses on stdout. Let me check the log format by looking at how the tool works. Let me check `xirang-mcp --help`.
 
 Note the BRIEF says `--log target/round9/logs/<id>.jsonl` appends a line `{"request":…, "response":…, "exit": N}`. So the bridge must have a `--log` flag.
 
@@ -335,7 +335,7 @@ ls: cannot access 'toolchain/mcp/src/': No such file or directory
 
 **该步推理**：
 ```
-Now, let me understand the tool. The `nichlink-mcp` binary — how is it invoked? It's a stdio MCP bridge. So requests come as JSON-RPC lines on stdin, responses on stdout. Let me check the log format by looking at how the tool works. Let me check `nichlink-mcp --help`.
+Now, let me understand the tool. The `xirang-mcp` binary — how is it invoked? It's a stdio MCP bridge. So requests come as JSON-RPC lines on stdin, responses on stdout. Let me check the log format by looking at how the tool works. Let me check `xirang-mcp --help`.
 
 Note the BRIEF says `--log target/round9/logs/<id>.jsonl` appends a line `{"request":…, "response":…, "exit": N}`. So the bridge must have a `--log` flag.
 
@@ -369,7 +369,7 @@ The `--help` doesn't mention `--log`. Let me check `--list` and the mcp module p
 ### step 5（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink && ./target/debug/nichlink-mcp --list 2>&1 | head -80", "description": "List MCP tools"}
+{"command": "cd /home/nich/Moirai_N3/nichlink && ./target/debug/xirang-mcp --list 2>&1 | head -80", "description": "List MCP tools"}
 ```
 
 **结果**：
@@ -684,7 +684,7 @@ fc/Cargo.toml
 fc/examples/graft_record.rs
 fc/examples/health_check.rs
 fc/examples/tree.rs
-fc/.nichlink/adopted/entries
+fc/.xirang/adopted/entries
 fc/src/control/control.rs
 fc/src/control/object/button/button.rs
 fc/src/control/object/slider/slider.rs
@@ -757,7 +757,7 @@ h2-claim-unkept/graft/src/toggle_fast.rs
 h2-claim-unkept/host/build.rs
 h2-claim-unkept/host/Cargo.lock
 h2-claim-unkept/host/Cargo.toml
-h2-claim-unkept/host/.nichlink/adopted/entries
+h2-claim-unkept/host/.xirang/adopted/entries
 h2-claim-unkept/host/src/control/control.rs
 h2-claim-unkept/host/src/control/object/badge/badge.rs
 h2-claim-unkept/host/src/control/object/button/button.rs
@@ -918,14 +918,14 @@ diff -ru r1/.git/logs/HEAD r2/.git/logs/HEAD
 --- r1/.git/logs/HEAD	2026-10-01 18:35:26.861145581 +0800
 +++ r2/.git/logs/HEAD	2026-10-01 18:35:26.961560129 +0800
 @@ -1 +1 @@
--0000000000000000000000000000000000000000 9b0732c0648ea5896aede261fb6608acff71ca61 eval <eval@nichlink.invalid> 1790850926 +0800	commit (initial): r1-mcp baseline
-+0000000000000000000000000000000000000000 ef6c1f02559588ef66fa521bb1837a0bb6b3b102 eval <eval@nichlink.invalid> 1790850926 +0800	commit (initial): r2-mcp baseline
+-0000000000000000000000000000000000000000 9b0732c0648ea5896aede261fb6608acff71ca61 eval <eval@xirang.invalid> 1790850926 +0800	commit (initial): r1-mcp baseline
++0000000000000000000000000000000000000000 ef6c1f02559588ef66fa521bb1837a0bb6b3b102 eval <eval@xirang.invalid> 1790850926 +0800	commit (initial): r2-mcp baseline
 diff -ru r1/.git/logs/refs/heads/master r2/.git/logs/refs/heads/master
 --- r1/.git/logs/refs/heads/master	2026-10-01 18:35:26.861213155 +0800
 +++ r2/.git/logs/refs/heads/master	2026-10-01 18:35:26.961662005 +0800
 @@ -1 +1 @@
--0000000000000000000000000000000000000000 9b0732c0648ea5896aede261fb6608acff71ca61 eval <eval@nichlink.invalid> 1790850926 +0800	commit (initial): r1-mcp baseline
-+0000000000000000000000000000000000000000 ef6c1f02559588ef66fa521bb1837a0bb6b3b102 eval <eval@nichlink.invalid> 1790850926 +0800	commit (initial): r2-mcp baseline
+-0000000000000000000000000000000000000000 9b0732c0648ea5896aede261fb6608acff71ca61 eval <eval@xirang.invalid> 1790850926 +0800	commit (initial): r1-mcp baseline
++0000000000000000000000000000000000000000 ef6c1f02559588ef66fa521bb1837a0bb6b3b102 eval <eval@xirang.invalid> 1790850926 +0800	commit (initial): r2-mcp baseline
 Only in r2/.git/objects: 06
 Only in r1/.git/objects: 0c
 Only in r1/.git/objects: 16
@@ -1261,7 +1261,7 @@ fn a_deepen_adds_a_layer_inside_the_face_and_prices_the_other_reading() {
         "{text}"
     );
     assert!(
-        text.contains("impl nichlink_toolchain::runtime::PartsContract for ButtonParts"),
+        text.contains("impl xirang_toolchain::runtime::PartsContract for ButtonParts"),
         "{text}"
     );
     // The parts list follows the JSON object's own order, which is sorted by key, so the pin states
@@ -1506,8 +1506,8 @@ Let me look at how a face file is generated for `add`: grep in toolchain for "co
 
 **结果**：
 ```
-//! File-backed authoring for NichLink registration faces.
-//! NichLink 注册面的文件化创作支持。
+//! File-backed authoring for XiRang registration faces.
+//! XiRang 注册面的文件化创作支持。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -2311,7 +2311,7 @@ kernel/src/registry_core/authoring/parse/parse.rs-210-        .map(|source| {
 ```
 The template writes only the struct + macro invocation (no impl block). So after `add`, I need to add the `impl ControlHandle for Dial` block by hand (like slider's).
 
-Note: the rendered file starts with `{GENERATED_MARKER}` and `use crate::{NoParts, NoPreset};`. Let me look at slider.rs again: it starts with the doc comment, then `use crate::control::{ControlFrame, ControlHandle};`, `use nichlink_toolchain::runtime::{...}`, then `pub struct Slider;`, `impl ControlHandle for Slider {...}`, then `crate::control_object! {...}`.
+Note: the rendered file starts with `{GENERATED_MARKER}` and `use crate::{NoParts, NoPreset};`. Let me look at slider.rs again: it starts with the doc comment, then `use crate::control::{ControlFrame, ControlHandle};`, `use xirang_toolchain::runtime::{...}`, then `pub struct Slider;`, `impl ControlHandle for Slider {...}`, then `crate::control_object! {...}`.
 
 Hmm, but the generated template's layout differs (doc + `use crate::{NoParts, NoPreset};` + struct + macro). If the generated file is marked as generated, editing it by hand... The BRIEF says fa is 可改 and "fa/fb/fd/fe 交付后门必须绿". The add template is the sanctioned path.
 
@@ -2628,15 +2628,15 @@ kernel/src/registry_core/syntax/entries/application.rs:102:const TEXT: &str = "a
 toolchain/src/runtime/src/macros/entry.rs:7:macro_rules! application {
 toolchain/src/runtime/src/macros/entry.rs-8-    (entry = $entry:path $(,)?) => {
 toolchain/src/runtime/src/macros/entry.rs-9-        #[doc(hidden)]
-toolchain/src/runtime/src/macros/entry.rs-10-        pub const NICHLINK_APPLICATION_ENTRY: &str = stringify!($entry);
+toolchain/src/runtime/src/macros/entry.rs-10-        pub const XIRANG_APPLICATION_ENTRY: &str = stringify!($entry);
 toolchain/src/runtime/src/macros/entry.rs-11-    };
 toolchain/src/runtime/src/macros/entry.rs-12-}
 toolchain/src/runtime/src/macros/entry.rs-13-
-toolchain/src/runtime/src/macros/entry.rs-14-/// Declare this crate as a NichLink host and pull in the registration plan
+toolchain/src/runtime/src/macros/entry.rs-14-/// Declare this crate as a XiRang host and pull in the registration plan
 toolchain/src/runtime/src/macros/entry.rs-15-/// captured at build time.
-toolchain/src/runtime/src/macros/entry.rs-16-/// 声明当前 crate 为 NichLink 宿主，并引入构建时捕获的注册计划。
+toolchain/src/runtime/src/macros/entry.rs-16-/// 声明当前 crate 为 XiRang 宿主，并引入构建时捕获的注册计划。
 toolchain/src/runtime/src/macros/entry.rs-17-///
-toolchain/src/runtime/src/macros/entry.rs-18-/// `nichlink-toolchain` renders the discovered registration tree to
+toolchain/src/runtime/src/macros/entry.rs-18-/// `xirang-toolchain` renders the discovered registration tree to
 toolchain/src/runtime/src/macros/entry.rs-19-/// `OUT_DIR/generated_lib.rs`; this macro includes it at the crate root so
 toolchain/src/runtime/src/macros/entry.rs-20-/// `builtin_static_plan()` and the per-level `{name}_object!` aliases are
 toolchain/src/runtime/src/macros/entry.rs-21-/// available crate-wide. It expands to
@@ -2697,8 +2697,8 @@ So the honest fix: reference the new face from a source reachable from the entry
 
 **结果**：
 ```
-nichlink-example-control-button-3c4e9e23aa54373b/
-nichlink-example-control-button-7d35189e6bee02a8/
+xirang-example-control-button-3c4e9e23aa54373b/
+xirang-example-control-button-7d35189e6bee02a8/
 proc-macro2-67a5c862b4249ce0/
 proc-macro2-a7b704920cda8ebe/
 quote-5164ab145275b9da/
@@ -2719,7 +2719,7 @@ head: cannot open 'control_button-*/out/generated_lib.rs' for reading: No such f
 ### step 102（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/fa/debug/build/nichlink-example-control-button-3c4e9e23aa54373b && ls out/ && echo '=== generated_lib.rs'; head -60 out/generated_lib.rs; echo '=== scope'; cat out/source_scope.tsv", "description": "Read generated lib and scope manifest"}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/fa/debug/build/xirang-example-control-button-3c4e9e23aa54373b && ls out/ && echo '=== generated_lib.rs'; head -60 out/generated_lib.rs; echo '=== scope'; cat out/source_scope.tsv", "description": "Read generated lib and scope manifest"}
 ```
 
 **结果**：
@@ -2761,9 +2761,9 @@ source_scope.tsv
 #[rust_analyzer::macro_style(braces)]
 macro_rules! control_object {
     ($($tokens:tt)*) => {
-        ::nichlink_toolchain::__nichlink_object! { $($tokens)* }
+        ::xirang_toolchain::__xirang_object! { $($tokens)* }
         #[cfg(rust_analyzer)]
-        ::nichlink_toolchain::face_fields_mirror! { $($tokens)* }
+        ::xirang_toolchain::face_fields_mirror! { $($tokens)* }
     }
 }
 #[allow(unused_imports)]
@@ -2785,7 +2785,7 @@ pub(crate) use control_object;
 ### step 103（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/fa/debug/build/nichlink-example-control-button-3c4e9e23aa54373b/out && grep -n \"mod \\|registrations\\|dial\" generated_lib.rs | head -40; echo '=== pruning'; cat pruning_manifest.tsv; echo '=== graft plan'; cat graft_plan.tsv", "description": "Inspect module mounting in generated lib"}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/fa/debug/build/xirang-example-control-button-3c4e9e23aa54373b/out && grep -n \"mod \\|registrations\\|dial\" generated_lib.rs | head -40; echo '=== pruning'; cat pruning_manifest.tsv; echo '=== graft plan'; cat graft_plan.tsv", "description": "Inspect module mounting in generated lib"}
 ```
 
 **结果**：
@@ -2796,10 +2796,10 @@ pub(crate) use control_object;
 91:        pub mod button;
 97:        pub mod slider;
 104:    pub mod registry_rule;
-115:mod __nichlink_ra_control;
-120:pub mod __nichlink_ra_control_object_button;
-125:pub mod __nichlink_ra_control_object_slider;
-130:pub mod __nichlink_ra_control_registry_rule;
+115:mod __xirang_ra_control;
+120:pub mod __xirang_ra_control_object_button;
+125:pub mod __xirang_ra_control_object_slider;
+130:pub mod __xirang_ra_control_registry_rule;
 166:pub fn registrations() -> Vec<RegistrationInfo> {
 === pruning
 # node	source	symbol	path	kind	registry_name	parent
@@ -2824,7 +2824,7 @@ Let me check the generated_lib.rs for the module mounting part (grep for "pub mo
 ### step 106（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/fa/debug/build/nichlink-example-control-button-3c4e9e23aa54373b/out && cat source_scope.tsv; echo '=== pruning'; cat pruning_manifest.tsv; echo '=== generated mods'; sed -n '75,110p' generated_lib.rs", "description": "Check scope after naming dial"}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/fa/debug/build/xirang-example-control-button-3c4e9e23aa54373b/out && cat source_scope.tsv; echo '=== pruning'; cat pruning_manifest.tsv; echo '=== generated mods'; sed -n '75,110p' generated_lib.rs", "description": "Check scope after naming dial"}
 ```
 
 **结果**：
@@ -2848,7 +2848,7 @@ pub mod control {
     #[path = "/home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/control.rs"]
     mod control;
     #[cfg(rust_analyzer)]
-    pub(crate) use crate::__nichlink_ra_control as control;
+    pub(crate) use crate::__xirang_ra_control as control;
     pub use control::*;
     #[allow(dead_code, unused_imports, ambiguous_glob_reexports, clippy::items_after_test_module, clippy::module_inception)]
     /// The `object` registration subtree this build generated from the folder layout.
@@ -2859,20 +2859,20 @@ pub mod control {
         #[path = "/home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/object/button/button.rs"]
         pub mod button;
         #[cfg(rust_analyzer)]
-        pub use crate::__nichlink_ra_control_object_button as button;
+        pub use crate::__xirang_ra_control_object_button as button;
         #[allow(dead_code, unused_imports, ambiguous_glob_reexports, clippy::items_after_test_module, clippy::module_inception)]
         #[cfg(not(rust_analyzer))]
         #[path = "/home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/object/slider/slider.rs"]
         pub mod slider;
         #[cfg(rust_analyzer)]
-        pub use crate::__nichlink_ra_control_object_slider as slider;
+        pub use crate::__xirang_ra_control_object_slider as slider;
     }
     #[allow(dead_code, unused_imports, ambiguous_glob_reexports, clippy::items_after_test_module, clippy::module_inception)]
     #[cfg(not(rust_analyzer))]
     #[path = "/home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/registry_rule/registry_rule.rs"]
     pub mod registry_rule;
     #[cfg(rust_analyzer)]
-    pub use crate::__nichlink_ra_control_registr
+    pub use crate::__xirang_ra_control_registr
 …[结果：此处截断，全文 2660 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -2959,7 +2959,7 @@ Hmm, actually — wait. The compile error was *before* the build script could...
 
 Let me look at the discovery cache mechanism to see whether a source scan is cached by fingerprint of the *scanned* files (maybe only the face sources + entry). If the cache key doesn't include lib.rs content... it should.
 
-Let me test the hypothesis differently: run `check {face:default}` via the MCP tool (it runs cargo test with the tree root) and then look at the published scope in `<root>/target/nichlink/out/source_scope.tsv`. Actually, the tool's check also runs cargo, same result.
+Let me test the hypothesis differently: run `check {face:default}` via the MCP tool (it runs cargo test with the tree root) and then look at the published scope in `<root>/target/xirang/out/source_scope.tsv`. Actually, the tool's check also runs cargo, same result.
 
 Let me look at scope.rs's `source_references` and the entry-source determination to understand what reference syntax would work. Let me read scope.rs from the beginning and `source_references`.
 ```
@@ -3035,7 +3035,7 @@ toolchain/src/build_time/src/syntax.rs:8:    source_references,
 pub(crate) fn path_mentions_module(path: &str, module: &str) -> bool {
     let path = path
         .strip_prefix("crate::")
-        .or_else(|| path.strip_prefix("nichlink_kernel::"))
+        .or_else(|| path.strip_prefix("xirang_kernel::"))
         .unwrap_or(path);
     path == module || path.starts_with(&format!("{module}::"))
 }
@@ -3160,13 +3160,13 @@ Let me read that test and reference_scan.rs.
 ### step 128（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees && diff -ru --exclude=.git --exclude=target --exclude=.nichlink fa fc | head -60; echo '=== sha of fc button'; sha256sum fc/src/control/object/button/button.rs", "description": "Diff fc vs fa tree"}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees && diff -ru --exclude=.git --exclude=target --exclude=.xirang fa fc | head -60; echo '=== sha of fc button'; sha256sum fc/src/control/object/button/button.rs", "description": "Diff fc vs fa tree"}
 ```
 
 **结果**：
 ```
 Only in fa/src/control/object: dial
-diff -ru '--exclude=.git' '--exclude=target' '--exclude=.nichlink' fa/src/lib.rs fc/src/lib.rs
+diff -ru '--exclude=.git' '--exclude=target' '--exclude=.xirang' fa/src/lib.rs fc/src/lib.rs
 --- fa/src/lib.rs	2026-10-02 21:30:24.058396339 +0800
 +++ fc/src/lib.rs	2026-10-01 18:31:26.644029120 +0800
 @@ -53,24 +53,6 @@
@@ -3194,7 +3194,7 @@ diff -ru '--exclude=.git' '--exclude=target' '--exclude=.nichlink' fa/src/lib.rs
  /// 按框架和包命名空间装配这个示例的注册机。
  /// Assemble the example's registry from its framework and package namespace.
  pub fn base_registry() -> Registry {
-diff -ru '--exclude=.git' '--exclude=target' '--exclude=.nichlink' fa/tests/registry.rs fc/tests/registry.rs
+diff -ru '--exclude=.git' '--exclude=target' '--exclude=.xirang' fa/tests/registry.rs fc/tests/registry.rs
 --- fa/tests/registry.rs	2026-10-02 21:30:45.438730069 +0800
 +++ fc/tests/registry.rs	2026-10-01 18:31:26.644570712 +0800
 @@ -56,7 +56,6 @@

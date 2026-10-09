@@ -10,12 +10,12 @@
 
 | 组 | 题目态从哪来（可照做） | 自证（必须跑，不是只查"没被动过"） |
 | --- | --- | --- |
-| `r1`–`r4`（四道注入缺陷） | **最便宜**：在各自树里 `git checkout .`（**HEAD 里就是注入态**，工作树里是上一轮的修复——复核者已用 `git diff` 证实：r4 `\|\|`→`&&` · r3 `<=`→`<` · r2 补 `write_totals` · r1 `>`→`<`）<br>**或**用生成器重建：`tools/nichlink-mcp-eval project <dir>` + `inject <dir> <n>`（n=1..4） | `tools/nichlink-mcp-eval check <dir> <n>`——它机械自证"**症状出现**且**文档修法恢复**" ✓；外加在树里跑一次 `cargo test --offline` 看**该红的那条真的红** |
-| `s1`–`s8` · `g1`–`g4`（情景关，只读） | `tools/nichlink-mcp-eval scenario-project <dir>` + `scenario-inject <dir> <n>`（n=1..8；#9 是 `two-independent-defects`） | `tools/nichlink-mcp-eval scenario-check <dir>`——自证"**默认面绿、恰好一个面红**" ✓ |
-| `fa`–`fe`（五族提示词模拟） | **构造器本轮回溯没找到** ✗：题面在 `tools/nichlink-mcp-eval` 的 `PROMPTS`（`prompt-plan` 可打印），但**承载项目本身不在这个工具里** ⇒ 两条路：(i) 从 `pristine-*` / 上一轮记录里找回基线；(ii) 用 `prompt-plan` 的题面 **现造**一个带注册面的承载项目 | 造完先跑一遍 `cargo test --offline` 与 `registry`，确认"**改动尚未发生**"（本题的题面就是"我要加一个" ⇒ 起始态必须是**没有加**的状态 ✗） |
+| `r1`–`r4`（四道注入缺陷） | **最便宜**：在各自树里 `git checkout .`（**HEAD 里就是注入态**，工作树里是上一轮的修复——复核者已用 `git diff` 证实：r4 `\|\|`→`&&` · r3 `<=`→`<` · r2 补 `write_totals` · r1 `>`→`<`）<br>**或**用生成器重建：`tools/xirang-mcp-eval project <dir>` + `inject <dir> <n>`（n=1..4） | `tools/xirang-mcp-eval check <dir> <n>`——它机械自证"**症状出现**且**文档修法恢复**" ✓；外加在树里跑一次 `cargo test --offline` 看**该红的那条真的红** |
+| `s1`–`s8` · `g1`–`g4`（情景关，只读） | `tools/xirang-mcp-eval scenario-project <dir>` + `scenario-inject <dir> <n>`（n=1..8；#9 是 `two-independent-defects`） | `tools/xirang-mcp-eval scenario-check <dir>`——自证"**默认面绿、恰好一个面红**" ✓ |
+| `fa`–`fe`（五族提示词模拟） | **构造器本轮回溯没找到** ✗：题面在 `tools/xirang-mcp-eval` 的 `PROMPTS`（`prompt-plan` 可打印），但**承载项目本身不在这个工具里** ⇒ 两条路：(i) 从 `pristine-*` / 上一轮记录里找回基线；(ii) 用 `prompt-plan` 的题面 **现造**一个带注册面的承载项目 | 造完先跑一遍 `cargo test --offline` 与 `registry`，确认"**改动尚未发生**"（本题的题面就是"我要加一个" ⇒ 起始态必须是**没有加**的状态 ✗） |
 
 **四样开工前检查**（每一样都在第八轮真咬过人）：① 拷贝要**带上依赖的兄弟目录**（`carrier/` ✗ 少了它四棵树在
-manifest 期就 101）；② `Cargo.toml` 里 `nichlink-toolchain` 指向**写明**（当前检出 vs 冻结快照，二选一并写进题面 ✗
+manifest 期就 101）；② `Cargo.toml` 里 `xirang-toolchain` 指向**写明**（当前检出 vs 冻结快照，二选一并写进题面 ✗
 我那次是指向第七轮快照而 BRIEF 说用当前桥）；③ `--root` 指到**真正的包根**（`rsync` 的目的地写法会让树多嵌一层 ✗）；
 ④ **自证题目态**（该红的红、该绿的绿）。
 

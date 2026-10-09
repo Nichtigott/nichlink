@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::ide::{IdeShadow, emit_face_declaration, ide_shadow};
 use crate::build_method::{
@@ -230,7 +230,7 @@ fn render_node(
         .map(|(_, spelling)| spelling.clone());
     let absolute = match (mounted, node.file.as_ref()) {
         (Some(spelling), _) => Some(spelling),
-        (None, Some(file)) => Some(nichlink_kernel::declaration::portable_path(
+        (None, Some(file)) => Some(xirang_kernel::declaration::portable_path(
             &file.to_string_lossy(),
         )),
         (None, None) => None,
@@ -284,8 +284,8 @@ fn render_node(
     // 让声明在编辑器里可补全、写错就是编译错误，并让构建读到的形状与编译器查过的形状是同一份的原因。
     writeln!(
         output,
-        "{inner}pub const SUBTREE: ::nichlink_toolchain::run_method::Subtree = \
-         ::nichlink_toolchain::run_method::Subtree::new(module_path!());",
+        "{inner}pub const SUBTREE: ::xirang_toolchain::run_method::Subtree = \
+         ::xirang_toolchain::run_method::Subtree::new(module_path!());",
         inner = "    ".repeat(depth + 1)
     )
     .unwrap();
@@ -304,8 +304,8 @@ fn render_node(
             output,
             "{inner}/// The identity of the registration face this module stands for in the host's tree.\n\
              {inner}/// 本模块在宿主的树里所代表的注册面的身份。\n\
-             {inner}pub const NODE_ID: ::nichlink_toolchain::run_method::registry_core::NodeId = \
-             ::nichlink_toolchain::run_method::registry_core::NodeId::from_raw({bytes:?});",
+             {inner}pub const NODE_ID: ::xirang_toolchain::run_method::registry_core::NodeId = \
+             ::xirang_toolchain::run_method::registry_core::NodeId::from_raw({bytes:?});",
             inner = "    ".repeat(depth + 1)
         )
         .unwrap();

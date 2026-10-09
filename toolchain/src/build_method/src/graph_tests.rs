@@ -13,10 +13,10 @@ fn package(label: &str) -> (PathBuf, PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-graph-{label}-{}-{sequence}",
+            "xirang-graph-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);

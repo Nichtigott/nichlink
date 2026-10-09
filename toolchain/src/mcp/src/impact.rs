@@ -1,7 +1,7 @@
 //! What else a change to one face touches, transitively.
 //! 改动一个面还会牵动什么，按传递闭包给出。
 //!
-//! `nichlink.usages` answers the direct neighbourhood and `nichlink.converge` answers
+//! `xirang.usages` answers the direct neighbourhood and `xirang.converge` answers
 //! one face's constraints; neither says how far a change travels. This does, over the
 //! three dependency kinds this tree actually has, each of which is *declared* rather
 //! than guessed: a face's parent owns it (so its descendants are in the radius), a
@@ -9,7 +9,7 @@
 //! graft cut that names the face hands it over. The traversal is bounded by `depth`
 //! and by a visited set, so a capability cycle is a shorter path rather than a hang,
 //! and what it did not reach is reported as unreached instead of implied to be safe.
-//! `nichlink.usages` 回答直接邻域，`nichlink.converge` 回答一个面的约束；两者都不说一次改动能走多远。
+//! `xirang.usages` 回答直接邻域，`xirang.converge` 回答一个面的约束；两者都不说一次改动能走多远。
 //! 这里说，而且只走这棵树真正拥有的三种依赖，每一种都是**声明**的而不是猜的：一个面的父级拥有它（因此
 //! 它的后代在半径内）、`requires` 了该面所提供能力的面是消费者、点名该面的已声明 graft 切口会把该面交出去。
 //! 遍历受 `depth` 与已访问集合限制，因此能力环变成一条更短的路径而不是死循环；没走到的会被如实报成
@@ -51,9 +51,7 @@ pub(crate) fn impact(root: &Path, arguments: &Value) -> Result<String, String> {
     let target = arguments
         .get("node")
         .and_then(Value::as_str)
-        .ok_or_else(|| {
-            "nichlink.impact requires node (the face whose change to trace)".to_owned()
-        })?;
+        .ok_or_else(|| "xirang.impact requires node (the face whose change to trace)".to_owned())?;
     let id = resolve_node(root, &namespace, target)?;
     let face = faces
         .iter()
@@ -212,8 +210,8 @@ pub(crate) fn impact(root: &Path, arguments: &Value) -> Result<String, String> {
         ));
     }
     output.push_str(
-        "detail: nichlink.usages (direct neighbourhood and capability tokens) · nichlink.converge \
-         (this face's constraints) · nichlink.diff (what changed since the build). Graft records and \
+        "detail: xirang.usages (direct neighbourhood and capability tokens) · xirang.converge \
+         (this face's constraints) · xirang.diff (what changed since the build). Graft records and \
          recorded traces that name this identity are not traversed.\n",
     );
     Ok(output)

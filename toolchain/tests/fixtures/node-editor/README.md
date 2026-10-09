@@ -1,21 +1,21 @@
 # Studio fixture: `node-editor`
 
-This directory is a **source-only** NichLink host package. Studio indexes a
+This directory is a **source-only** XiRang host package. Studio indexes a
 project by reading `<package-root>/src/` as text through
-`nichlink_run_method::generated_snapshots_from`, so this package exists purely
+`xirang_run_method::generated_snapshots_from`, so this package exists purely
 so the `#[cfg(feature = "prototype-fixtures")]` tests under
 `studio/src/studio/app/tests/` have a real registration tree to search,
 navigate, and resolve source paths against. Nothing here is compiled: the
 package is deliberately **not** a workspace member, has no `target/` directory,
-and its own `[workspace]` table keeps Cargo from folding it into the NichLink
+and its own `[workspace]` table keeps Cargo from folding it into the XiRang
 workspace.
 
-本目录是一个**仅源码**的 NichLink 宿主包。Studio 通过
-`nichlink_run_method::generated_snapshots_from` 把 `<package-root>/src/` 当文本读取来
+本目录是一个**仅源码**的 XiRang 宿主包。Studio 通过
+`xirang_run_method::generated_snapshots_from` 把 `<package-root>/src/` 当文本读取来
 索引项目，因此本包的存在只是为了让 `studio/src/studio/app/tests/` 下
 `#[cfg(feature = "prototype-fixtures")]` 的测试有一棵真实的注册树可供搜索、导航，并
 解析源码路径。这里的内容不会被编译：本包刻意不是工作区成员，没有 `target/` 目录，其
-自带的 `[workspace]` 表也让 Cargo 无法把它并入 NichLink 工作区。
+自带的 `[workspace]` 表也让 Cargo 无法把它并入 XiRang 工作区。
 
 ## Why it exists
 

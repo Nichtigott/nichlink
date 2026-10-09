@@ -6,5 +6,5 @@
 //! `prototype-fixtures` 测试从不运行本脚本：Studio 把源码树当文本读取，不编译夹具。
 
 fn main() {
-    nichlink_build_method::run();
+    xirang_build_method::run();
 }

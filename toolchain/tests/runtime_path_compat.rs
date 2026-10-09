@@ -21,14 +21,14 @@
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
 /// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
 /// 而展开里的 `crate::` 解析到 crate 根。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 use std::marker::PhantomData;
 
-use nichlink_kernel::identity::NodeId as OfficialNodeId;
-use nichlink_kernel::registry_core::identity::NodeId as KernelNodeId;
-use nichlink_toolchain::run_method::NodeId as SurfaceNodeId;
-use nichlink_toolchain::run_method::registry_core::identity::NodeId as SurfaceKernelNodeId;
+use xirang_kernel::identity::NodeId as OfficialNodeId;
+use xirang_kernel::registry_core::identity::NodeId as KernelNodeId;
+use xirang_toolchain::run_method::NodeId as SurfaceNodeId;
+use xirang_toolchain::run_method::registry_core::identity::NodeId as SurfaceKernelNodeId;
 
 /// The same identity, reached four ways: module path, kernel module page, the
 /// surface's flat re-export, and the surface's kernel module path.
@@ -55,31 +55,30 @@ fn one_identity_resolves_through_every_historical_path() {
 /// 根部白名单保留宿主代码以裸名书写的名词；类型仍由所属模块页拥有。
 #[test]
 fn the_whitelist_and_the_module_pages_both_hold() {
-    let _: PhantomData<nichlink_kernel::NodeId> = PhantomData;
-    let _: PhantomData<nichlink_kernel::Registry> = PhantomData;
-    let _: PhantomData<nichlink_kernel::identity::NodeId> = PhantomData;
-    let _: PhantomData<nichlink_kernel::declaration::RegistrationInfo> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::catalog::PluginCatalog> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::graft_document::GraftPlanDocument> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::graft::GraftCut> = PhantomData;
+    let _: PhantomData<xirang_kernel::NodeId> = PhantomData;
+    let _: PhantomData<xirang_kernel::Registry> = PhantomData;
+    let _: PhantomData<xirang_kernel::identity::NodeId> = PhantomData;
+    let _: PhantomData<xirang_kernel::declaration::RegistrationInfo> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::catalog::PluginCatalog> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::graft_document::GraftPlanDocument> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::graft::GraftCut> = PhantomData;
     assert_eq!(
-        nichlink_kernel::lexicon::GENERATED_LIB_FILE,
+        xirang_kernel::lexicon::GENERATED_LIB_FILE,
         "generated_lib.rs"
     );
 }
 
 /// The surfaces keep every kernel name they had: a host that writes
-/// `nichlink_toolchain::run_method::PluginManifest` or `nichlink_toolchain::run_method::sha256_hex`
+/// `xirang_toolchain::run_method::PluginManifest` or `xirang_toolchain::run_method::sha256_hex`
 /// must not notice the kernel root getting smaller.
-/// 执行面保留它们原有的全部内核名字：写 `nichlink_toolchain::run_method::PluginManifest` 或
-/// `nichlink_toolchain::run_method::sha256_hex` 的宿主不该察觉内核根部变小了。
+/// 执行面保留它们原有的全部内核名字：写 `xirang_toolchain::run_method::PluginManifest` 或
+/// `xirang_toolchain::run_method::sha256_hex` 的宿主不该察觉内核根部变小了。
 #[test]
 fn the_surface_keeps_its_flat_kernel_names() {
-    let _: PhantomData<nichlink_toolchain::run_method::PluginManifest> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::Registry> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::plugin::catalog::PluginCatalog> =
-        PhantomData;
-    assert_eq!(nichlink_toolchain::run_method::sha256_hex(b"").len(), 64);
+    let _: PhantomData<xirang_toolchain::run_method::PluginManifest> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::Registry> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::plugin::catalog::PluginCatalog> = PhantomData;
+    assert_eq!(xirang_toolchain::run_method::sha256_hex(b"").len(), 64);
 }
 
 /// Every kernel module page is part of the official surface, so a host that
@@ -89,46 +88,44 @@ fn the_surface_keeps_its_flat_kernel_names() {
 /// 每个模块取一个有代表性的 item，钉住该页本身仍然存在。
 #[test]
 fn every_kernel_module_page_still_resolves() {
-    let _: PhantomData<nichlink_kernel::identity::NodeId> = PhantomData;
-    let _: PhantomData<nichlink_kernel::declaration::RegistrationInfo> = PhantomData;
-    let _: PhantomData<nichlink_kernel::diagnostic::RegistryError> = PhantomData;
-    let _: PhantomData<nichlink_kernel::mir::MirGraph> = PhantomData;
-    let _: PhantomData<nichlink_kernel::release::StaticPlan> = PhantomData;
-    let _: PhantomData<nichlink_kernel::requirements::CapabilityDeclaration> = PhantomData;
-    let _: PhantomData<nichlink_kernel::source::SourceFunction> = PhantomData;
-    let _: PhantomData<nichlink_kernel::tree::Registry> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::catalog::PluginCatalog> = PhantomData;
-    let _: PhantomData<nichlink_kernel::registry_core::identity::NodeId> = PhantomData;
-    let _: PhantomData<nichlink_kernel::registry_core::tree::Registry> = PhantomData;
+    let _: PhantomData<xirang_kernel::identity::NodeId> = PhantomData;
+    let _: PhantomData<xirang_kernel::declaration::RegistrationInfo> = PhantomData;
+    let _: PhantomData<xirang_kernel::diagnostic::RegistryError> = PhantomData;
+    let _: PhantomData<xirang_kernel::mir::MirGraph> = PhantomData;
+    let _: PhantomData<xirang_kernel::release::StaticPlan> = PhantomData;
+    let _: PhantomData<xirang_kernel::requirements::CapabilityDeclaration> = PhantomData;
+    let _: PhantomData<xirang_kernel::source::SourceFunction> = PhantomData;
+    let _: PhantomData<xirang_kernel::tree::Registry> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::catalog::PluginCatalog> = PhantomData;
+    let _: PhantomData<xirang_kernel::registry_core::identity::NodeId> = PhantomData;
+    let _: PhantomData<xirang_kernel::registry_core::tree::Registry> = PhantomData;
     assert_eq!(
-        nichlink_kernel::lexicon::GENERATED_LIB_FILE,
+        xirang_kernel::lexicon::GENERATED_LIB_FILE,
         "generated_lib.rs"
     );
     assert_eq!(
-        nichlink_kernel::authoring::FACE_FIELD_COUNT,
-        nichlink_kernel::authoring::face_field::FACE_FIELD_COUNT
+        xirang_kernel::authoring::FACE_FIELD_COUNT,
+        xirang_kernel::authoring::face_field::FACE_FIELD_COUNT
     );
 }
 
 /// The plugin protocol keeps its module pages on both the kernel and the
-/// surface shim; a host that wrote `nichlink_toolchain::run_method::plugin::trust::…`
+/// surface shim; a host that wrote `xirang_toolchain::run_method::plugin::trust::…`
 /// must not notice the shim narrowing.
 /// 插件协议在内核与执行面 shim 两侧都保留模块页；写过
-/// `nichlink_toolchain::run_method::plugin::trust::…` 的宿主不该察觉 shim 变窄。
+/// `xirang_toolchain::run_method::plugin::trust::…` 的宿主不该察觉 shim 变窄。
 #[test]
 fn the_plugin_module_pages_still_resolve() {
-    let _: PhantomData<nichlink_kernel::plugin::artifact::PluginArtifact> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::contracts::FlowContract> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::graft::GraftCut> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::plugin_policy::PluginPolicy> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::slot::PluginChannel> = PhantomData;
-    let _: PhantomData<nichlink_kernel::plugin::trust::PluginTrustPolicy> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::plugin::catalog::PluginCatalog> =
+    let _: PhantomData<xirang_kernel::plugin::artifact::PluginArtifact> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::contracts::FlowContract> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::graft::GraftCut> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::plugin_policy::PluginPolicy> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::slot::PluginChannel> = PhantomData;
+    let _: PhantomData<xirang_kernel::plugin::trust::PluginTrustPolicy> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::plugin::catalog::PluginCatalog> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::plugin::graft_document::GraftPlanDocument> =
         PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::plugin::graft_document::GraftPlanDocument> =
-        PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::plugin::trust::PluginTrustError> =
-        PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::plugin::trust::PluginTrustError> = PhantomData;
 }
 
 /// The runtime evidence surface stays reachable both through the
@@ -138,18 +135,17 @@ fn the_plugin_module_pages_still_resolve() {
 /// `runtime::trace::locals::*` 页抵达。
 #[test]
 fn the_runtime_and_locals_pages_still_resolve() {
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::CallTrace> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::Coordinates> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::Provenance> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::RuntimeValue> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::CallTrace> = PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::LocalId> =
+    let _: PhantomData<xirang_toolchain::run_method::runtime::CallTrace> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::runtime::Coordinates> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::runtime::Provenance> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::runtime::RuntimeValue> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::runtime::trace::CallTrace> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::runtime::trace::locals::LocalId> = PhantomData;
+    let _: PhantomData<xirang_toolchain::run_method::runtime::trace::locals::LocalKind> =
         PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::LocalKind> =
+    let _: PhantomData<xirang_toolchain::run_method::runtime::trace::locals::LocalValue> =
         PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::LocalValue> =
-        PhantomData;
-    let _: PhantomData<nichlink_toolchain::run_method::runtime::trace::locals::Observation> =
+    let _: PhantomData<xirang_toolchain::run_method::runtime::trace::locals::Observation> =
         PhantomData;
 }
 
@@ -161,15 +157,15 @@ fn the_runtime_and_locals_pages_still_resolve() {
 #[test]
 fn the_public_macro_names_still_resolve() {
     #[allow(unused_imports)]
-    use nichlink_toolchain::run_method::{
+    use xirang_toolchain::run_method::{
         external_object, face_fields, face_fields_mirror, host, static_graft_plan,
     };
     #[allow(unused_imports)]
-    use nichlink_toolchain::{
+    use xirang_toolchain::{
         __admission, __assert_impls, __control_object, __external_object, __face_string_or,
         __face_ty_name_or, __face_ty_or, __face_value_or, __flow, __flow_provider, __flow_select,
-        __nichlink_object, __plugin, __registration_face, __stable_name, __string_list,
-        __submit_registration,
+        __plugin, __registration_face, __stable_name, __string_list, __submit_registration,
+        __xirang_object,
     };
     // The plan and tracing macros are `#[macro_export]`, so an external caller names them at the
     // crate root — the same hoisting that makes `__control_object!` a root path.
@@ -180,12 +176,12 @@ fn the_public_macro_names_still_resolve() {
     // 这条钉子钉的是这些名字**能解析**；本测试是否逐个调用它们不是重点——旁边那几块兼容钉子
     // 用同一个属性表达的就是这件事。
     #[allow(unused_imports)]
-    use nichlink_toolchain::{
+    use xirang_toolchain::{
         application, graft_plan, trace_call, trace_call_result, trace_consume, trace_transform,
         trace_value,
     };
     assert_eq!(
-        nichlink_toolchain::run_method::lexicon::GENERATED_LIB_FILE,
+        xirang_toolchain::run_method::lexicon::GENERATED_LIB_FILE,
         "generated_lib.rs"
     );
 }
@@ -199,17 +195,17 @@ fn the_public_macro_names_still_resolve() {
 #[test]
 fn the_authoring_surface_still_resolves() {
     #[allow(unused_imports)]
-    use nichlink_toolchain::run_method::authoring::{
+    use xirang_toolchain::run_method::authoring::{
         AuthoringChange, AuthoringContext, FACE_FIELD_COUNT, ModuleFacePatch, NewModuleFace,
         add_module, add_module_from_face, add_module_with_registration, delete_module,
         edit_module_face, generated_snapshots, generated_snapshots_from,
     };
     #[allow(unused_imports)]
-    use nichlink_toolchain::run_method::authoring::{
+    use xirang_toolchain::run_method::authoring::{
         external_graft, filesystem, manifest, operations, parse, snapshot, validation,
     };
     assert_eq!(
-        nichlink_toolchain::run_method::authoring::FACE_FIELD_COUNT,
-        nichlink_toolchain::run_method::authoring::face_field::FACE_FIELD_COUNT
+        xirang_toolchain::run_method::authoring::FACE_FIELD_COUNT,
+        xirang_toolchain::run_method::authoring::face_field::FACE_FIELD_COUNT
     );
 }

@@ -41,7 +41,7 @@ bf46752b4deb2039ebc55dc7255ed552  core/src/registry_core/source/items.rs
 | 8 | `STU-C-03` `search_queries.rs` 自述（adjacent）与实现相符 | **证实** | 文档说 adjacent，实现确实是 `dedup_by`（相邻去重） |
 | 9 | `STU-C-04` `support.rs` 自述覆盖实际三块内容 | **证实** | 文档必须点名 `cargo` 探测，且不得再只说"交互几何与编辑器辅助" |
 | 10 | `STU-S-06` "需内核入口、本轮不修" | **结论已被子批次内的另一笔取代**（详见 §5） | 内核 `item_symbols` 已在（`core/.../source/items.rs`，t36 落地）；Studio 已改调它、前缀词表 0 残留 |
-| — | 作者 6 条钉子 | 6/6 跑绿（作为一项输入，不构成判定） | `cargo test -p nichlink-studio --offline --all-features --lib b4_studio` → `6 passed` |
+| — | 作者 6 条钉子 | 6/6 跑绿（作为一项输入，不构成判定） | `cargo test -p xirang-studio --offline --all-features --lib b4_studio` → `6 passed` |
 
 **判定口径**：以上 9 条为**独立装置**的结论；作者钉子的绿只作对照。所有行为断言都跑在
 `--all-features`（`prototype-fixtures` / `node-graph` 夹具路径），`--test-threads=1`（两个装置会改
@@ -122,10 +122,10 @@ mine_the_renderer_draws_every_row_of_the_list
 1. **内核入口已在**：`core/src/registry_core/source/items.rs:56` 的
    `pub fn item_symbols(source: &str) -> Vec<SourceItem>`（新文件，`git status` 为 `??`，mtime
    **21:09**），在 `source.rs:22-23` 挂载并 `pub use items::*;` 导出 ⇒ 可达路径
-   `nichlink::source::item_symbols`（正是 finding 的 fix_hint 要的那份"声明/符号清单"）。
+   `xirang::source::item_symbols`（正是 finding 的 fix_hint 要的那份"声明/符号清单"）。
 2. **Studio 侧前缀词表已 0 残留**：`studio/src/studio/app/search_queries.rs` 里旧的关键字前缀表
    0 命中（`grep -c 'strip_prefix("pub\|"struct" | "enum"\|INTRODUCERS'` → 0）；该文件（mtime
-   **21:30**，晚于作者 20:44 的钉子）第 7 行 `use nichlink_run_method::source::item_symbols;`，
+   **21:30**，晚于作者 20:44 的钉子）第 7 行 `use xirang_run_method::source::item_symbols;`，
    `source_rows_for_text` 直接 `for item in item_symbols(text)` 渲染（`:122`），注释明写"声明词表
    归内核"。
 3. **作者的"需内核入口"前提在**其**交付时刻（20:44）**成立——那时 `items.rs` 还不存在（21:09 才
@@ -166,10 +166,10 @@ mine_the_renderer_draws_every_row_of_the_list
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo test -p nichlink-studio --offline --all-features` | **exit 0**（22:06:32，多个 `test result: ok`，含作者 6 条钉子） |
+| `cargo test -p xirang-studio --offline --all-features` | **exit 0**（22:06:32，多个 `test result: ok`，含作者 6 条钉子） |
 | `cargo test --workspace --offline` | **exit 0**（22:12:11 重跑；见下） |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | **exit 0**（22:07:37） |
-| `cargo test -p nichlink-conventions --offline` | **exit 0**（22:12:11 重跑） |
+| `cargo test -p xirang-conventions --offline` | **exit 0**（22:12:11 重跑） |
 | `cargo fmt --all -- --check` | **exit 0**（22:08:00） |
 
 **并发红的作废与重跑记录**（都落在本批文件之外，按队规作废）：

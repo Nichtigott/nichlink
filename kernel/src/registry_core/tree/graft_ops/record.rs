@@ -1,5 +1,5 @@
-//! Graft records: pure reconciliation of `.nichlink` declarations against a tree.
-//! 嫁接记录：把 `.nichlink` 声明与注册树做纯对账。
+//! Graft records: pure reconciliation of `.xirang` declarations against a tree.
+//! 嫁接记录：把 `.xirang` 声明与注册树做纯对账。
 //!
 //! A `graft.plan` file is a declaration an authoring surface writes and a
 //! runtime host reads; it is not compiled and the build never applies it. Two
@@ -9,15 +9,15 @@
 //! [`Registry::overlay`](crate::Registry::overlay): deciding which live slot a
 //! record addresses, whether a declaration keeps that slot alive, and whether
 //! the record or the declaration names the implementation that finally occupies
-//! it. Reading `.nichlink/...` is an execution-surface job and lives in
-//! `nichlink-toolchain`.
+//! it. Reading `.xirang/...` is an execution-surface job and lives in
+//! `xirang-toolchain`.
 //! `graft.plan` 文件是创作界面写下、运行期宿主读取的声明；它不参与编译，构建也
 //! 从不应用它。有两个读者会打开它但不应用：构建的未声明计划警告
 //! （`build_method::graft_plan_check::planned_slots`）与 CLI 的 `grafts` 命令。
 //! 本页拥有把它接进 [`Registry::overlay`](crate::Registry::overlay)
 //! 的纯逻辑那一半：判定一条记录指向哪个现存槽位、是否有声明让该槽位活着，以及最终
-//! 由记录还是声明命名占据该槽位的实现。读取 `.nichlink/...` 属于执行面的工作，位于
-//! `nichlink-toolchain`。
+//! 由记录还是声明命名占据该槽位的实现。读取 `.xirang/...` 属于执行面的工作，位于
+//! `xirang-toolchain`。
 
 use crate::registry_core::plugin::graft::document::GraftPlanDocument;
 
@@ -64,16 +64,16 @@ pub use self::reports::RecordReport;
 /// One persisted graft record, keyed by the directory that held it.
 /// 一条持久化嫁接记录，以持有它的目录为键。
 ///
-/// `selector` is the directory name under `.nichlink/external-grafts/`; it is a
+/// `selector` is the directory name under `.xirang/external-grafts/`; it is a
 /// lookup key, not the declared implementation. The document is authoritative
 /// for `target`, `target_path`, `graft`, and `full`.
-/// `selector` 是 `.nichlink/external-grafts/` 下的目录名，只是查找键，不是声明的
+/// `selector` 是 `.xirang/external-grafts/` 下的目录名，只是查找键，不是声明的
 /// 实现。`target`、`target_path`、`graft`、`full` 以文档为准。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecordedGraft {
-    /// The `.nichlink/external-grafts/` directory name that held this record; a
+    /// The `.xirang/external-grafts/` directory name that held this record; a
     /// lookup key, not the declared implementation.
-    /// 持有该记录的 `.nichlink/external-grafts/` 目录名；只是查找键，不是声明的实现。
+    /// 持有该记录的 `.xirang/external-grafts/` 目录名；只是查找键，不是声明的实现。
     pub selector: String,
     /// The plan document read back from that directory; authoritative for the
     /// record's target, path, graft, and granularity.

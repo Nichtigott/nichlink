@@ -37,7 +37,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-use nichlink_toolchain::run_method::registry_core::{GraftPlan, Registry};
+use xirang_toolchain::run_method::registry_core::{GraftPlan, Registry};
 
 /// Number of successful allocations since the last reset.
 /// 自上次重置以来成功分配的次数。
@@ -125,7 +125,7 @@ fn assert_the_static_read_path_allocates_nothing() {
         .expect("the example declares faces")
         .id();
     let missing =
-        nichlink_toolchain::run_method::registry_core::NodeId::from_path("<absent>", "Absent");
+        xirang_toolchain::run_method::registry_core::NodeId::from_path("<absent>", "Absent");
 
     let (allocations, bytes, observed) = measure(|| {
         let plan = builtin_static_plan();
@@ -203,7 +203,7 @@ fn overlay_phases() {
     // 下限：不带任何切口的 overlay 仍会克隆基树并建立簿记，因此两种写法都不可能为零。
     let (empty_allocations, empty_bytes, empty) = measure(|| {
         base.overlay_static(
-            &[] as &[nichlink_toolchain::run_method::registry_core::StaticGraftCut],
+            &[] as &[xirang_toolchain::run_method::registry_core::StaticGraftCut],
             &external,
         )
         .expect("an overlay with no cuts is the base tree")

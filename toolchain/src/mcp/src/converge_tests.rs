@@ -57,12 +57,9 @@ fn recorded_run(root: &Path, namespace: &str, recorded_as: &str) {
         &json!({"action": "add", "apply": true, "fields": {"module": "label", "kind": "Label"}}),
     )
     .expect("the face is added");
-    let root_id = nichlink_kernel::root_node_id(namespace);
-    let label = nichlink_kernel::identity::NodeId::from_namespaced_path(
-        namespace,
-        "label/label.rs",
-        "Label",
-    );
+    let root_id = xirang_kernel::root_node_id(namespace);
+    let label =
+        xirang_kernel::identity::NodeId::from_namespaced_path(namespace, "label/label.rs", "Label");
     let mut trace = CallTrace::full();
     trace.with_at(root_id, "main", at("src/main.rs", 9, "main"), |trace| {
         // A value captured in a frame whose file declares no face: it belongs to the
@@ -139,10 +136,10 @@ fn two_face_run(root: &Path, namespace: &str) {
         )
         .expect("the face is added");
     }
-    let root_id = nichlink_kernel::root_node_id(namespace);
+    let root_id = xirang_kernel::root_node_id(namespace);
     let mut trace = CallTrace::full();
     trace.with_at(root_id, "main", at("src/main.rs", 9, "main"), |trace| {
-        let label = nichlink_kernel::identity::NodeId::from_namespaced_path(
+        let label = xirang_kernel::identity::NodeId::from_namespaced_path(
             namespace,
             "label/label.rs",
             "Label",
@@ -153,7 +150,7 @@ fn two_face_run(root: &Path, namespace: &str) {
             at("src/label/label.rs", 12, "Label::render"),
             |_| {},
         );
-        let gauge = nichlink_kernel::identity::NodeId::from_namespaced_path(
+        let gauge = xirang_kernel::identity::NodeId::from_namespaced_path(
             namespace,
             "gauge/gauge.rs",
             "Gauge",
@@ -262,16 +259,16 @@ fn the_per_face_detail_cap_says_when_it_stopped_and_names_the_cap() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Absence is an answer, not an error — the same sentence `nichlink.trace` gives,
+/// Absence is an answer, not an error — the same sentence `xirang.trace` gives,
 /// because both tools read the same artifact and neither invents its own wording.
-/// 缺失是答案而不是错误——与 `nichlink.trace` 同一句话，因为两个工具读的是同一份 artifact，谁也不
+/// 缺失是答案而不是错误——与 `xirang.trace` 同一句话，因为两个工具读的是同一份 artifact，谁也不
 /// 另造一套说法。
 #[test]
 fn an_absent_run_is_answered_with_the_way_to_record_one() {
     let (root, _) = package("trace-absent");
     let reply = converge(&root, &json!({"trace": true})).expect("absence is an answer");
     assert!(reply.contains("trace absent"), "{reply}");
-    assert!(reply.contains("NICH_LINK_TRACE"), "{reply}");
+    assert!(reply.contains("XIRANG_TRACE"), "{reply}");
     assert!(reply.contains("src/main.rs"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -389,9 +386,9 @@ fn a_rejected_tree_is_reported_as_the_verdict_rather_than_hidden_behind_an_error
 /// The cross-file break is already prevented where it would be introduced: the write
 /// path refuses an edit that would leave a descendant's requirement unanswered, and
 /// the refusal names the descendant and its source location. This is the half
-/// `nichlink.converge` cannot show, because the kernel does not let the state exist.
+/// `xirang.converge` cannot show, because the kernel does not let the state exist.
 /// 那个跨文件破坏在它会被引入的地方就已经被拦住了：写入路径拒绝一次会让后代的需求失去答案的编辑，
-/// 而拒绝里点名了那个后代与它的源码位置。这是 `nichlink.converge` 展示不了的另一半，因为内核不
+/// 而拒绝里点名了那个后代与它的源码位置。这是 `xirang.converge` 展示不了的另一半，因为内核不
 /// 允许那个状态存在。
 #[test]
 fn the_write_path_refuses_an_edit_that_would_orphan_a_requirement() {

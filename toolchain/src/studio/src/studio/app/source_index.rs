@@ -21,13 +21,13 @@ pub(super) fn load_registry() -> Result<Registry, String> {
     // environment when several libraries share one process.
     let namespace = package_namespace();
     let mut registry = Registry::root_for_namespace(
-        crate::run_method::FrameworkId::new("nichlink.studio"),
+        crate::run_method::FrameworkId::new("xirang.studio"),
         namespace,
     );
     // Scan only the host package's `src/` tree. When Studio is launched from
-    // the NichLink workspace itself there is no host `src/`; show an empty
+    // the XiRang workspace itself there is no host `src/`; show an empty
     // registry instead of mistaking build/debug fixtures for faces.
-    // 只扫描宿主包的 `src/`。直接从 NichLink workspace 启动时没有宿主 `src/`，
+    // 只扫描宿主包的 `src/`。直接从 XiRang workspace 启动时没有宿主 `src/`，
     // 此时显示空注册树，不要把 build/debug 测试夹具误认成注册面。
     let source_root = package_root().join("src");
     if !source_root.is_dir() {

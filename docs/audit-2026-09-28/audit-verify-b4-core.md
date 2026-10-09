@@ -41,7 +41,7 @@
 ## 2. API 兼容与新公开符号
 
 - `git show HEAD:core/.../authoring/parse/rules.rs | grep -n "pub fn parse_requirements_owned"` = `(value: &str) -> Vec<OwnedRequirementSpec>`；工作树同签名同语义（有损），t26 的 `-> Result<…>` 已被 t32 回滚。
-- **自 HEAD 以来的新公开符号（core/src 全量 surface diff）：只有 `try_parse_requirements_owned` 一个**（`compact_admission`/`compact_registration_rule` 已在 HEAD 的提交里）。它**没有**出现在 `CHANGELOG.md` / `docs/roadmap-1.0.md`（`grep` 命中 0）→ **新条目 N-3**：`[0.1.6]` 未发布段应补记这个加法式入口；含义同前几轮：新增跨 crate 公开符号使 `tools/nichlink-package-audit` 的**隔离打包**那半要等版本线推进（今天 contents half 与 core 的打包都过），发布顺序仍是 core 在前。
+- **自 HEAD 以来的新公开符号（core/src 全量 surface diff）：只有 `try_parse_requirements_owned` 一个**（`compact_admission`/`compact_registration_rule` 已在 HEAD 的提交里）。它**没有**出现在 `CHANGELOG.md` / `docs/roadmap-1.0.md`（`grep` 命中 0）→ **新条目 N-3**：`[0.1.6]` 未发布段应补记这个加法式入口；含义同前几轮：新增跨 crate 公开符号使 `tools/xirang-package-audit` 的**隔离打包**那半要等版本线推进（今天 contents half 与 core 的打包都过），发布顺序仍是 core 在前。
 
 ## 3. 队长补核的两条
 
@@ -53,7 +53,7 @@
 1. LG-27：只做了源码读（合并规则）+ 未自建 `RuntimeCheckSpec` 夹具、未做变异——作者钉子的红/绿我未复现。
 2. LG-06 / LG-29：我用"变异让作者钉子红 + 源码读"验证，未自建 overlay/语法夹具（构造 `GraftPlan`+外部 `Registry` 的场景成本高）。
 3. t32 的"重命名金丝雀仍红"（`registration macro test_object! does not match parent panel`）我未复跑。
-4. 门禁：`cargo test -p nichlink-core`、`cargo test --workspace`、`cargo test -p nichlink-conventions`、`cargo fmt --all -- --check` 在哈希钉住树上**全绿**；`cargo clippy --workspace --all-targets --offline -- -D warnings` 在写作窗口**红**，点是并发成员的 `nichlink-run-method`（`function after_last_src is never used`）与 `nichlink-conventions`（`cannot find release_action_pin in crate`）——均不在 B4-core 的交付面，本批 12 个相关文件 sha256 跑前=跑后（见 §5）。
+4. 门禁：`cargo test -p xirang-core`、`cargo test --workspace`、`cargo test -p xirang-conventions`、`cargo fmt --all -- --check` 在哈希钉住树上**全绿**；`cargo clippy --workspace --all-targets --offline -- -D warnings` 在写作窗口**红**，点是并发成员的 `xirang-run-method`（`function after_last_src is never used`）与 `xirang-conventions`（`cannot find release_action_pin in crate`）——均不在 B4-core 的交付面，本批 12 个相关文件 sha256 跑前=跑后（见 §5）。
 
 ## 5. 门禁与并发
 

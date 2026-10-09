@@ -9,12 +9,12 @@ use tracing::Span;
 
 use crate::run_method::{CallSite, CallTrace, EvidenceKind};
 
-/// Create a structured tracing span for one NichLink call site.
-/// 为一个 NichLink 调用点创建结构化 tracing span。
+/// Create a structured tracing span for one XiRang call site.
+/// 为一个 XiRang 调用点创建结构化 tracing span。
 pub fn span_for(call: &CallSite) -> Span {
     tracing::span!(
         tracing::Level::TRACE,
-        "nichlink.call",
+        "xirang.call",
         node = %call.node,
         function = call.function,
         frame_id = call.frame_id,
@@ -93,7 +93,7 @@ impl CallGraph {
     /// Export a compact DOT representation for TUI or external graph tools.
     /// 导出紧凑 DOT 表示，供 TUI 或外部图工具使用。
     pub fn to_dot(&self) -> String {
-        let mut output = String::from("digraph nichlink {\n");
+        let mut output = String::from("digraph xirang {\n");
         for index in self.graph.node_indices() {
             let name = &self.graph[index];
             output.push_str("  ");
@@ -159,11 +159,11 @@ mod tests {
         let graph = CallGraph::from_trace(&trace);
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
-        assert!(graph.to_dot().contains("nichlink"));
+        assert!(graph.to_dot().contains("xirang"));
     }
 
     #[test]
-    fn span_contains_nichlink_fields() {
+    fn span_contains_xirang_fields() {
         let call = crate::call_evidence::CallSite {
             node: NodeId::from_path("test.rs", "Test"),
             function: "test",

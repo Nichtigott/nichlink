@@ -5,14 +5,14 @@
 //! works inside this checkout carries `required-features` (Cargo's per-target equivalent of
 //! `publish = false`), and a feature that gates test-only fixtures stays off by default.
 //! Nothing executed them — deleting `required-features = ["dev-supervisor"]` from
-//! `studio/Cargo.toml` left every other gate silent, and `cargo install nichlink-toolchain`
+//! `studio/Cargo.toml` left every other gate silent, and `cargo install xirang-toolchain`
 //! would then ship a tool with nothing to rebuild. A rule that only prose states decays, so
 //! this module reads every member manifest and refuses those shapes.
 //! `AGENTS.md` 用散文陈述了两条关于按特性门控的 target 的规则：只在本检出内工作的 target 带
 //! `required-features`（Cargo 按 target 的 `publish = false` 等价物），门控测试用 fixture 的特性
 //! 保持默认关闭。没有任何东西执行它们——从 `studio/Cargo.toml` 删掉
 //! `required-features = ["dev-supervisor"]`，其余门禁全部沉默，而 `cargo install
-//! nichlink-toolchain` 会装出一个没有东西可重建的工具。只有散文陈述的规则会腐化，因此本模块读取
+//! xirang-toolchain` 会装出一个没有东西可重建的工具。只有散文陈述的规则会腐化，因此本模块读取
 //! 每个成员的清单并拒绝那些形状。
 
 use std::fs;
@@ -28,7 +28,7 @@ use std::path::Path;
 /// 这条规则需要在这里点名 target，而不是推导出来：清单里没有任何东西说"这个二进制只在本检出里
 /// 工作"——`required-features` **就是**那句话，而门禁的意义正是在那句话消失时发现它。
 const WORKSPACE_ONLY_TARGETS: &[(&str, &str, &str)] =
-    &[("toolchain", "nichlink-dev", "dev-supervisor")];
+    &[("toolchain", "xirang-dev", "dev-supervisor")];
 
 /// Features that must stay off by default, as `(crate directory, feature)`.
 /// 必须保持默认关闭的特性，形如 `(crate 目录, 特性)`。

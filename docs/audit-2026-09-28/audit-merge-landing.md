@@ -8,7 +8,7 @@
 
 | 批 | 提交 | 规模 | 内容 |
 | --- | --- | --- | --- |
-| 1 | `2656ddb` | 248 文件，+833 / −555 | 内核改名：`core/` → `kernel/`、包名 `nichlink-core` → `nichlink-kernel`、lib 名 `nichlink` → `nichlink_kernel`；六个成员与根的各一行 path 依赖；`conventions/src/shims.rs` 的 20 处 pin 字面量；`ci.yml` 与 `tools/nichlink-publish` 的两张表；活文档锚点与 `CHANGELOG` |
+| 1 | `2656ddb` | 248 文件，+833 / −555 | 内核改名：`core/` → `kernel/`、包名 `xirang-core` → `xirang-kernel`、lib 名 `xirang` → `xirang_kernel`；六个成员与根的各一行 path 依赖；`conventions/src/shims.rs` 的 20 处 pin 字面量；`ci.yml` 与 `tools/xirang-publish` 的两张表；活文档锚点与 `CHANGELOG` |
 | 2 | `13c0b13` | 385 文件，+1921 / −2981 | 七合一：七个执行面目录合并为 `toolchain/`（模块 `build_time`/`runtime`/`call_evidence`/`plugin_host`/`studio`/`mcp`/`cli`），发布面 **9 → 3** |
 | 3 准备 | `ddaa33e` | 8 文件，+127 / −19 | 版本线 `0.1.6` → `0.2.0`、CHANGELOG 定稿、`docs/merge-batch3-publish.md`（发布与 yank 命令清单）——**本批不含任何发布或 yank** |
 
@@ -16,9 +16,9 @@
 
 `cargo fmt --all -- --check`；`cargo test --workspace --offline`（**默认构建面**）；
 `cargo clippy --workspace --all-targets --offline -- -D warnings`；
-`cargo test -p nichlink-conventions --offline`（含 `release_version` / `naming` / `mounting` /
+`cargo test -p xirang-conventions --offline`（含 `release_version` / `naming` / `mounting` /
 `purity` / `shims` / `bilingual` / `doc_anchors` 等门禁，132 项）；
-`tools/nichlink-publish --check-table`（3 个已发布包）；`cargo test --workspace --offline --all-features`；
+`tools/xirang-publish --check-table`（3 个已发布包）；`cargo test --workspace --offline --all-features`；
 `cargo test --workspace --offline --all-features --doc`；`python3 /tmp/anchor_check.py`
 （`anchors checked: 20` / `violations: 0`）；两个真实示例宿主（`control-button`、`control-button-graft`）。
 
@@ -27,21 +27,21 @@
 
 ## 判别性证据（落地后现算）
 
-- 批 1：词边界 `nichlink::` 295 → **0**；`shims.rs` 的 `pub use nichlink::` 20 → **0**；
-  `Cargo.toml` 里 `nichlink-core` 6 → **0**；真锚点 24 → **0**；`core/` 目录已不存在。
-- 批 2：`cargo metadata --no-deps` 列 **6 个成员**（`nichlink-kernel` / `nichlink-macro` /
-  `nichlink-toolchain` / `nichlink-conventions` / 两个示例宿主）；
+- 批 1：词边界 `xirang::` 295 → **0**；`shims.rs` 的 `pub use xirang::` 20 → **0**；
+  `Cargo.toml` 里 `xirang-core` 6 → **0**；真锚点 24 → **0**；`core/` 目录已不存在。
+- 批 2：`cargo metadata --no-deps` 列 **6 个成员**（`xirang-kernel` / `xirang-macro` /
+  `xirang-toolchain` / `xirang-conventions` / 两个示例宿主）；
   `--check-table` = **3 crates**；接回 cargo 的测试 = **10 个集成测试文件 + 1 个示例**，
   函数守恒 **54/54**。
 - 批 3 准备：全仓 `version = "0.1.6"` 残留 **2 处**（复核 t139 现算；两处都在测试夹具里当字符串用，
-  不是依赖声明）⇒ 判据应写成"清单行谓词：没有一行是 `nichlink-*` 的**依赖/版本声明**写 0.1.6"，
+  不是依赖声明）⇒ 判据应写成"清单行谓词：没有一行是 `xirang-*` 的**依赖/版本声明**写 0.1.6"，
   而不是"全仓 0 命中"；`release_version` 门禁绿 ✓。
 
 ## 与方案的漂移（方案读数 → 落地前现算；说明"为什么每步都要先算"）
 
 | 方案的表 | 方案值 | 现算值 |
 | --- | --- | --- |
-| §3.1 词边界 `nichlink::` | 237 次 / 88 文件 | **295 次 / 102 文件** |
+| §3.1 词边界 `xirang::` | 237 次 / 88 文件 | **295 次 / 102 文件** |
 | §3.5 `#[path]` 声明 | 339 条 | **432 条**（非相对恒为 0） |
 | §5.1 `shims` 条目 | 16 条 | **17 条** |
 | §5.1 `bilingual` 对 | 9 对 | **8 对**（`macro` 只有 `README.md`） |
@@ -60,7 +60,7 @@
   （无 `.json` / `.jsonl` / `.bin`），也不硬编码 `NodeId`（只有运行时计算的 `root_node_id(...)`）
   ⇒ 身份逐次运行重算，行为无影响；记为"偏差 + 证据"，不写成"没有偏差"。
 - **复核的 MAJOR 发现（F-13-1 / F-14-1）已收口**：该 fixture 住在 `src/` 下时两件事同时坏 ✗ ——
-  ① `tools/nichlink-package-audit` 的**内容半段红**（内容判据要求 `src/**/*.rs` 都在包里，而 `cargo package`
+  ① `tools/xirang-package-audit` 的**内容半段红**（内容判据要求 `src/**/*.rs` 都在包里，而 `cargo package`
   不收嵌套包）；② `toolchain/src/studio/src/studio/app/tests.rs` 找的是
   `CARGO_MANIFEST_DIR + "tests/fixtures/node-editor"` ⇒ 夹具**从未被找到**，测试走 `Option` 分支**静默跳过** ✗。
   现已把它移到**代码本来就期望的** `toolchain/tests/fixtures/` 下 ⇒ 内容半段转绿、夹具真正可用 ✓
@@ -72,14 +72,14 @@
   （`cargo yank --version <v> <name> --undo`）。
 - **不可回滚的只有"发布"这一个动作** ✗：crates.io 是永久归档——**已发布的版本不可覆盖、代码不可删除**
   （Cargo Book：*the version can never be overwritten, and the code cannot be deleted*）。执行顺序与前置
-  写死在 `docs/merge-batch3-publish.md`：发布（`nichlink-kernel` → `nichlink-macro` → `nichlink-toolchain`，
-  依赖序）→ `tools/nichlink-publish --verify-consumers`（**该工具没有 `--verify-publish`，实测 exit 2** ✗）
+  写死在 `docs/merge-batch3-publish.md`：发布（`xirang-kernel` → `xirang-macro` → `xirang-toolchain`，
+  依赖序）→ `tools/xirang-publish --verify-consumers`（**该工具没有 `--verify-publish`，实测 exit 2** ✗）
   → **它绿之前不 yank** → 旧八名**逐版本** yank（各 `0.1.0/0.1.1/0.1.3/0.1.4/0.1.5`；只 yank 最新版会让
   `= "0.1"` 的新解析退回未 yank 的旧版 ✗）。维护者选定 **0.2.0**，并在本机 `cargo login` 后由队长执行 ✓。
 - **执行结果（2026-09-29，追记）**：三个 crate 的 `0.2.0` **已全部发布** ✓（`cargo publish` 逐条 EXIT=0、
-  index 已收录）；`tools/nichlink-publish --verify-consumers` **绿** ✓（"consumer resolved and built:
-  nichlink-kernel nichlink-macro nichlink-toolchain"）；旧 8 名 × 5 版本共 **40 次 yank** 已按上表执行 ✓
-  （`nichlink-macro` 保留 ✓）。**两处踩坑如实记**：① 首轮 `cargo publish` 在第二条 crate 的 `verify`
+  index 已收录）；`tools/xirang-publish --verify-consumers` **绿** ✓（"consumer resolved and built:
+  xirang-kernel xirang-macro xirang-toolchain"）；旧 8 名 × 5 版本共 **40 次 yank** 已按上表执行 ✓
+  （`xirang-macro` 保留 ✓）。**两处踩坑如实记**：① 首轮 `cargo publish` 在第二条 crate 的 `verify`
   阶段被 **workspace-write 沙箱**拦成 `Permission denied (os error 13)`（`~/.cargo` 归属正常却写不进 ⇒
   是沙箱而不是权限），改用**一次性 `danger-full-access`** 后全过 ✓；② 清单里 `--verify-publish` 这个开关
   **不存在** ✗（真实开关只有 `--help/--publish/--yes/--allow-dirty/--check-table/--verify-consumers`）——
@@ -92,8 +92,8 @@
    十九个搬成 `toolchain/tests/runtime_*.rs` 集成测试（`--list` 条数 **3/6/1/1/8** 与文件里写着的 `#[test]`
    数逐一对上，逐个真跑全绿 ✓），采集探针留在 crate 内挂载并跑绿 ✓（**20/20**）。接回时暴露并修掉一个
    **潜伏生产缺陷**：`collector: debug` 分支调用 `$crate::call_evidence::submit!` 编译不过 ⇒ 应为
-   `$crate::submit!`（3 处 ✓），并给 `toolchain/src/lib.rs` 加 `extern crate self as nichlink_toolchain;`
-   （此前没有它，宏展开里的 `::nichlink_toolchain::…` 无法解析——**这正是本族被搁置的直接原因**）。
+   `$crate::submit!`（3 处 ✓），并给 `toolchain/src/lib.rs` 加 `extern crate self as xirang_toolchain;`
+   （此前没有它，宏展开里的 `::xirang_toolchain::…` 无法解析——**这正是本族被搁置的直接原因**）。
    下面保留当时的证据记录（它说明那个洞当初长什么样）：复核 t139 现算**总数 74 = 20 未接回 + 54 已接回**；
    两个构建面 `--list` 命中 **0**；给六个文件各插 `compile_error!` 后 `cargo check --all-targets` 两个面
    **仍 exit 0**；在 `75e4387` 的副本里这 20 个**当年是活的集成测试目标** ⇒ 降级发生在批 2（`13c0b13`）。
@@ -117,7 +117,7 @@
 4. 两条已记账的小残留：① `examples/**` 仍写旧名 `cut.full()` 两处（转发器保证可用 ✓）——**已闭合**
    （2026-09-29：两处改成 `is_full()`，即 `kernel/src/registry_core/release.rs` 的文档本来就要求新代码
    写的那一个名字（`NAM-35` 把 `full()` 保留为历史名 ✓）；只改内容、不动文件/路径，红线安全 ✓）；
-   ② 根 glob 让 `nichlink-toolchain` 的根部"glob 一切"，因此 README/AGENTS 已按"模块路径是官方地址、
+   ② 根 glob 让 `xirang-toolchain` 的根部"glob 一切"，因此 README/AGENTS 已按"模块路径是官方地址、
    只有精选清单承诺裸名"的口径写明策略 ✓（并在后来把两处撞名显式消歧，见 §⑦e）✓。
 5. **NAM-33 动词表门禁已落地**（`conventions/src/verb_table.rs` + 同级 `verb_table_tests.rs`）：
    判定落在**语法位置**（只解析 `fn` 声明，文档里"提及"不算）、`get_` 必须返回 `Option`、表中裸动词

@@ -31,7 +31,7 @@ use super::{graft_view::graft_cut_label, write_if_changed};
 
 /// The first line of the graph artifact, so a reader can name what it is holding.
 /// 图产物的第一行，好让读者说出自己手里是什么。
-pub(crate) const GRAPH_MARKER: &str = "nichlink-build-graph";
+pub(crate) const GRAPH_MARKER: &str = "xirang-build-graph";
 
 /// What the writer published: the counts and the digest a reader (and the readiness record) needs.
 /// 写入方发布了什么：计数与摘要——读者（以及就绪记录）需要的东西。
@@ -191,7 +191,7 @@ pub(crate) fn write_graph_manifest(
         edges.len()
     );
     output.push_str(&body);
-    write_if_changed(&out_dir.join(nichlink_kernel::lexicon::GRAPH_FILE), &output)?;
+    write_if_changed(&out_dir.join(xirang_kernel::lexicon::GRAPH_FILE), &output)?;
     Ok(GraphHeader {
         nodes: nodes.len(),
         edges: edges.len(),
@@ -217,7 +217,7 @@ pub(crate) fn write_generation(
     root: &Path,
     header: &GraphHeader,
 ) -> Result<(), String> {
-    let path = out_dir.join(nichlink_kernel::lexicon::GENERATION_FILE);
+    let path = out_dir.join(xirang_kernel::lexicon::GENERATION_FILE);
     let generation = std::fs::read_to_string(&path)
         .ok()
         .and_then(|text| {
@@ -239,13 +239,13 @@ pub(crate) fn write_generation(
         "# generation\t{marker}\ngeneration\t{generation}\ndigest\t{digest}\nfaces\t{faces}\n\
          files\t{source_files}\ngraph_nodes\t{nodes}\ngraph_edges\t{edges}\n\
          stamp\t{source_files}:{newest}\nfinished_at\t{clock}\n{key}{namespace}\n",
-        marker = nichlink_kernel::lexicon::GENERATION_MARKER,
+        marker = xirang_kernel::lexicon::GENERATION_MARKER,
         digest = header.digest,
         faces = header.faces,
         nodes = header.nodes,
         edges = header.edges,
         clock = clock(),
-        key = nichlink_kernel::lexicon::GENERATION_NAMESPACE_KEY,
+        key = xirang_kernel::lexicon::GENERATION_NAMESPACE_KEY,
         namespace = super::registry_identity::package_namespace(),
     );
     write_if_changed(&path, &output)

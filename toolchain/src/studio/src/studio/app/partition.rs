@@ -2,10 +2,10 @@
 //! 打开分区屏，并执行它被要求做的事（审计 `M7`，P3.6）。
 //!
 //! The screen is a viewer of the same reader the CLI uses, and its three actions call the **same**
-//! writers `nichlink crates --write/--release/--revert` call — so the two surfaces cannot write
+//! writers `xirang crates --write/--release/--revert` call — so the two surfaces cannot write
 //! different trees, and a defect fixed in one is fixed in both.
 //! 本屏是 CLI 所用同一个读取器的查看器，而它的三个动作调用**同一批**写入方，也就是
-//! `nichlink crates --write/--release/--revert` 调用的那些——因此两个执行面不可能写下不同的树，而在一边修好的
+//! `xirang crates --write/--release/--revert` 调用的那些——因此两个执行面不可能写下不同的树，而在一边修好的
 //! 缺陷在两边都好。
 
 use std::path::Path;
@@ -56,8 +56,7 @@ impl App {
             let after = crate::build_method::apply_declaration_edit(&root, edit)?;
             Ok(format!(
                 "removed `{name}` from {}:\n{diff}{}",
-                root.join(nichlink_kernel::lexicon::ADD_CRATES_FILE)
-                    .display(),
+                root.join(xirang_kernel::lexicon::ADD_CRATES_FILE).display(),
                 match after {
                     Some(view) => format!(
                         "the declaration now names {} crate(s)\n",
@@ -126,8 +125,7 @@ fn write_partition_action(action: PartitionAction) -> Result<String, String> {
         return Err(format!(
             "{} declares no crates: {} has no declaration, so there is nothing to write",
             root.display(),
-            root.join(nichlink_kernel::lexicon::ADD_CRATES_FILE)
-                .display()
+            root.join(xirang_kernel::lexicon::ADD_CRATES_FILE).display()
         ));
     };
     let directories: Vec<&Path> = plan

@@ -1,5 +1,5 @@
-//! `nichlink build`: validate the registration tree, then run `cargo build`.
-//! `nichlink build`：先校验注册树，再运行 `cargo build`。
+//! `xirang build`: validate the registration tree, then run `cargo build`.
+//! `xirang build`：先校验注册树，再运行 `cargo build`。
 //!
 //! Split out of `lib.rs`: the command is a thin process wrapper around
 //! `registration_check`, and the argv split (leading path versus passed-through
@@ -41,7 +41,7 @@ pub(crate) fn build(
     // 这一点、改为校验当前目录——于是那句横幅描述的是一个并不是正在被构建的项目（审计 `S11`）。
     let directory = build_target(directory, &cargo_args)?;
     let package = registration_check(&directory)?;
-    println!("nichlink build: registration ok ({package})");
+    println!("xirang build: registration ok ({package})");
     let manifest = std::fs::canonicalize(&directory)
         .map_err(|error| format!("cannot resolve {directory}: {error}"))?;
     let status = std::process::Command::new("cargo")

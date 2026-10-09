@@ -1,6 +1,6 @@
-//! 运行 `cargo run -p nichlink-example-control-button --example tree` 打印示例的
+//! 运行 `cargo run -p xirang-example-control-button --example tree` 打印示例的
 //! 注册树。
-//! Run `cargo run -p nichlink-example-control-button --example tree` to print the
+//! Run `cargo run -p xirang-example-control-button --example tree` to print the
 //! example's registration tree.
 
 fn main() {

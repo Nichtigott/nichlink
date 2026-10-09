@@ -653,71 +653,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nichlink-conventions"
-version = "0.2.2"
-dependencies = [
- "nichlink-kernel",
- "syn 2.0.119",
- "tempfile",
-]
-
-[[package]]
-name = "nichlink-example-control-button"
-version = "0.1.0"
-dependencies = [
- "nichlink-example-control-button-graft",
- "nichlink-toolchain",
-]
-
-[[package]]
-name = "nichlink-example-control-button-graft"
-version = "0.1.0"
-dependencies = [
- "nichlink-toolchain",
-]
-
-[[package]]
-name = "nichlink-kernel"
-version = "0.2.2"
-dependencies = [
- "proc-macro2",
- "sha2",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "nichlink-macro"
-version = "0.2.2"
-dependencies = [
- "nichlink-kernel",
- "proc-macro2",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "nichlink-toolchain"
-version = "0.2.2"
-dependencies = [
- "arc-swap",
- "crossterm",
- "ed25519-dalek",
- "inventory",
- "nichlink-kernel",
- "nichlink-macro",
- "notify",
- "petgraph",
- "proc-macro2",
- "rataflow",
- "ratatui",
- "serde_json",
- "syn 2.0.119",
- "tempfile",
- "tracing",
- "wasmi",
- "wat",
-]
-
-[[package]]
 name = "notify"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1585,6 +1520,71 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+[[package]]
+name = "xirang-conventions"
+version = "0.1.0"
+dependencies = [
+ "syn 2.0.119",
+ "tempfile",
+ "xirang-kernel",
+]
+
+[[package]]
+name = "xirang-example-control-button"
+version = "0.1.0"
+dependencies = [
+ "xirang-example-control-button-graft",
+ "xirang-toolchain",
+]
+
+[[package]]
+name = "xirang-example-control-button-graft"
+version = "0.1.0"
+dependencies = [
+ "xirang-toolchain",
+]
+
+[[package]]
+name = "xirang-kernel"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "sha2",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "xirang-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.119",
+ "xirang-kernel",
+]
+
+[[package]]
+name = "xirang-toolchain"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "crossterm",
+ "ed25519-dalek",
+ "inventory",
+ "notify",
+ "petgraph",
+ "proc-macro2",
+ "rataflow",
+ "ratatui",
+ "serde_json",
+ "syn 2.0.119",
+ "tempfile",
+ "tracing",
+ "wasmi",
+ "wat",
+ "xirang-kernel",
+ "xirang-macro",
+]
 
 [[package]]
 name = "zeroize"

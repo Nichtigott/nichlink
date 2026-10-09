@@ -98,11 +98,11 @@
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo test -p nichlink-conventions --offline` | **exit 0，131 passed / 0 failed** |
+| `cargo test -p xirang-conventions --offline` | **exit 0，131 passed / 0 failed** |
 | `cargo test --workspace --offline` | **exit 0，934 passed / 0 failed**（本机未出现 ENV-1 那条 studio 离线用例，故无需豁免） |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | **exit 0**，无输出 |
 | `cargo fmt --all -- --check` | **exit 0**，无 Diff |
-| `tools/nichlink-publish --check-table` | **exit 0** |
+| `tools/xirang-publish --check-table` | **exit 0** |
 
 副本基线（同一套装置）：131 passed / 0 failed，exit 0。本轮未遇并发红（t38 报告里的并发写者 `run_method/src/authoring/manifest/face/render.rs` 640 行已在 t43 拆走，现在 370 行）。
 

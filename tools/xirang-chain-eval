@@ -5,10 +5,10 @@ set -eu
 # 调用链评测：在 /tmp 副本里构造故障，问两个工具，机械判分。
 #
 # Nothing here is a test bank. The sites are chosen by a seed out of the tree's own
-# call graph (`nichlink-chain-eval-graph.py`), the answer key is the construction
+# call graph (`xirang-chain-eval-graph.py`), the answer key is the construction
 # itself, and the judging is string and edge arithmetic (`...-judge.py`). No symbol
 # name or file name of a scenario appears in this directory.
-# 这里没有题库。站点由种子从树自己的调用图里挑（`nichlink-chain-eval-graph.py`），参考答案就是构造
+# 这里没有题库。站点由种子从树自己的调用图里挑（`xirang-chain-eval-graph.py`），参考答案就是构造
 # 本身，判分是字符串与边的算术（`...-judge.py`）。本目录里不含任何场景的符号名或文件名。
 #
 # Why every copy comes from `git archive <pinned-rev>` and not from the worktree: the
@@ -27,33 +27,33 @@ set -eu
 # `git stash`/`checkout`/`restore`/`clean`，也不提交。每条 cargo 命令都带 `--offline`。
 #
 # Usage / 用法:
-#   tools/nichlink-chain-eval prepare    # pin revision, build instrument, pick sites
-#   tools/nichlink-chain-eval run [N]     # rounds: inject, ask both tools, judge
-#   tools/nichlink-chain-eval table      # markdown tables + verdicts.json
-#   tools/nichlink-chain-eval repair "1 4 7" 3   # red/green + repair rubric
-#   tools/nichlink-chain-eval scan       # sensitive-string scan of the new files
-#   tools/nichlink-chain-eval all        # prepare, run, table
+#   tools/xirang-chain-eval prepare    # pin revision, build instrument, pick sites
+#   tools/xirang-chain-eval run [N]     # rounds: inject, ask both tools, judge
+#   tools/xirang-chain-eval table      # markdown tables + verdicts.json
+#   tools/xirang-chain-eval repair "1 4 7" 3   # red/green + repair rubric
+#   tools/xirang-chain-eval scan       # sensitive-string scan of the new files
+#   tools/xirang-chain-eval all        # prepare, run, table
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$root"
 
-work=${NICHLINK_CHAIN_EVAL_WORK:-/tmp/nichlink-eval}
-plan_spec=${NICHLINK_CHAIN_EVAL_PLAN:-1:impl,1:chain,1:both,2:impl,2:chain,2:both,3:impl,3:chain,3:both,4:impl,4:chain,4:both,5:impl,5:chain}
-seed=${NICHLINK_CHAIN_EVAL_SEED:-20260929}
+work=${XIRANG_CHAIN_EVAL_WORK:-/tmp/xirang-eval}
+plan_spec=${XIRANG_CHAIN_EVAL_PLAN:-1:impl,1:chain,1:both,2:impl,2:chain,2:both,3:impl,3:chain,3:both,4:impl,4:chain,4:both,5:impl,5:chain}
+seed=${XIRANG_CHAIN_EVAL_SEED:-20260929}
 # The evaluated revision. It defaults to HEAD, and it is pinned into `$work/pinned-rev`
 # so every later copy comes from the same tree; a revision that does not build stops
 # `prepare` here rather than producing 14 rounds of nothing.
 # 被评测的修订。默认取 HEAD，并固定写入 `$work/pinned-rev`，使之后每份副本都来自同一棵树；构建不过的
 # 修订会在这里停住 prepare，而不是产出 14 轮什么都没有的结果。
-rev=${NICHLINK_CHAIN_EVAL_REV:-}
+rev=${XIRANG_CHAIN_EVAL_REV:-}
 export PATH="$HOME/.local/bin:$PATH"
 
-graph="$here/nichlink-chain-eval-graph.py"
-mutate="$here/nichlink-chain-eval-mutate.py"
-ask="$here/nichlink-chain-eval-ask.py"
-judge="$here/nichlink-chain-eval-judge.py"
-repair="$here/nichlink-chain-eval-repair.py"
+graph="$here/xirang-chain-eval-graph.py"
+mutate="$here/xirang-chain-eval-mutate.py"
+ask="$here/xirang-chain-eval-ask.py"
+judge="$here/xirang-chain-eval-judge.py"
+repair="$here/xirang-chain-eval-repair.py"
 
 log() { printf '%s\n' "$*" | tee -a "$work/run.log"; }
 
@@ -84,7 +84,7 @@ pinned() { cat "$work/pinned-rev"; }
 # 就是这样，后来工作树多了一个未跟踪模块，构建便在一个任何固定修订里都不存在的文件上失败。
 build_in_base() {
   ( cd "$work/base" && CARGO_TARGET_DIR="$work/base/target" \
-    cargo build -p nichlink-toolchain --offline --features mcp --bin nichlink-mcp )
+    cargo build -p xirang-toolchain --offline --features mcp --bin xirang-mcp )
 }
 
 plan_members() {
@@ -113,11 +113,11 @@ prepare() {
   unpack "$work/base"
   log "base copy $work/base"
   if ! run build_in_base; then
-    log "pinned revision $rev does not build; pin a buildable one with NICHLINK_CHAIN_EVAL_REV"
+    log "pinned revision $rev does not build; pin a buildable one with XIRANG_CHAIN_EVAL_REV"
     exit 1
   fi
-  test -x "$work/base/target/debug/nichlink-mcp"
-  log "instrument $work/base/target/debug/nichlink-mcp"
+  test -x "$work/base/target/debug/xirang-mcp"
+  log "instrument $work/base/target/debug/xirang-mcp"
   run codegraph init "$work/base"
   run python3 "$graph" --root "$work/base" --out "$work/plan.json" \
     --seed "$seed" --plan "$plan_spec"
@@ -159,7 +159,7 @@ run_rounds() {
     ( cd "$copy" && codegraph init . ) >"$directory/index.log" 2>&1
     run python3 "$ask" --tool mcp --truth "$directory/truth.json" --copy "$copy" \
       --out-dir "$directory" --members "$members" \
-      --binary "$work/base/target/debug/nichlink-mcp"
+      --binary "$work/base/target/debug/xirang-mcp"
     run python3 "$ask" --tool codegraph --truth "$directory/truth.json" --copy "$copy" \
       --out-dir "$directory" --members "$members"
     run python3 "$judge" --mode one --truth "$directory/truth.json" --out-dir "$directory" \
@@ -281,7 +281,7 @@ scan() {
   # Sensitive-string scan over the files this evaluation adds. The command and its
   # result both belong in the record: publishing the evidence is the point.
   # 本次评测新增文件上的敏感串扫描。命令与结果都该进记录：公开证据才是要点。
-  files="tools/nichlink-chain-eval tools/nichlink-chain-eval-graph.py tools/nichlink-chain-eval-mutate.py tools/nichlink-chain-eval-ask.py tools/nichlink-chain-eval-judge.py tools/nichlink-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md"
+  files="tools/xirang-chain-eval tools/xirang-chain-eval-graph.py tools/xirang-chain-eval-mutate.py tools/xirang-chain-eval-ask.py tools/xirang-chain-eval-judge.py tools/xirang-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md"
   pattern='(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}|BEGIN [A-Z ]*PRIVATE KEY|password[[:space:]]*=|secret[[:space:]]*=|token[[:space:]]*=)'
   printf '$ grep -nE %s %s\n' "$pattern" "$files"
   set +e

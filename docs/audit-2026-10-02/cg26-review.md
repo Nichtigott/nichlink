@@ -118,12 +118,12 @@ r1/h1/g3 的 git 单提交    "r1-mcp baseline" / "h1-mcp baseline" / "g3-mcp ba
 ## 2. 逐题对错（15 题，冻结；行号我都回源码读过）
 
 判据：四道 hardbug = `target/hardbug-runs/t21/trees/<类>/.audit/truth.json`（字段 `root_cause`/`dead_arm`/`lapsed`/`must_refuse`/`fix.forbidden`）；
-其余 = `tools/nichlink-mcp-eval scenario-plan` 的 `preset answer`（第九轮那臂用的同一份预设）。
+其余 = `tools/xirang-mcp-eval scenario-plan` 的 `preset answer`（第九轮那臂用的同一份预设）。
 
 | 题 | cg26 的落点 | 与真值/预设比 | 判定 | 我核过的行号证据（源码原文） |
 | --- | --- | --- | --- | --- |
 | `h1-supply-chain` | `toggle.rs:16` `to_world`（`root cause`+`mechanism` 单字段齐全）；8 个兄弟 `to_local` | truth：file `src/control/object/toggle/toggle.rs` line **16**，symbol `offset`，mechanism `to_world`/`world` | **命中** ✓ | toggle.rs:3 `use …to_world`、`:16 to_world(x)`；dial/badge/button/gauge/panel/slider/spinner/timeline 各 `:16 to_local`（8 个）；`offsets.rs:5 EXPECTED_TOTAL=136`、`:9-17` 8 项相加；7×17+41=**160**、truth 的 red 原文 `left: 160` ✓ |
-| `h2-claim-unkept` | 两处都报：spinner.rs:19-23 缺 `handle_contracts`；台账第 2 行（panel）指纹失效 | truth：`root_cause` spinner.rs:**23**、mechanism `handle_contracts`/`handle_traits`；`lapsed`=panel.rs；`declaration.lacks`=`handle_contracts` | **命中**（诊断）／**fix 违禁** ✗（§4.3） | spinner.rs:19-23 只有 kind/exports/parent；button.rs:23 有 `handle_contracts`；`.nichlink/adopted/entries` 两行指纹**逐字相同** `edc72845cc31…`，而 `sha256sum` 得 button.rs `06c45576d883e961…`、panel.rs `d886e9b0c1281eac…`（与 cg26 报的一致） |
+| `h2-claim-unkept` | 两处都报：spinner.rs:19-23 缺 `handle_contracts`；台账第 2 行（panel）指纹失效 | truth：`root_cause` spinner.rs:**23**、mechanism `handle_contracts`/`handle_traits`；`lapsed`=panel.rs；`declaration.lacks`=`handle_contracts` | **命中**（诊断）／**fix 违禁** ✗（§4.3） | spinner.rs:19-23 只有 kind/exports/parent；button.rs:23 有 `handle_contracts`；`.xirang/adopted/entries` 两行指纹**逐字相同** `edc72845cc31…`，而 `sha256sum` 得 button.rs `06c45576d883e961…`、panel.rs `d886e9b0c1281eac…`（与 cg26 报的一致） |
 | `h3-cross-file-chain` | `host/src/lib.rs:48-66` 计划 8 对 `cut/graft`，独缺 dial；补在 `:65` 之后 | truth：`root_cause` `src/lib.rs`:**48**、symbol `static_graft_plan`、mechanism `dial`/`cut`；`pruned` face `root/control/dial` | **命中** ✓（一处措辞不准，§4.5） | lib.rs:48 `static_graft_plan!(`、:50-65 八对、无 dial；`shipped.rs:8-23` 断言 9 名（含 dial）；truth red 原文打印 9 行无 dial ✓ |
 | `h4-one-file-many-algorithms` | `entry.rs:30-32` `zero_arm` 恒 `Post`；`:44` `Refuse` 按构造不可达 | truth：`root_cause` `src/model/entry.rs`:**31**、symbol `zero_arm`、mechanism `ZeroArm::Post`；`dead_arm` line **44** variant `Refuse`；contract line **37** | **命中** ✓ | entry.rs:31 `ZeroArm::Post`；:44 `ZeroArm::Refuse => false`；契约 :36-37；tests 只有 2 条（5±receipt）。**我独立复跑**（`/tmp` 副本）：`warning: variant 'Refuse' is never constructed --> src/model/entry.rs:9:5`、探针输出 `zero+receipt=true / zero-no-receipt=false / five+receipt=true / five-no-receipt=false / signed(-5)=5 / normalized(" A ")="a"` —— 与 cg26 逐字相同 ✓ |
 | `s1` | 唯一调用者 `crates/report/tests/report.rs:11 fn store()`，`:13/:14/:15` 三次 `post`；定义 `core/src/store.rs:21` | 预设：至少点名 `report.rs` 那三处（跨 crate、全限定/构造式） | **命中** ✓ | report.rs:5 `use ledger_core::store::Store;`、:11 `fn store()`、:13-15 `store.post(…expect…)`；store.rs:21 `pub fn post` ✓ |
@@ -154,7 +154,7 @@ r1/h1/g3 的 git 单提交    "r1-mcp baseline" / "h1-mcp baseline" / "g3-mcp ba
 
 我的脚本（`zstd -dc` 解多帧 → 逐行 JSON → `assistant/message` 计步、`usage.{inputTokens,cacheReadTokens,outputTokens}`、
 `content[].type=="reasoning"` 计推理字符）跑第九轮那臂的会话
-`aa54ec58-44bf-4f88-a2ed-d0dd11614b93`（会话头标签 `agent-teams:nichlink-round9:arm-mcp` ✓），得到：
+`aa54ec58-44bf-4f88-a2ed-d0dd11614b93`（会话头标签 `agent-teams:xirang-round9:arm-mcp` ✓），得到：
 
 ```
 steps=182  reason=278,127  tin=208,653  tcache=36,192,640  tout=152,225   步均上下文=198,861  结束上下文=342,656
@@ -323,7 +323,7 @@ python3 - <<'PY'  # 见 §3.4 的三个数
 python3 /tmp/cg26v/axes.py aa54ec58-44bf-4f88-a2ed-d0dd11614b93 225f5295-20fb-4d73-8bb7-375b9ee71a5b
 # 真值对照
 cat target/hardbug-runs/t21/trees/<类>/.audit/truth.json
-python3 tools/nichlink-mcp-eval scenario-plan
+python3 tools/xirang-mcp-eval scenario-plan
 # h4 独立复跑（/tmp 副本，不碰题树）
 cp -r target/round9/trees/h4-one-file-many-algorithms /tmp/cg26v/h4/tree && cd /tmp/cg26v/h4/tree && cargo test --offline
 ```

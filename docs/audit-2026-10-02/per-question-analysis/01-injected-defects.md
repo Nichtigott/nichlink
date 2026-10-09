@@ -50,7 +50,7 @@
 **引导含义**（依据都指到原文）：
 1. **`locate` 的可见名额要按文件配额，并带出失败测试的调用面。** 依据：①1 的 5 行全是 `tests/ledger.rs`、`17 of 22 … withheld`，而第 58 行那条失败测试的正文里就点名了 `filter.matches(entry)`（同一份 `tests/ledger.rs`，见 brief/cg/r2.md ①6 的逐字转储 `52 .filter(|entry| filter.matches(entry))`）。本桥的 census 已经在做同样口径的文本走查（`test-reachable: … a static walk from the test files along the same name-in-call-list rule the orphan view uses`，①5）：把它接到 `locate` 上——**当"整句原样出现"的文件是测试文件时，把该测试体内点名的 production 函数单列成行**（r1 就会多出 `src/query/filter.rs:24 matches`）。
 2. **`why` 的 `contract` 块要带上定义体引用到的字段/类型 doc。** 依据：答案 ② 的契约在 `:13-14`，而 `why --at src/query/filter.rs:30` 只打了 `:22-23`（①3）。实现面：`why` 已经知道定义的行区间（`the definition matches (lines 24-39)`）与它的体，把体内引用的 `self.min_amount` 一类字段的 doc 行并进 `contract` 块即可，不必新增查询。
-3. **`locate` 的 `next` 行要补 `search {literal}` 与整文件读。** 依据：`next read {path, line} for the body (the reply prints the contract lines too), callgraph {function} for who calls it`（①1）把下一步全锁在"你已经知道 path 上"；而 `read` 支持 `whole: true`、`nichlink.search` 本来就在分派表里（tools.rs:197-211、tools.rs:693）。这两句进 `next`，agent 就不必靠"自己想起来"。
+3. **`locate` 的 `next` 行要补 `search {literal}` 与整文件读。** 依据：`next read {path, line} for the body (the reply prints the contract lines too), callgraph {function} for who calls it`（①1）把下一步全锁在"你已经知道 path 上"；而 `read` 支持 `whole: true`、`xirang.search` 本来就在分派表里（tools.rs:197-211、tools.rs:693）。这两句进 `next`，agent 就不必靠"自己想起来"。
 
 ---
 
@@ -116,7 +116,7 @@
 
 **引导含义**：
 1. **`locate` 的语料要把函数体（至少字符串字面量）算进去。** 依据：①1 的两行候选全错，而病灶正躺在 `bucket_of` 的函数体 `0 => "debit"` / `1 => "small"` 里（cg/r3.md ①4 第 45-48 行）。它已经在读整份文件文本（locate.rs:112 `let whole_phrase = source.contains(phrase.as_str());`），把同一次扫描的"体词频"用于打分是同一份数据、不新增扫描成本。
-2. **更便宜的一半：`locate` 的 `next` 行必须写 `search {literal}`。** 依据：`locate` 的模块注释自己说了这条出路（locate.rs:6-9：`它只能猜一个符号名去问 callgraph，或猜一句话去问 search {literal}`），但**回给 agent 的 `next` 行**只有 `read`/`callgraph`（①1，locate.rs:214）。而 `nichlink.search` 就在分派表里（tools.rs:693）。改成 `next … , search {literal} for a phrase this ranking did not read (it scores names and docs, not bodies)`，r3 型症状就有明文出口。
+2. **更便宜的一半：`locate` 的 `next` 行必须写 `search {literal}`。** 依据：`locate` 的模块注释自己说了这条出路（locate.rs:6-9：`它只能猜一个符号名去问 callgraph，或猜一句话去问 search {literal}`），但**回给 agent 的 `next` 行**只有 `read`/`callgraph`（①1，locate.rs:214）。而 `xirang.search` 就在分派表里（tools.rs:693）。改成 `next … , search {literal} for a phrase this ranking did not read (it scores names and docs, not bodies)`，r3 型症状就有明文出口。
 3. **`why` 应把它已经知道的定义体一并打印。** 依据：`why` 的回复第一行就写着 `the definition contains (lines 19-27)`（①2）——行区间已知，却只打 doc 与 callers，不打体；本题要看到 `amount <= high` 还得再发一次 `callgraph`（而那次是改后）。把体（或 `--body`）并进 `why`，r1/r3/r4 三题各能省 1 次调用，且"契约 vs 实现"的对照会在同一条回复里。
 
 ---

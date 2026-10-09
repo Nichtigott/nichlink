@@ -87,5 +87,5 @@ fn host_macro_call(source: &str) -> bool {
     // literals are still masked by the kernel scanner itself.
     // 只改写紧跟在 `host` 之后的感叹号；注释与字符串字面量仍由内核扫描器自己屏蔽。
     let probe = source.replace("host!", "host ");
-    nichlink_kernel::source::body_calls(&probe, "host")
+    xirang_kernel::source::body_calls(&probe, "host")
 }

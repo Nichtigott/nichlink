@@ -1,5 +1,5 @@
-//! Tests for the two bounds `nichlink.callgraph` needs: definitions and callers.
-//! `nichlink.callgraph` 需要的两道上限的测试：定义数与调用者数。
+//! Tests for the two bounds `xirang.callgraph` needs: definitions and callers.
+//! `xirang.callgraph` 需要的两道上限的测试：定义数与调用者数。
 //!
 //! The measured failure these exist against is the one `callgraph.rs`'s module doc
 //! records: a common name (`new`) matched definitions throughout a real-tree corpus,
@@ -42,13 +42,13 @@ fn package(label: &str) -> PathBuf {
 fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
     let listed = super::tools();
     for (name, key) in [
-        ("nichlink.explain", "node"),
-        ("nichlink.explain", "overlay"),
-        ("nichlink.callgraph", "limit"),
-        ("nichlink.diff", "limit"),
-        ("nichlink.trace", "query"),
-        ("nichlink.impact", "node"),
-        ("nichlink.grafts", "limit"),
+        ("xirang.explain", "node"),
+        ("xirang.explain", "overlay"),
+        ("xirang.callgraph", "limit"),
+        ("xirang.diff", "limit"),
+        ("xirang.trace", "query"),
+        ("xirang.impact", "node"),
+        ("xirang.grafts", "limit"),
     ] {
         let tool = listed
             .iter()
@@ -61,16 +61,16 @@ fn the_evidence_tools_are_advertised_with_their_narrowing_arguments() {
     }
 }
 
-/// `nichlink.impact` is wired to its implementation too, and asking it for a radius
+/// `xirang.impact` is wired to its implementation too, and asking it for a radius
 /// with no face named is an error response rather than a silent empty one.
-/// `nichlink.impact` 同样接到了实现上，而没点名任何面就要半径会得到错误响应，而不是一份静默的空答案。
+/// `xirang.impact` 同样接到了实现上，而没点名任何面就要半径会得到错误响应，而不是一份静默的空答案。
 #[test]
 fn the_impact_tool_refuses_a_call_without_a_node() {
     let root = package("impact-dispatch");
     let reply = super::tool_call(
         &root,
         json!(1),
-        &json!({"name": "nichlink.impact", "arguments": {}}),
+        &json!({"name": "xirang.impact", "arguments": {}}),
     );
     let text = reply["result"]["content"][0]["text"]
         .as_str()
@@ -82,10 +82,10 @@ fn the_impact_tool_refuses_a_call_without_a_node() {
 
 /// The dispatch table and the catalog list the same tools in the same order, so the
 /// order is a machine-checked fact rather than an eyeballed one. The failure this
-/// prevents: `nichlink.apply` sat sixth in the catalog and last in the dispatch, and
+/// prevents: `xirang.apply` sat sixth in the catalog and last in the dispatch, and
 /// nothing noticed (audit `BR-12`).
 /// 分派表与目录以同样的顺序列出同样的工具，因此这个顺序是被机器检查的事实，而不是靠眼睛对的。
-/// 它防止的失败：`nichlink.apply` 在目录里排第 6、在分派里排最后，而没有任何东西发现（审计 `BR-12`）。
+/// 它防止的失败：`xirang.apply` 在目录里排第 6、在分派里排最后，而没有任何东西发现（审计 `BR-12`）。
 #[test]
 fn the_dispatch_table_follows_the_catalog() {
     let catalog = super::tools();
@@ -131,12 +131,12 @@ fn every_listed_tool_is_dispatched() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// The description of `nichlink.usages` names every field the implementation
+/// The description of `xirang.usages` names every field the implementation
 /// prints. It stopped at `runtime checks` while `usages.rs` also printed
 /// `module`, `stable_name`, `getting_from_other_registry`, `flow_provider`, and
 /// `needs_registry` — so an agent asking "what can I set" got a shorter answer
 /// than the tool's own contract (audit `BR-7`).
-/// `nichlink.usages` 的描述点名实现打印的每一个字段。它停在 `runtime checks`，而 `usages.rs`
+/// `xirang.usages` 的描述点名实现打印的每一个字段。它停在 `runtime checks`，而 `usages.rs`
 /// 还打印 `module`、`stable_name`、`getting_from_other_registry`、`flow_provider` 与
 /// `needs_registry`——于是一个问"我能设什么"的代理拿到的答案比这个工具自己的契约更短
 /// （审计 `BR-7`）。
@@ -145,11 +145,11 @@ fn the_usages_description_names_every_field_it_prints() {
     let listed = super::tools();
     let usages = listed
         .iter()
-        .find(|tool| tool["name"] == "nichlink.usages")
-        .expect("nichlink.usages is advertised");
+        .find(|tool| tool["name"] == "xirang.usages")
+        .expect("xirang.usages is advertised");
     let description = usages["description"]
         .as_str()
-        .unwrap_or_else(|| panic!("nichlink.usages has no description: {usages}"));
+        .unwrap_or_else(|| panic!("xirang.usages has no description: {usages}"));
     for field in [
         "module",
         "preset",
@@ -176,13 +176,13 @@ fn the_usages_description_names_every_field_it_prints() {
     ] {
         assert!(
             description.contains(field),
-            "`{field}` is read back by nichlink.usages and must be named in its description: {description}"
+            "`{field}` is read back by xirang.usages and must be named in its description: {description}"
         );
     }
 }
 
-/// The description of `nichlink.verify` names **both** verdicts it prints.
-/// `nichlink.verify` 的描述点名它打印的**两个**判断。
+/// The description of `xirang.verify` names **both** verdicts it prints.
+/// `xirang.verify` 的描述点名它打印的**两个**判断。
 ///
 /// The second line (`connector verdict: ok|rejected`) was added because a tree can pass
 /// the static verdict and be refused by the authoring connector (audit `F1`), and the
@@ -196,11 +196,11 @@ fn the_verify_description_names_the_connector_verdict() {
     let listed = super::tools();
     let verify = listed
         .iter()
-        .find(|tool| tool["name"] == "nichlink.verify")
-        .expect("nichlink.verify is advertised");
+        .find(|tool| tool["name"] == "xirang.verify")
+        .expect("xirang.verify is advertised");
     let description = verify["description"]
         .as_str()
-        .unwrap_or_else(|| panic!("nichlink.verify has no description: {verify}"));
+        .unwrap_or_else(|| panic!("xirang.verify has no description: {verify}"));
     for expected in [
         "connector verdict: ok",
         "connector verdict: rejected",
@@ -214,8 +214,8 @@ fn the_verify_description_names_the_connector_verdict() {
     }
 }
 
-/// `nichlink.mir` refuses a snapshot it cannot print whole, and its description says so.
-/// `nichlink.mir` 拒绝它无法整体打印的快照，而它的描述把这一点说出来。
+/// `xirang.mir` refuses a snapshot it cannot print whole, and its description says so.
+/// `xirang.mir` 拒绝它无法整体打印的快照，而它的描述把这一点说出来。
 ///
 /// The writer's promise is "what it prints reads back here" (audit `X2`), so the one case
 /// where it prints nothing has to be declared rather than discovered by a parse error.
@@ -226,11 +226,11 @@ fn the_mir_description_declares_the_refusal_above_the_reply_cap() {
     let listed = super::tools();
     let mir = listed
         .iter()
-        .find(|tool| tool["name"] == "nichlink.mir")
-        .expect("nichlink.mir is advertised");
+        .find(|tool| tool["name"] == "xirang.mir")
+        .expect("xirang.mir is advertised");
     let description = mir["description"]
         .as_str()
-        .unwrap_or_else(|| panic!("nichlink.mir has no description: {mir}"));
+        .unwrap_or_else(|| panic!("xirang.mir has no description: {mir}"));
     assert!(
         description.contains("reads back here"),
         "the promise is what makes the refusal necessary: {description}"
@@ -282,7 +282,7 @@ fn rejected_package(label: &str) -> PathBuf {
 #[test]
 fn a_connector_rejection_is_the_same_answer_from_usages_and_converge() {
     let root = rejected_package("a2");
-    for tool in ["nichlink.usages", "nichlink.converge"] {
+    for tool in ["xirang.usages", "xirang.converge"] {
         let reply = super::tool_call(
             &root,
             json!(1),
@@ -313,10 +313,10 @@ fn a_connector_rejection_is_the_same_answer_from_usages_and_converge() {
 fn the_evidence_tools_are_dispatched_to_their_implementations() {
     let root = package("dispatch");
     for (name, expected) in [
-        ("nichlink.explain", "scope unknown"),
-        ("nichlink.diff", "no build evidence"),
-        ("nichlink.trace", "trace absent"),
-        ("nichlink.grafts", "no external graft plans"),
+        ("xirang.explain", "scope unknown"),
+        ("xirang.diff", "no build evidence"),
+        ("xirang.trace", "trace absent"),
+        ("xirang.grafts", "no external graft plans"),
     ] {
         let reply = super::tool_call(&root, json!(1), &json!({"name": name, "arguments": {}}));
         let text = reply["result"]["content"][0]["text"]
@@ -328,9 +328,9 @@ fn the_evidence_tools_are_dispatched_to_their_implementations() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// `tools/list` is MCP-shaped: `nichlink.search` is there, and every entry declares
+/// `tools/list` is MCP-shaped: `xirang.search` is there, and every entry declares
 /// an object input schema.
-/// `tools/list` 是 MCP 形状的：`nichlink.search` 在其中，且每一条都声明 object 输入 schema。
+/// `tools/list` 是 MCP 形状的：`xirang.search` 在其中，且每一条都声明 object 输入 schema。
 ///
 /// Moved here from an inline `mod tests` in `tools.rs`, so every source file has at
 /// most one `<name>_tests.rs` and `tools.rs` holds only the catalog and the dispatch
@@ -340,7 +340,7 @@ fn the_evidence_tools_are_dispatched_to_their_implementations() {
 #[test]
 fn tools_list_is_mcp_shaped() {
     let listed = super::tools();
-    assert!(listed.iter().any(|tool| tool["name"] == "nichlink.search"));
+    assert!(listed.iter().any(|tool| tool["name"] == "xirang.search"));
     assert!(
         listed
             .iter()
@@ -363,11 +363,11 @@ fn the_two_studio_writes_are_advertised_with_their_flags() {
     let listed = super::tools();
     for (name, keys) in [
         (
-            "nichlink.new_project",
+            "xirang.new_project",
             &["directory", "package", "kind", "apply", "confirm", "root"][..],
         ),
         (
-            "nichlink.plugin",
+            "xirang.plugin",
             &[
                 "source",
                 "framework",
@@ -415,8 +415,8 @@ fn the_two_studio_writes_are_advertised_with_their_flags() {
 fn the_new_writes_name_the_executor_they_reuse() {
     let listed = super::tools();
     for (name, expected) in [
-        ("nichlink.new_project", "create_project"),
-        ("nichlink.plugin", "contains_record"),
+        ("xirang.new_project", "create_project"),
+        ("xirang.plugin", "contains_record"),
     ] {
         let tool = listed
             .iter()
@@ -442,7 +442,7 @@ pub(crate) fn scratch_package(label: &str) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-tools-{label}-{}-{sequence}",
+        "xirang-mcp-tools-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -476,7 +476,7 @@ pub(crate) fn scratch_package(label: &str) -> std::path::PathBuf {
 /// 按"行首是 `next`"去 grep 的读者一条也看不到。
 #[test]
 fn a_read_answer_names_the_next_call_exactly_once() {
-    let plain = super::with_next_hint("nichlink.callgraph", "callers (0): -\n".to_owned());
+    let plain = super::with_next_hint("xirang.callgraph", "callers (0): -\n".to_owned());
     assert_eq!(plain.matches("\nnext").count(), 1, "{plain}");
     assert!(plain.ends_with("what depends on it\n"), "{plain}");
 
@@ -484,24 +484,24 @@ fn a_read_answer_names_the_next_call_exactly_once() {
     // 已经点名过的答案（search / check / adopted）不动。
     let already = "no matches in /root\nnext   pass `literal` for text\n".to_owned();
     assert_eq!(
-        super::with_next_hint("nichlink.callgraph", already.clone()),
+        super::with_next_hint("xirang.callgraph", already.clone()),
         already
     );
 
     // A tool with no hint is left alone.
     // 没有提示的工具不动。
     assert_eq!(
-        super::with_next_hint("nichlink.apply", "ok\n".to_owned()),
+        super::with_next_hint("xirang.apply", "ok\n".to_owned()),
         "ok\n"
     );
 
     for name in [
-        "nichlink.status",
-        "nichlink.registry",
-        "nichlink.explain",
-        "nichlink.callgraph",
-        "nichlink.inspect",
-        "nichlink.affected",
+        "xirang.status",
+        "xirang.registry",
+        "xirang.explain",
+        "xirang.callgraph",
+        "xirang.inspect",
+        "xirang.affected",
     ] {
         assert!(super::next_hint(name).is_some(), "{name} needs a hint");
     }
@@ -520,19 +520,18 @@ fn a_read_answer_names_the_next_call_exactly_once() {
 #[test]
 fn every_answer_carries_a_quotable_evidence_line() {
     let root = scratch_package("evidence");
-    let answer = super::run_tool(&root, "nichlink.status", &json!({})).expect("status answers");
+    let answer = super::run_tool(&root, "xirang.status", &json!({})).expect("status answers");
     let last = answer.lines().last().expect("an answer has lines");
     assert!(
-        last.starts_with("evidence nichlink.status "),
+        last.starts_with("evidence xirang.status "),
         "the last line names this call: {answer}"
     );
     assert_eq!(
-        last, "evidence nichlink.status {} → exit 0",
+        last, "evidence xirang.status {} → exit 0",
         "a call with no arguments renders an empty object, and says it answered"
     );
-    let with_arguments =
-        super::run_tool(&root, "nichlink.search", &json!({"query": "nothing-here"}))
-            .expect("search answers, even with no matches");
+    let with_arguments = super::run_tool(&root, "xirang.search", &json!({"query": "nothing-here"}))
+        .expect("search answers, even with no matches");
     let last = with_arguments.lines().last().expect("an answer has lines");
     assert!(
         last.contains("{\"query\":\"nothing-here\"}") && last.ends_with("→ exit 0"),
@@ -542,7 +541,7 @@ fn every_answer_carries_a_quotable_evidence_line() {
     // a different call — and a refusal has no line at all, because its own text is the evidence.
     // 这一行由派发实际使用的那个 `arguments` 值渲染，因此它不可能描述另一次调用——而被拒的调用完全没有
     // 这一行，因为它的文案本身就是证据。
-    let refused = super::run_tool(&root, "nichlink.read", &json!({"path": 7}));
+    let refused = super::run_tool(&root, "xirang.read", &json!({"path": 7}));
     assert!(refused.is_err(), "a bad shape is refused");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -559,16 +558,15 @@ fn every_answer_carries_a_quotable_evidence_line() {
 /// 第一个形状只活在散文里。
 #[test]
 fn a_bare_tree_is_told_how_to_start_and_a_faceful_one_is_not() {
-    let bare = std::env::temp_dir().join(format!("nichlink-mcp-bare-{}", std::process::id()));
+    let bare = std::env::temp_dir().join(format!("xirang-mcp-bare-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&bare);
     std::fs::create_dir_all(&bare).expect("scratch dir");
-    let status = super::run_tool(&bare, "nichlink.status", &json!({})).expect("status answers");
+    let status = super::run_tool(&bare, "xirang.status", &json!({})).expect("status answers");
     assert!(
         status.contains("next   `new_project {directory, kind, package, apply: true}`"),
         "a tree with no manifest is told how to start: {status}"
     );
-    let registry =
-        super::run_tool(&bare, "nichlink.registry", &json!({})).expect("registry answers");
+    let registry = super::run_tool(&bare, "xirang.registry", &json!({})).expect("registry answers");
     assert!(
         registry.contains("no registration tree here yet") && registry.contains("new_project"),
         "and so is the other opening call: {registry}"
@@ -582,7 +580,7 @@ fn a_bare_tree_is_told_how_to_start_and_a_faceful_one_is_not() {
     // A faceful fixture keeps the ordinary hints: the entry point is for the stages that need one.
     // 有面的夹具保留普通提示：入口只给需要它的那些阶段。
     let root = scratch_package("stage-faceful");
-    let status = super::run_tool(&root, "nichlink.status", &json!({})).expect("status answers");
+    let status = super::run_tool(&root, "xirang.status", &json!({})).expect("status answers");
     assert!(!status.contains("new_project"), "{status}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -615,16 +613,16 @@ fn the_advertised_required_keys_match_what_the_call_path_insists_on() {
             .unwrap_or_default()
     };
     assert!(
-        !required("nichlink.conformance").contains(&"anchor"),
+        !required("xirang.conformance").contains(&"anchor"),
         "conformance works without `anchor` (it lists every anchor), so the schema must not demand it"
     );
     assert!(
-        !required("nichlink.check").contains(&"face"),
+        !required("xirang.check").contains(&"face"),
         "the call path defaults `face` to `default`, so the schema must not demand it: a schema that \
          still stars it teaches every reader a shape the tool accepts without it"
     );
     assert!(
-        required("nichlink.apply").contains(&"action"),
+        required("xirang.apply").contains(&"action"),
         "and a key the call path really insists on stays required: `apply` needs `action` — without \
          this half, emptying every `required` would pass"
     );
@@ -679,10 +677,10 @@ fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
     assert_eq!(
         writers,
         vec![
-            "nichlink.apply".to_owned(),
-            "nichlink.crates".to_owned(),
-            "nichlink.new_project".to_owned(),
-            "nichlink.plugin".to_owned(),
+            "xirang.apply".to_owned(),
+            "xirang.crates".to_owned(),
+            "xirang.new_project".to_owned(),
+            "xirang.plugin".to_owned(),
         ],
         "the tools that are not read-only are the ones that write"
     );
@@ -692,7 +690,7 @@ fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
     for name in &writers {
         assert!(
             crate::mcp::ownership::subject(name) == crate::mcp::ownership::Subject::Write
-                || name == "nichlink.new_project",
+                || name == "xirang.new_project",
             "`{name}` is a writer the write path knows"
         );
     }
@@ -708,7 +706,7 @@ fn every_tool_discloses_its_effect_and_the_writers_are_the_write_paths_own() {
         .collect();
     assert_eq!(
         destructive,
-        vec!["nichlink.apply", "nichlink.crates"],
+        vec!["xirang.apply", "xirang.crates"],
         "{destructive:?}"
     );
     assert!(readers.len() > writers.len(), "most tools only read");
@@ -802,7 +800,7 @@ fn every_key_a_handler_reads_is_advertised_and_every_entry_is_accounted_for() {
     // 而承载信号的 enum 不得比处理函数接受的信号更窄。
     let consistency = entries
         .iter()
-        .find(|entry| entry["name"] == "nichlink.consistency")
+        .find(|entry| entry["name"] == "xirang.consistency")
         .expect("consistency");
     let signals = consistency["inputSchema"]["properties"]["by"]["enum"]
         .as_array()
@@ -868,30 +866,27 @@ fn walk_properties(value: &serde_json::Value, into: &mut std::collections::BTree
 /// 它住在测试文件里而不是目录旁边，因为只有钉子读的表就是测试代码，而它原来所在的源码文件有自己的预算
 /// （审计 `M7`）。
 const READ_KEYS: &[(&str, &[&str])] = &[
-    (
-        "nichlink.search",
-        &["names", "query", "literal", "converge"],
-    ),
-    ("nichlink.digest", &["file"]),
-    ("nichlink.conformance", &["anchor"]),
+    ("xirang.search", &["names", "query", "literal", "converge"]),
+    ("xirang.digest", &["file"]),
+    ("xirang.conformance", &["anchor"]),
     // `files` is read by `adopted`'s renewal path alone (`renew`, adopted.rs), not by the comparison.
     // `files` 只由 `adopted` 的续期路径读（`renew`，adopted.rs），比对那条路不读。
-    ("nichlink.consistency", &["parent", "full"]),
-    ("nichlink.why", &["at"]),
-    ("nichlink.locate", &[]),
-    ("nichlink.inspect", &[]),
+    ("xirang.consistency", &["parent", "full"]),
+    ("xirang.why", &["at"]),
+    ("xirang.locate", &[]),
+    ("xirang.inspect", &[]),
     (
-        "nichlink.callgraph",
+        "xirang.callgraph",
         &["function", "orphans", "path", "source"],
     ),
-    ("nichlink.read", &["context", "line", "lines", "whole"]),
-    ("nichlink.status", &[]),
+    ("xirang.read", &["context", "line", "lines", "whole"]),
+    ("xirang.status", &[]),
     (
-        "nichlink.apply",
+        "xirang.apply",
         &["action", "confirm", "fields", "full", "selector"],
     ),
     (
-        "nichlink.new_project",
+        "xirang.new_project",
         &[
             "confirm",
             "dependency",
@@ -903,7 +898,7 @@ const READ_KEYS: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "nichlink.plugin",
+        "xirang.plugin",
         &[
             "checksum",
             "confirm",
@@ -918,26 +913,26 @@ const READ_KEYS: &[(&str, &[&str])] = &[
             "version",
         ],
     ),
-    ("nichlink.registry", &["full", "offset"]),
-    ("nichlink.explain", &["node", "overlay"]),
-    ("nichlink.diff", &["against", "records"]),
-    ("nichlink.trace", &["query", "values"]),
-    ("nichlink.mir", &["against", "against_trace", "jsonl"]),
-    ("nichlink.unified", &["against"]),
-    ("nichlink.grafts", &[]),
-    ("nichlink.impact", &["depth"]),
-    ("nichlink.usages", &["node"]),
-    ("nichlink.converge", &["trace"]),
-    ("nichlink.adopted", &["anchor", "apply", "confirm", "files"]),
-    ("nichlink.affected", &["files"]),
-    ("nichlink.check", &["census", "target_dir", "verbose"]),
-    ("nichlink.verify", &[]),
+    ("xirang.registry", &["full", "offset"]),
+    ("xirang.explain", &["node", "overlay"]),
+    ("xirang.diff", &["against", "records"]),
+    ("xirang.trace", &["query", "values"]),
+    ("xirang.mir", &["against", "against_trace", "jsonl"]),
+    ("xirang.unified", &["against"]),
+    ("xirang.grafts", &[]),
+    ("xirang.impact", &["depth"]),
+    ("xirang.usages", &["node"]),
+    ("xirang.converge", &["trace"]),
+    ("xirang.adopted", &["anchor", "apply", "confirm", "files"]),
+    ("xirang.affected", &["files"]),
+    ("xirang.check", &["census", "target_dir", "verbose"]),
+    ("xirang.verify", &[]),
     (
-        "nichlink.graph",
+        "xirang.graph",
         &["node", "direction", "depth", "cycles", "limit"],
     ),
     // `crates` reads the action and whether to apply it; `root` is read by every tool's entry.
     // `crates` 读动作与是否写入；`root` 由每个工具的入口读。
-    ("nichlink.crates", &["action", "apply", "crate", "subtree"]),
-    ("nichlink_tools", &["tool", "full"]),
+    ("xirang.crates", &["action", "apply", "crate", "subtree"]),
+    ("xirang_tools", &["tool", "full"]),
 ];

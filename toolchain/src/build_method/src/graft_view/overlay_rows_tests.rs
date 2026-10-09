@@ -3,15 +3,15 @@
 //!
 //! The projection decides which slots ship and which a declared cut replaces, so
 //! a wrong verdict here is a wrong answer about the published tree — the one
-//! thing `explain --overlay` and `nichlink.explain {"overlay": true}` exist to
+//! thing `explain --overlay` and `xirang.explain {"overlay": true}` exist to
 //! give. Each test below is a claim those surfaces make.
 //! 投影决定哪些槽位会发布、哪些被已声明切口替换，因此这里的一个错误结论就是对发布树的错误回答
-//! ——而这正是 `explain --overlay` 与 `nichlink.explain {"overlay": true}` 存在的意义。下面每条
+//! ——而这正是 `explain --overlay` 与 `xirang.explain {"overlay": true}` 存在的意义。下面每条
 //! 测试都是这两个执行面做出的一个主张。
 
 use std::path::PathBuf;
 
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 use super::*;
 
@@ -73,7 +73,7 @@ fn root(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "nichlink-overlay-rows-{label}-{}-{sequence}",
+        "xirang-overlay-rows-{label}-{}-{sequence}",
         std::process::id()
     ))
 }

@@ -97,19 +97,19 @@ Linking dynamic dispatch...
 ```
 The original fc hash matches the declared `da9c82b7282a0ace…` ✓ — proceed.
 
-fc's layout: the control-button host (same as fa/fb/g3) PLUS `.nichlink/adopted/entries` (the ledger).
+fc's layout: the control-button host (same as fa/fb/g3) PLUS `.xirang/adopted/entries` (the ledger).
 
 Now:
 1. rm -rf trees/fc; rsync; verify copy hash.
 2. init (append to logs/fc.txt).
-3. Premise self-check: cat `.nichlink/adopted/entries`; explore `adopted`/`conformance` verdicts.
+3. Premise self-check: cat `.xirang/adopted/entries`; explore `adopted`/`conformance` verdicts.
 
 Let me also mark the task in_progress first (rule: mark in_progress before completed; let me do it now).
 
 Then explore the tree: the question "已经采信了，现在再横向加一个" = "It's already adopted; now add another one horizontally." So: the ledger has an adopted entry (root/control/button) and I must add another one **horizontally** (i.e., a sibling — e.g. `root/control/slider`), keeping the ledger (the existing entry must stay) and writing down how existing entries were handled + evidence. The gate must be green.
 
 Let me look at the tree's ledger + what "adopted"/"conformance" are (probably toolchain APIs the host's tests use; maybe the tree has a test or an example using them). Let me explore:
-- `cat .nichlink/adopted/entries` (nonbridge)
+- `cat .xirang/adopted/entries` (nonbridge)
 - codegraph `files` for fc
 - Look for a test that reads the ledger (grep in my copy for "adopted"/"conformance" — allowed within my copy).
 
@@ -128,7 +128,7 @@ Let me do the copy + init + ledger read + grep in one go.
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
 6	
 7	pub struct Button;
 8	
@@ -231,7 +231,7 @@ Let me run the verification.
 2	//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	pub struct Toggle;
 8	
@@ -272,7 +272,7 @@ Content of answers/fc.md:
 
 # fc —「已经采信了，现在再横向加一个。」（可改；交付后门必须绿、台账必须还在）
 
-① 题面/前提：宿主干净，`.nichlink/adopted/entries` 里有一条**已采信的**记录：`root/control/button | … | 12:32:28（UTC，队长口径）| src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在横向扩展**之前**记下的 ⇒ 本题要做横向扩展并保住它。
+① 题面/前提：宿主干净，`.xirang/adopted/entries` 里有一条**已采信的**记录：`root/control/button | … | 12:32:28（UTC，队长口径）| src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在横向扩展**之前**记下的 ⇒ 本题要做横向扩展并保住它。
 ② 做了什么：横向加一个同级对象 `Toggle`（与 Button/Slider 同形）——
    - `src/control/object/toggle/toggle.rs`：`Toggle` + `impl ControlHandle` + `control_object!{ kind: Toggle, exports: ["control.render"], parent: control::NODE_ID, handle_contracts: [ControlHandle], flow: … }`；
    - `src/lib.rs`：新增 `PUBLISHED_OBJECT_FACES`（在代码里拼出三个面的路径）——不拼就不发布（作用域从入口可达源码收窄、忽略 import/字符串/注释）；
@@ -318,17 +318,17 @@ Project Structure (14 files):
 
 # fc —「已经采信了，现在再横向加一个。」（可改；交付后门必须绿、**台账必须还在**）
 
-① 题面/前提：`.nichlink/adopted/entries` 里有一条**已采信**的记录：`root/control/button | … | nich | 12:32:28 | src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在**横向扩展之前**记的 ⇒ 本题要做横向扩展、并保住这条记录（时刻字段按队长口径是 **UTC**）。
+① 题面/前提：`.xirang/adopted/entries` 里有一条**已采信**的记录：`root/control/button | … | nich | 12:32:28 | src/control/object/button/button.rs | 22b54a4c… | agreed before the horizontal extension`——note 明说这条是在**横向扩展之前**记的 ⇒ 本题要做横向扩展、并保住这条记录（时刻字段按队长口径是 **UTC**）。
 ② 做了什么（横向加一个同级对象 `Toggle`，与 Button/Slider 同形）：
    - 新文件 `src/control/object/toggle/toggle.rs`：`Toggle`＋`impl ControlHandle for Toggle`＋`crate::control_object!{ kind: Toggle, exports: ["control.render"], parent: crate::control::NODE_ID, handle_contracts: [crate::control::ControlHandle], flow: FlowContract::new(ContractId::new("control.render.v1"), 1, "ControlInput", "ControlFrame") }`（照 `slider.rs` 逐项写）。
    - `src/lib.rs`：新增 `pub const PUBLISHED_OBJECT_FACES: [NodeId; 3]`，**在代码里拼出**三个对象面的路径——构建期作用域从入口可达源码收窄、扫描忽略 import/字符串/注释，不拼就不发布。
    - `tests/registry.rs`：4 处**期望**随扩展更新（树行表 3→4、`plan.faces().len()` 3→4、构建期作用域 2→3 并加 toggle 行、把"父级规则不看 kind"那条测试里的合成样例 `Toggle/"toggle"` 改名 `Dial/"dial"`，否则撞新面的槽位名）。
 ③ **台账：既有条目的处置 + 证据**（本题硬要求）
-   - 处置：既有条目**一字未动**，它指名的字节也**一字未动**——`.nichlink/adopted/entries` 前后 sha256 都是 `697a5380e448c1e5`，`src/control/object/button/button.rs` 前后都是 `e842be74cce534bf` ⇒ 那条采信仍然描述它在描述的那些字节；横向扩展没有碰到它。
+   - 处置：既有条目**一字未动**，它指名的字节也**一字未动**——`.xirang/adopted/entries` 前后 sha256 都是 `697a5380e448c1e5`，`src/control/object/button/button.rs` 前后都是 `e842be74cce534bf` ⇒ 那条采信仍然描述它在描述的那些字节；横向扩展没有碰到它。
    - **我没有**给 `Toggle` 手写第二条记录：**理由不是"算不出来"**——内核有公开的 `adoption_fingerprint`（`kernel/src/registry_core/adoption/adoption.rs:200`；写入路径的调用点 `toolchain/src/mcp/src/adopted.rs:329`），输入＝相对路径＋文件文本，拼法 `路径 ++ 0x00 ++ 内容字节长度 ++ 0x00 ++ 内容 ++ 0x00` 再 sha256；我按这个拼法复算 `src/control/object/button/button.rs` 得 `22b54a4c…` == 台账值 ✓（也就解释了它为什么 ≠ 文件字节的 sha256 `e842be74…`）。理由是**流程性**的：采信要由桥按它的 conformance 流程写，"谁在什么证据下采信的"这条链不能靠人手写绕过。给不给新兄弟采信，由桥按同一流程决定。
    - 证据：上面两个 sha256 的前后对比 + 台账原文（`cat` 记录在 `logs/fc.txt`）；"指纹方案不可由树内重算"这一条也如实写明。
 ④ 门与可见结果：`cargo test --offline` → **6 个 target 全 ok、0 failed，rc=0**（registry 25 条含更新后的 4 处期望）；`--all-features` → **6 ok / 0 failed，rc=0**；`cargo run --example tree` 由 3 行变 **4 行**，新增 `root/control/toggle  kind=Toggle  source=control/object/toggle/toggle.rs`。
-⑤ 反证与命令序列：若只加文件而不在入口拼路径，`tree` 仍是 3 行（未声明的面不发布）＝没加成；若我在扩展时碰到 `button.rs` 或重写台账，上面两个 sha256 会变——我也正是用它们当"既有条目未被搅动"的判据。序列：`cat .nichlink/adopted/entries` + `sha256sum`（扩展前）→ 写新面/入口/期望 → `cargo test --offline`（先因新面文件缺目录编译失败一次，补齐后 rc=0）→ `--all-features`（rc=0）→ `--example tree`（3 行→4 行）→ 台账与 `button.rs` 的 sha256 复核（不变）。改前我没有另跑门（登记态说它绿；改前的可见检查是 tree 3 行 + 台账原文 + 两个 sha256）。
+⑤ 反证与命令序列：若只加文件而不在入口拼路径，`tree` 仍是 3 行（未声明的面不发布）＝没加成；若我在扩展时碰到 `button.rs` 或重写台账，上面两个 sha256 会变——我也正是用它们当"既有条目未被搅动"的判据。序列：`cat .xirang/adopted/entries` + `sha256sum`（扩展前）→ 写新面/入口/期望 → `cargo test --offline`（先因新面文件缺目录编译失败一次，补齐后 rc=0）→ `--all-features`（rc=0）→ `--example tree`（3 行→4 行）→ 台账与 `button.rs` 的 sha256 复核（不变）。改前我没有另跑门（登记态说它绿；改前的可见检查是 tree 3 行 + 台账原文 + 两个 sha256）。
 
 总调用：成功 7 / 被拒 0（codegraph；含 2 次 init ⇒ 5 步）
 调用清单：codegraph `init .`、`files`、`node src/control/object/button/button.rs`、`node src/control/object/toggle/toggle.rs`（改后）、`sync .`（新文件入索引）；非 codegraph：`cat` 台账、`sha256sum` ×3、`cargo test` ×3、`cargo run --example tree` ×2、`diff`（对照 fa 的既有知识）。

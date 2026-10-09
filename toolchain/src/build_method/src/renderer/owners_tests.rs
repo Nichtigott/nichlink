@@ -8,8 +8,8 @@ use crate::build_method::renderer::ShapeRender;
 use crate::build_method::renderer::test_support::temporary_directory;
 use crate::build_method::static_plan::StaticFaceRecord;
 use crate::build_method::{SourceScope, render_lib};
-use nichlink_kernel::registry_core::identity::NodeId;
-use nichlink_kernel::registry_core::syntax::{GraftExpressions, SyntaxLocation};
+use xirang_kernel::registry_core::identity::NodeId;
+use xirang_kernel::registry_core::syntax::{GraftExpressions, SyntaxLocation};
 
 /// Facade mode names the crate that compiles each module; every other mode leaves expressions exactly
 /// as the author wrote them (audit `M7`, §M7.33).
@@ -154,7 +154,7 @@ fn a_crate_emits_only_the_graft_entries_it_compiles() {
     // 把那个面交出去的 crate 既不发射条目、也不发射契约断言——表留空，而不是留着一个本 crate 没有的模块名。
     let elsewhere = render(&[]);
     assert!(
-        elsewhere.contains("BUILTIN_GRAFT_CUTS: &[::nichlink_toolchain::run_method::registry_core::StaticGraftCut] = &[\n];"),
+        elsewhere.contains("BUILTIN_GRAFT_CUTS: &[::xirang_toolchain::run_method::registry_core::StaticGraftCut] = &[\n];"),
         "{elsewhere}"
     );
     assert!(

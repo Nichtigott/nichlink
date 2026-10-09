@@ -24,10 +24,10 @@ pub(crate) struct BuildInput {
     pub(crate) emit_cargo_directives: bool,
     /// The subtrees this package compiles instead of the whole host (`None` = the whole host), and
     /// whether it is the facade — the cross-crate half. Both come from the generator as **arguments**
-    /// now: they used to arrive through `NICH_LINK_SHAPE_*`, which a generated build script can only
+    /// now: they used to arrive through `XIRANG_SHAPE_*`, which a generated build script can only
     /// set with `unsafe { std::env::set_var(…) }` under Rust 2024.
     /// 这个包编译哪些子树（`None`＝整个宿主），以及它是不是 facade（跨 crate 那一半）。两者现在由生成器
-    /// 以**参数**给出：过去经 `NICH_LINK_SHAPE_*` 传递，而生成的构建脚本在 Rust 2024 下只能靠
+    /// 以**参数**给出：过去经 `XIRANG_SHAPE_*` 传递，而生成的构建脚本在 Rust 2024 下只能靠
     /// `unsafe { std::env::set_var(…) }` 设置它们。
     pub(crate) only: Option<String>,
     pub(crate) facade: bool,
@@ -92,24 +92,22 @@ pub struct HostCut {
 impl HostCut {
     /// The parsed declaration this cut stands for.
     /// 这条切口所代表的已解析声明。
-    pub(crate) fn syntax(&self) -> nichlink_kernel::syntax::GraftSyntax {
-        nichlink_kernel::syntax::GraftSyntax {
+    pub(crate) fn syntax(&self) -> xirang_kernel::syntax::GraftSyntax {
+        xirang_kernel::syntax::GraftSyntax {
             cut: self.cut.clone(),
             cut_end: self.cut_end.clone(),
             graft: self.graft.clone(),
             full: self.full,
-            location: nichlink_kernel::syntax::SyntaxLocation {
+            location: xirang_kernel::syntax::SyntaxLocation {
                 line: self.line,
                 column: self.column,
             },
             cfg: self.cfg.clone(),
-            expressions: self
-                .typed
-                .then(|| nichlink_kernel::syntax::GraftExpressions {
-                    cut: self.cut.clone(),
-                    cut_end: self.cut_end.clone(),
-                    graft: self.graft.clone(),
-                }),
+            expressions: self.typed.then(|| xirang_kernel::syntax::GraftExpressions {
+                cut: self.cut.clone(),
+                cut_end: self.cut_end.clone(),
+                graft: self.graft.clone(),
+            }),
         }
     }
 }

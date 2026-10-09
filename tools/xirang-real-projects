@@ -1,18 +1,18 @@
 #!/bin/sh
-# Point the read-only surface at other people's crates: does NichLink accept real code, or does it
+# Point the read-only surface at other people's crates: does XiRang accept real code, or does it
 # refuse it by name?
-# 把只读面指向别人的 crate：NichLink 接受真实代码，还是按名拒绝它？
+# 把只读面指向别人的 crate：XiRang 接受真实代码，还是按名拒绝它？
 #
-# Every source tree this walks was written by someone who has never heard of NichLink, which is the
+# Every source tree this walks was written by someone who has never heard of XiRang, which is the
 # only shape that can catch a rule that is really a description of *this* repository. It caught one:
 # the nesting guard counted the tokens of `#[doc = "…"]`, so a module header of consecutive `//!` lines
-# measured as one long expression — `tokio/src/fs/mod.rs` has 213 of them, `nichlink check .` refused it
+# measured as one long expression — `tokio/src/fs/mod.rs` has 213 of them, `xirang check .` refused it
 # with "input nests 1025 levels … above the limit of 1024", and four more of that crate's files were
 # refused the same way (audit `M7`, §M7.56). A gate that only ever looked at this checkout could not see
 # that.
-# 本脚本遍历的每一棵源码树，作者都没听说过 NichLink，而这是唯一能抓住"某条规则其实只是对本仓库的描述"
+# 本脚本遍历的每一棵源码树，作者都没听说过 XiRang，而这是唯一能抓住"某条规则其实只是对本仓库的描述"
 # 的形状。它抓到了一条：嵌套守卫在数 `#[doc = "…"]` 的 token，于是连续 `//!` 行组成的模块头被量成一个
-# 长表达式——`tokio/src/fs/mod.rs` 有 213 行，`nichlink check .` 以「input nests 1025 levels … above
+# 长表达式——`tokio/src/fs/mod.rs` 有 213 行，`xirang check .` 以「input nests 1025 levels … above
 # the limit of 1024」拒绝了它，同一个 crate 还有四个文件被同样拒绝（审计 `M7`，§M7.56）。一个只看本
 # 检出的门禁看不见这些。
 #
@@ -35,20 +35,20 @@
 # 灯色取决于陌生人的源码布局。计数会打印出来，使这个数字不会无声地漂移。
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-CARGO_FLAGS="${NICHLINK_CARGO_FLAGS---offline}"
-NICHLINK="$ROOT/target/debug/nichlink"
-WANT="${NICHLINK_REAL_PROJECTS:-60}"
-REGISTRY="${NICHLINK_REGISTRY_SRC:-${CARGO_HOME:-$HOME/.cargo}/registry/src}"
+CARGO_FLAGS="${XIRANG_CARGO_FLAGS---offline}"
+XIRANG="$ROOT/target/debug/xirang"
+WANT="${XIRANG_REAL_PROJECTS:-60}"
+REGISTRY="${XIRANG_REGISTRY_SRC:-${CARGO_HOME:-$HOME/.cargo}/registry/src}"
 fail() { printf 'real-projects FAILED: %s\n' "$1" >&2; exit 1; }
 step() { printf '== %s\n' "$1"; }
 
-[ -d "$REGISTRY" ] || fail "no registry sources at $REGISTRY (this gate reads them; set NICHLINK_REGISTRY_SRC)"
+[ -d "$REGISTRY" ] || fail "no registry sources at $REGISTRY (this gate reads them; set XIRANG_REGISTRY_SRC)"
 
 step "building the CLI"
-(cd "$ROOT" && cargo build $CARGO_FLAGS -p nichlink-toolchain --features cli --bin nichlink >/dev/null 2>&1) ||
-  fail "cannot build $NICHLINK"
+(cd "$ROOT" && cargo build $CARGO_FLAGS -p xirang-toolchain --features cli --bin xirang >/dev/null 2>&1) ||
+  fail "cannot build $XIRANG"
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-real-projects.XXXXXX")
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/xirang-real-projects.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
 step "collecting up to $WANT crates from $REGISTRY"
@@ -58,7 +58,7 @@ for index in "$REGISTRY"/*/; do
   for crate in "$index"*/; do
     name=$(basename "$crate")
     case "$name" in
-      nichlink-*) continue ;;
+      xirang-*) continue ;;
     esac
     [ -d "$crate/src" ] || continue
     find "$crate/src" -name '*.rs' -print -quit 2>/dev/null | grep -q . || continue
@@ -87,7 +87,7 @@ while IFS= read -r crate; do
   # so it is recorded as neither.
   # 清单里声明了某个不在副本里的 workspace 成员的 crate，cargo 说不出它的名字，而包名就是身份命名空间：
   # 那是对副本的拒绝，不是对代码的拒绝，因此两边都不记。
-  out=$("$NICHLINK" check "$room" 2>&1)
+  out=$("$XIRANG" check "$room" 2>&1)
   code=$?
   checked=$((checked + 1))
   if [ "$code" -eq 0 ]; then

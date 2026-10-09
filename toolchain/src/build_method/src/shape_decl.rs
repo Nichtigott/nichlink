@@ -21,9 +21,9 @@ use std::path::Path;
 #[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
 use std::path::PathBuf;
 
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::lexicon;
-use nichlink_kernel::registry_core::{DeclaredCrate, validate_shape};
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::lexicon;
+use xirang_kernel::registry_core::{DeclaredCrate, validate_shape};
 
 use super::discovery_cache::write_if_changed;
 use super::face_view::PruningRow;
@@ -349,7 +349,7 @@ pub(crate) fn write_shape_lock(
         .map(|(name, _)| (name.clone(), Vec::new()))
         .collect();
     let mut unclaimed = 0usize;
-    let mut seen: std::collections::BTreeSet<nichlink_kernel::identity::NodeId> =
+    let mut seen: std::collections::BTreeSet<xirang_kernel::identity::NodeId> =
         std::collections::BTreeSet::new();
     for row in rows {
         if !seen.insert(row.id) {
@@ -445,7 +445,7 @@ pub(crate) fn check_shape(
             .collect();
         return Err(format!(
             "add_crates: `{}` names no module this tree has, so the crate would be empty: no faces \
-             below it in this host. Run `nichlink check` and read what it says about the tree, or fix \
+             below it in this host. Run `xirang check` and read what it says about the tree, or fix \
              the path",
             if named.is_empty() {
                 "?".to_owned()
@@ -519,19 +519,19 @@ fn claim_has_a_subtree(name: &str, subtree: &str, rows: &[PruningRow]) -> Result
 /// The one refusal spelling for a declaration the build cannot read.
 /// 构建读不了的声明，其唯一的拒绝拼法。
 ///
-/// It says who checks what, because the answer is not the obvious one: **NichLink** resolves these
+/// It says who checks what, because the answer is not the obvious one: **XiRang** resolves these
 /// paths against the registration tree, and no compiler can. A partitioned host no longer compiles the
 /// subtrees its declaration names — they went to the crates the split created — so `crate::control::…`
 /// has nothing to resolve against *in the host*, while the tree still knows that node. Saying
 /// "the compiler checks the paths" sent a reader looking for a check that does not exist (the file is
 /// read as text, never compiled).
-/// 它说清"谁检查什么"，因为答案不是显而易见的那个：**NichLink** 对着注册树解析这些路径，而没有任何编译器
+/// 它说清"谁检查什么"，因为答案不是显而易见的那个：**XiRang** 对着注册树解析这些路径，而没有任何编译器
 /// 能做这件事。被划分的宿主不再编译声明点名的子树——它们已经去了拆分产生的 crate——因此 `crate::control::…`
 /// **在宿主里**没有可解析对象，而树仍然认得那个节点。写"编译器会检查这些路径"会让读者去找一个不存在的检查
 /// （本文件是按**文本**读的，从不参与编译）。
 fn unreadable(path: &Path, why: &str) -> String {
     format!(
-        "{}: {why}. NichLink resolves these paths against the registration tree, not a compiler: a \
+        "{}: {why}. XiRang resolves these paths against the registration tree, not a compiler: a \
          partitioned host no longer compiles the subtrees its declaration names. This reader accepts \
          `Shape {{ package_prefix: \"…\", crates: &[Crate::named(\"…\").at(&[crate::…::SUBTREE])] }}`, \
          or the same thing built through `Shape::of(…)`",
@@ -701,11 +701,11 @@ fn template(package_prefix: &str, name: &str, subtrees: &[String]) -> String {
         entries.push(',');
     }
     format!(
-        "// Which subtrees of this host become crates of their own. NichLink reads this file as text\n\
-         // at build time; `nichlink crates --check` prints what it would write.\n\
-         // 这个宿主里哪些子树各自成为一个 crate。NichLink 在构建期把本文件当**文本**读；\n\
-         // `nichlink crates --check` 打印它会写下什么。\n\
-         use nichlink_toolchain::run_method::{{Crate, Shape}};\n\
+        "// Which subtrees of this host become crates of their own. XiRang reads this file as text\n\
+         // at build time; `xirang crates --check` prints what it would write.\n\
+         // 这个宿主里哪些子树各自成为一个 crate。XiRang 在构建期把本文件当**文本**读；\n\
+         // `xirang crates --check` 打印它会写下什么。\n\
+         use xirang_toolchain::run_method::{{Crate, Shape}};\n\
          \n\
          // A function rather than a `const`: every name on the way to the value — `Crate::named`,\n\
          // `.at`, and the paths inside `&[…]` — is ordinary Rust, so an editor completes them and a\n\

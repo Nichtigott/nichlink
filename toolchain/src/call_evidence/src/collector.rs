@@ -1,5 +1,5 @@
-//! Debug-only linker-section backend for NichLink declarations.
-//! 仅调试期使用的 NichLink 声明链接段后端。
+//! Debug-only linker-section backend for XiRang declarations.
+//! 仅调试期使用的 XiRang 声明链接段后端。
 
 /// Iterate every declaration that opted into the debug collector in this
 /// binary; outside debug builds the result is empty rather than absent.

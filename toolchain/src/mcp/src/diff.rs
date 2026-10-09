@@ -20,8 +20,8 @@ use crate::build_method::{
     GraftPlanRow, PruningRow, declared_grafts, graft_plan_rows, read_build_scope,
     read_pruning_manifest,
 };
-use nichlink_kernel::NodeId;
 use serde_json::Value;
+use xirang_kernel::NodeId;
 
 use crate::mcp::build_evidence::build_evidence;
 use crate::mcp::protocol::DEFAULT_LIMIT;
@@ -108,14 +108,14 @@ pub(crate) fn diff_body(member: &Member, arguments: &Value) -> Result<String, St
         return diff_records(root, faces, namespace, arguments, unparsable, member);
     }
     // The built side and its per-face verdicts come from one rule
-    // (`crate::mcp::tree_delta`), which `nichlink.search` reads too: the same face must
+    // (`crate::mcp::tree_delta`), which `xirang.search` reads too: the same face must
     // not be `added` here and something else there.
-    // 构建那一侧与逐面的结论来自一条规则（`crate::mcp::tree_delta`），`nichlink.search` 也读它：
+    // 构建那一侧与逐面的结论来自一条规则（`crate::mcp::tree_delta`），`xirang.search` 也读它：
     // 同一个面不能在这里是 `added`、在那里是别的。
     let built = TreeDelta::read(root);
     if !built.known {
         return Ok(
-            "no build evidence: run `nichlink check` (or `nichlink build`) first — a tree diff needs \
+            "no build evidence: run `xirang check` (or `xirang build`) first — a tree diff needs \
              the built side, and this project has never published one.\n"
                 .to_owned(),
         );
@@ -170,11 +170,11 @@ pub(crate) fn diff_body(member: &Member, arguments: &Value) -> Result<String, St
         .collect();
     // The bucket words come from `FaceStatus::label`'s side of the tree
     // vocabulary, not from this file: the same face is annotated `ok`, `added
-    // since build`, or `re-identified` by `nichlink.search`, and a count line that
+    // since build`, or `re-identified` by `xirang.search`, and a count line that
     // spelled them its own way would make the two tools disagree about the word
     // even though they share the rule.
     // 桶名取自这棵树的词汇里 `FaceStatus::label` 那一侧，而不是本文件：同一个面会被
-    // `nichlink.search` 标注成 `ok`、`added since build` 或 `re-identified`，一条自己另拼的
+    // `xirang.search` 标注成 `ok`、`added since build` 或 `re-identified`，一条自己另拼的
     // 计数行会让两个工具虽然共用规则、却在词形上说不到一起。
     output.push_str(&format!(
         "{} {}  gone {}  {} {}\n",
@@ -268,7 +268,7 @@ fn diff_published(member: &Member, arguments: &Value, against: &str) -> Result<S
     if !there.is_dir() {
         return Err(format!(
             "`against` names {} — not a directory of published records (the build writes them \
-             under `target/nichlink/out`)",
+             under `target/xirang/out`)",
             there.display()
         ));
     }
@@ -428,7 +428,7 @@ fn diff_records(
     let mut undeclared: Vec<(
         &GraftPlanRow,
         Option<bool>,
-        Option<nichlink_kernel::identity::NodeId>,
+        Option<xirang_kernel::identity::NodeId>,
     )> = Vec::new();
     let mut unreadable = 0usize;
     for row in &rows {
@@ -439,13 +439,13 @@ fn diff_records(
         if faces.iter().any(|face| face.id == target) {
             // The identity being in the tree is only half the answer. A record no
             // `static_graft_plan!` cut names is pruned by the release and skipped at runtime, which
-            // is what `nichlink.grafts` reports as "[NOT declared by the host entry]" and counts
+            // is what `xirang.grafts` reports as "[NOT declared by the host entry]" and counts
             // under `unkept plans N` — and what the build refuses outright. Calling it `ok` here
             // gave one record two health conclusions, and the agent that read the first one would
             // ship it (audit `M1`). The row already carries whether a declaration named it, so the
             // split costs nothing.
             // 身份在树里只是答案的一半。没有任何 `static_graft_plan!` 切口点名的记录会被发布剪掉、运行期
-            // 跳过——这正是 `nichlink.grafts` 报成 "[NOT declared by the host entry]" 并计入
+            // 跳过——这正是 `xirang.grafts` 报成 "[NOT declared by the host entry]" 并计入
             // `unkept plans N`、构建直接拒绝的那种。在这里称它 `ok` 会让同一条记录有两个健康结论，而读到
             // 前一个的代理会把它发出去（审计 `M1`）。该行本就携带"是否有声明点名它"，分流不需额外代价。
             match row.declared {
@@ -470,13 +470,13 @@ fn diff_records(
         // The declaration question does not depend on the identity being in the tree: a
         // slot no `static_graft_plan!` cut names is pruned by the release either way.
         // Asking it only in the branch above made this tool answer `undeclared 0` and
-        // `re-identified 1` for exactly the record `nichlink.grafts` reports as
+        // `re-identified 1` for exactly the record `xirang.grafts` reports as
         // `[NOT declared by the host entry]` / `unkept plans 1` — two opposite
         // recommendations for one record, and the wrong one is the optimistic one
         // (audit `LGC-LG-12`). A record that is both unkept and drifted is reported as
         // unkept, with where its path points now.
         // 声明那边的问题与身份在不在树里无关：没有任何 `static_graft_plan!` 切口点名的槽位两种情形下都
-        // 会被发布剪掉。只在上面的分支里问它，会让本工具对**恰恰是** `nichlink.grafts` 报成
+        // 会被发布剪掉。只在上面的分支里问它，会让本工具对**恰恰是** `xirang.grafts` 报成
         // `[NOT declared by the host entry]` / `unkept plans 1` 的那条记录回答 `undeclared 0` 与
         // `re-identified 1`——同一条记录两个相反的建议，而错的那个是乐观的那个（审计 `LGC-LG-12`）。
         // 既没被保住、又漂移了的记录报成"没被保住"，并附上它的路径现在指向哪里。
@@ -612,8 +612,8 @@ fn diff_records(
         ));
     }
     output.push_str(
-        "detail: nichlink.grafts (which slots the host entry declares) · nichlink.explain (this \
-         face's build evidence) · nichlink.verify (re-run the kernel and report the tree delta)\n",
+        "detail: xirang.grafts (which slots the host entry declares) · xirang.explain (this \
+         face's build evidence) · xirang.verify (re-run the kernel and report the tree delta)\n",
     );
     Ok(output)
 }

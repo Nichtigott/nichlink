@@ -12,10 +12,10 @@ fn scratch(label: &str, manifest: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-members-{label}-{}-{sequence}",
+            "xirang-members-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);

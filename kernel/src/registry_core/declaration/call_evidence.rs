@@ -139,8 +139,8 @@ pub enum TraceMode {
 }
 
 impl TraceMode {
-    /// Parses the value accepted by `NICH_LINK_TRACE`.
-    /// 解析 `NICH_LINK_TRACE` 支持的值。
+    /// Parses the value accepted by `XIRANG_TRACE`.
+    /// 解析 `XIRANG_TRACE` 支持的值。
     pub fn parse_trace_mode(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "off" | "0" | "disabled" => Some(Self::Off),

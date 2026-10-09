@@ -24,17 +24,17 @@
 //! wrote. Fields that name a path *inside the declaring tree* (`admission`, a non-default
 //! registration rule) cannot move between trees at all: the external spelling means nothing here.
 //! And the record is read from the **project** root, never from a preview's copy, because
-//! `copy_package` skips `.nichlink/` — a preview that read the copy would report a record it never
+//! `copy_package` skips `.xirang/` — a preview that read the copy would report a record it never
 //! saw.
 //! **拒绝，以及为什么拒绝。** 执行器只改写**它生成过的**文件——手写的面文件会被点名拒绝，而不是被改写成
 //! 作者从未写过的形状。命名*声明树内部*路径的字段（`admission`、非默认的注册规则）根本无法跨树搬移：
 //! 外部的那套拼法在这里不指任何东西。而记录永远从**项目**根读取，而不是预览的副本，因为 `copy_package`
-//! 会跳过 `.nichlink/`——读副本的预览会报告一条它从未见过的记录。
+//! 会跳过 `.xirang/`——读副本的预览会报告一条它从未见过的记录。
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::tree::graft_ops::{RecordReport, RecordedGraft, ResolvedRecord};
 use serde_json::Value;
+use xirang_kernel::tree::graft_ops::{RecordReport, RecordedGraft, ResolvedRecord};
 
 use crate::mcp::apply::{Outcome, load_registry};
 use crate::run_method::AuthoringContext;
@@ -66,12 +66,12 @@ pub(crate) fn run_promote(
             promote_example(root)
         ));
     }
-    // Read from the project root: a preview's copy has no `.nichlink/`, so reading `work` would
+    // Read from the project root: a preview's copy has no `.xirang/`, so reading `work` would
     // answer as if this package had no records at all.
-    // 从项目根读取：预览的副本里没有 `.nichlink/`，读 `work` 会答成"这个包根本没有记录"。
+    // 从项目根读取：预览的副本里没有 `.xirang/`，读 `work` 会答成"这个包根本没有记录"。
     let document = crate::run_method::load_graft_record(root, &selector).map_err(|error| {
         format!(
-            "{error}; the record is `.nichlink/external-grafts/{selector}/graft.plan` under the \
+            "{error}; the record is `.xirang/external-grafts/{selector}/graft.plan` under the \
              project root this call resolved"
         )
     })?;
@@ -105,7 +105,7 @@ pub(crate) fn run_promote(
             {
                 return Err(format!(
                     "this record's target identity no longer resolves ({drifted}); \
-                     `nichlink.diff {{\"records\": true}}` lists what moved, and re-identifying the \
+                     `xirang.diff {{\"records\": true}}` lists what moved, and re-identifying the \
                      record is a decision rather than something this action may guess"
                 ));
             }
@@ -133,7 +133,7 @@ pub(crate) fn run_promote(
         .ok_or_else(|| {
             format!(
                 "no declaration hands over `{path}`, so this record has nothing to land into — \
-                 `.nichlink/external-grafts/` is not the host entry"
+                 `.xirang/external-grafts/` is not the host entry"
             )
         })?;
     let (crate_path, module) = crate_and_module(cut.expressions.as_ref().ok_or_else(|| {
@@ -155,7 +155,7 @@ pub(crate) fn run_promote(
             external_file.display()
         )
     })?;
-    let external_face = nichlink_kernel::syntax::parse_face(&external_source)
+    let external_face = xirang_kernel::syntax::parse_face(&external_source)
         .map_err(|error| {
             format!(
                 "the external implementation {} does not parse: {}",
@@ -274,9 +274,9 @@ pub(crate) fn run_promote(
         change.source.display(),
         declared.entry.display(),
         if applying {
-            "moved to `.nichlink/trash/external-grafts/`"
+            "moved to `.xirang/trash/external-grafts/`"
         } else {
-            "would move to `.nichlink/trash/external-grafts/`"
+            "would move to `.xirang/trash/external-grafts/`"
         }
     );
     if applying {
@@ -293,7 +293,7 @@ pub(crate) fn run_promote(
             "note   the kind moved: `{previous_kind}` → `{}`. `kind` is an identity input \
              (`NodeId = hash(namespace, source, name)`), so this face is no longer `{slot}` — \
              references to the old type have to be updated by hand, and \
-             `nichlink.diff {{\"records\": true}}` lists records keyed by the old identity\n",
+             `xirang.diff {{\"records\": true}}` lists records keyed by the old identity\n",
             replacement.kind
         ));
     }
@@ -332,7 +332,7 @@ pub(crate) fn run_promote(
 /// 一个只给出 `<selector>` 的拒绝，会让读者在请求变成调用之前先去列一遍目录；这里读的就是它所在的那个目录。
 /// `add` 的示例遵循同一条规则——见 `apply::write_example`——而这里工具需要的值就这一个。
 fn promote_example(root: &Path) -> String {
-    let selector = std::fs::read_dir(root.join(".nichlink/external-grafts"))
+    let selector = std::fs::read_dir(root.join(".xirang/external-grafts"))
         .ok()
         .and_then(|entries| {
             entries
@@ -355,7 +355,7 @@ fn text(arguments: &Value, key: &str) -> Result<String, String> {
         Some(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
         Some(_) => Err(format!("`{key}` must not be empty")),
         None => Err(format!(
-            "promote requires `{key}`: the `.nichlink/external-grafts/<selector>/` directory to \
+            "promote requires `{key}`: the `.xirang/external-grafts/<selector>/` directory to \
              land"
         )),
     }
@@ -454,7 +454,7 @@ fn repoint_entry(
 ) -> Result<String, String> {
     let source = std::fs::read_to_string(entry)
         .map_err(|error| format!("{} is not readable: {error}", entry.display()))?;
-    let before = nichlink_kernel::syntax::entries::graft_entries(&source).map_err(|error| {
+    let before = xirang_kernel::syntax::entries::graft_entries(&source).map_err(|error| {
         format!(
             "the entry does not parse before the write: {}",
             error.message
@@ -474,7 +474,7 @@ fn repoint_entry(
             )
         })?;
     let edited = repoint_graft(&source, &cut.cut, &cut.graft)?;
-    let after = nichlink_kernel::syntax::entries::graft_entries(&edited)
+    let after = xirang_kernel::syntax::entries::graft_entries(&edited)
         .map_err(|error| format!("the rewritten entry does not parse: {}", error.message))?;
     if after.len() != before.len() {
         return Err(format!(
@@ -626,7 +626,7 @@ fn is_word_byte(byte: u8) -> bool {
 fn backup(work: &Path, file: &Path) -> Result<(), String> {
     let relative = file.strip_prefix(work).unwrap_or(file);
     let trash = work
-        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
+        .join(xirang_kernel::lexicon::XIRANG_DIR)
         .join("trash")
         .join("promoted")
         .join(stamp().to_string())
@@ -644,17 +644,17 @@ fn backup(work: &Path, file: &Path) -> Result<(), String> {
 /// 把记录目录移进回收目录——与 `remove_external_graft` 相同的回收纪律。
 fn retire_record(root: &Path, selector: &str) -> Result<PathBuf, String> {
     let from = root
-        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
-        .join(nichlink_kernel::lexicon::EXTERNAL_GRAFT_DIR)
+        .join(xirang_kernel::lexicon::XIRANG_DIR)
+        .join(xirang_kernel::lexicon::EXTERNAL_GRAFT_DIR)
         .join(selector);
     let to = root
-        .join(nichlink_kernel::lexicon::NICHLINK_DIR)
+        .join(xirang_kernel::lexicon::XIRANG_DIR)
         .join("trash")
-        .join(nichlink_kernel::lexicon::EXTERNAL_GRAFT_DIR)
+        .join(xirang_kernel::lexicon::EXTERNAL_GRAFT_DIR)
         .join(format!("{selector}-{}", stamp()));
     if let Some(parent) = to.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|error| format!("cannot create NichLink trash: {error}"))?;
+            .map_err(|error| format!("cannot create XiRang trash: {error}"))?;
     }
     std::fs::rename(&from, &to).map_err(|error| {
         format!(

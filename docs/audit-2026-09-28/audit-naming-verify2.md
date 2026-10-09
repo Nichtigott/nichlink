@@ -44,7 +44,7 @@
 | 3 | §1.3 feature 表 | 特性名**保持 `evidence`**（D-9 管文件/模块名，不管特性名）；在该行注明"模块名叫 `call_evidence`" |
 | 4 | §2.2 碰撞表 | 七个模块名列表与"无相撞"行同步为 `call_evidence` |
 | 5 | §2.2 根代码片段 | `#[path = "call_evidence/call_evidence.rs"] pub mod call_evidence;`（仍在 `feature = "evidence"` 之下） |
-| 6 | §3.1 引用表 | `nichlink_debug_method::` 的目标写法 → `nichlink_toolchain::call_evidence::` |
+| 6 | §3.1 引用表 | `xirang_debug_method::` 的目标写法 → `xirang_toolchain::call_evidence::` |
 | 7 | §3.6 替换顺序 | 同上 |
 | 8 | §4.2 `git mv` 列表 | `debug_method→src/call_evidence` |
 | 9 | §4.4 宏路径 | `$crate::evidence::submit!` → `$crate::call_evidence::submit!` |
@@ -53,7 +53,7 @@
 | 12 | §10.1 `D-3` 行 + §10.2 | `39 处` → **34 处（发布面 28）**，并补上 examples/fixture 的 6 处豁免与身份理由（见 §C.1） |
 | 13 | §10.1 `NAM-40` 行 | 改成引用 t30 修订后的 `NAM-40`/`NAM-43`（14 处四族），并明写"第一版的『394/394 一致、0 违规』已被证伪并撤回，本文任何句子都不以它为据" |
 
-**自检**：该文件 `file:line` 引用 **48 处 / 0 violation**（我自己的锚点脚本）；`cargo test -p nichlink-conventions --offline` = **99 passed / 0 failed**；文件内 3 个 ```rust 片段用仓库同款 `syn` 复验仍 `file=true stmts=true`。
+**自检**：该文件 `file:line` 引用 **48 处 / 0 violation**（我自己的锚点脚本）；`cargo test -p xirang-conventions --offline` = **99 passed / 0 failed**；文件内 3 个 ```rust 片段用仓库同款 `syn` 复验仍 `file=true stmts=true`。
 
 ---
 

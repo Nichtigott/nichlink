@@ -1,7 +1,7 @@
 # 第七轮对照评测审计（t13 / auditor）— MCP × codegraph，每臂 22 题
 
 ## 装置与时间线
-- 桥 = 冻结快照 `target/round7/src-target/debug/nichlink-mcp`，sha256 前置 `67b8f3ff2769ab66`（与 `BRIEF.md` §0 一致），构建自冻结检出 `target/round7/src` = 提交 `6d180b8`。**主检出 `target/debug/nichlink-mcp` 在 t14（已落地为提交 `9998be3`）之后 `check` 第 1 行多一条 `verdict`** ⇒ 本报告一切复现/比对都用快照，未用过主检出二进制。
+- 桥 = 冻结快照 `target/round7/src-target/debug/xirang-mcp`，sha256 前置 `67b8f3ff2769ab66`（与 `BRIEF.md` §0 一致），构建自冻结检出 `target/round7/src` = 提交 `6d180b8`。**主检出 `target/debug/xirang-mcp` 在 t14（已落地为提交 `9998be3`）之后 `check` 第 1 行多一条 `verdict`** ⇒ 本报告一切复现/比对都用快照，未用过主检出二进制。
 - **cg 臂装置版本**：数据产自 codegraph CLI **1.5.0**，日志/答案 mtime **18:37:13–19:04:04**；维护者在 **19:11** 升到 **1.6.1** 并删除 `~/.codegraph/versions/v1.5.0/`（现只剩 v1.6.1）⇒ **1.5.0 已不可复现**。22 份 cg 答案与日志的 sha256 与 `CONTROL-FREEZE.md` **22/22 逐字吻合**（我自算），本报告因此是这批 1.5.0 数据的唯一判分依据；**凡需重跑 CLI 才能判定的事项一律标「无法判定（版本已变）」，不猜**。审计全程未运行过任何 `codegraph` 命令。
 - 题树：22 题 × 2 臂。只读树 `s1–s8`/`g4-<arm>` 的 `git status --porcelain` **全空**，全树无 `.codegraph/` 残留（唯一命中的 `.audit/pin-counterproof/.codegraph` 是我 t15 的审计副本）。答案 44 份、日志 44 份齐备，最长答案 **30 行**（≤30 满足）。
 - **exit 码按日志逐行解析**（不采信自报）：mcp 113 行 = exit0 **108** / exit1 **2** / exit2 **3**；cg 84 条 `=== EXIT:` **全部 0**。exit2 = 客户端用法错；exit1 = 工具级拒绝（如缺 `face`）。
@@ -50,12 +50,12 @@ carried = Σ 每条回复字符 × 其后剩余调用数（1 起算），**无�
 - **四题**：8 棵树（`rN-mcp`/`rN-cg`）与 `pristine-N` 的 `diff -r`（排除 target/.git/Cargo.lock）**全部为空**——`tests/` 未动、无 `#[ignore]`/`#[allow]`、无删断言；门我自跑，8 棵树 `cargo test --offline` 全 rc=0、**9 passed / 0 failed**。
 - **r4 陷阱**：mcp 会话 t1s36 真构造两条捷径——`|| amount != 0` → `7 passed; 2 failed`、只留 `has_receipt` → `8 passed; 1 failed`，随后从 `/tmp/r4-entry-good.rs` 还原（交付态与 pristine-4 逐字节相同）；cg 会话里只有 grep 与 `git diff --stat`，**没有构造记录** ⇒ 只此一题分胜负。
 - **八关**：s3 问域两臂都写清（`#[test]` 由框架运行期调用，故只计数/排除）；s6 按预设容忍度两臂都点"零金额那一侧"且含 `(false,0)`，都没写成"`has_receipt == false` 两格"；**s5 两处病灶的独立性，两臂都只是推理、都没有构造**（会话里没有"只修其一再跑"），按判据同判平手。
-- **五族**：门我自己跑（14 棵树 × 两面 = **28 个 rc=0**：a-extend 27、b-deepen 27/28、c-adopt 27、d-one 4/5、e-many 4/5）；`fc` 台账我自核——两树 `.nichlink/adopted/entries` sha256 均 `541cbe86…38a3`（337 B / 1 行 / 被 git 跟踪），一字未动、两臂都没伪造条目；两树 `Cargo.toml 8d6b35ed…`、`button.rs e842be74…` 与 cg 自报吻合。
+- **五族**：门我自己跑（14 棵树 × 两面 = **28 个 rc=0**：a-extend 27、b-deepen 27/28、c-adopt 27、d-one 4/5、e-many 4/5）；`fc` 台账我自核——两树 `.xirang/adopted/entries` sha256 均 `541cbe86…38a3`（337 B / 1 行 / 被 git 跟踪），一字未动、两臂都没伪造条目；两树 `Cargo.toml 8d6b35ed…`、`button.rs e842be74…` 与 cg 自报吻合。
 - **新五关**：g1 我用快照复现 `check --census true`（`test-reachable: 1 of 12` + `no test reaches audit_unused (crates/core/src/audit.rs:14)`，与 mcp 逐字一致）；g2 两臂的伪代码都是**意图**、差都指向"`render` 从不调用 `write_count`"；g3 我自跑 `cargo run --example tree` 两树都 **3 行**、改动面各只有 1 个文件、门两面绿；**g4 按答案键**——两臂都列 `bands.rs:36` 与 `bands.rs:54`，都没把 `bands.rs:42`/`store.rs:22`/`buckets.rs:8`/`query.rs:22`/`bands.rs:92` **列为臂**（cg 提 `State::Dormant` 是在"判不了"栏里，正是答案键要的边界自报），且都自报边界（数据相关不判、宏展开/动态派发/FFI 不可见、非覆盖率量度）；h1 两臂都处置了换面才现的 `crates/core/src/audit.rs:9`，mcp 另处置 census 常量栏（`buckets.rs:10` 改读 `SMALL_LIMIT`，4 files 5+/3− vs cg 3 files）。
 - **门**（我自跑）：8 棵 r 树 + 14 棵族/关树 × 两面，**全部 rc=0**，0 failed。
 
 ## 我跑的两条门禁（原始输出 `.audit/repo-gate.log` / `.audit/probe-loop.out`）
-- **仓库门禁复合 rc=0**：`cargo fmt --all -- --check && cargo test --workspace --offline && cargo clippy --workspace --all-targets --offline -- -D warnings && cargo clippy --workspace --all-targets --offline --all-features -- -D warnings && tools/nichlink-publish --check-table` → workspace **688 passed / 0 failed**，`--check-table` 打印 `dependency table matches the manifests (3 crates)`。
+- **仓库门禁复合 rc=0**：`cargo fmt --all -- --check && cargo test --workspace --offline && cargo clippy --workspace --all-targets --offline -- -D warnings && cargo clippy --workspace --all-targets --offline --all-features -- -D warnings && tools/xirang-publish --check-table` → workspace **688 passed / 0 failed**，`--check-table` 打印 `dependency table matches the manifests (3 crates)`。
 - **夹具机械探针循环 rc=0**：`bash .audit/probe-loop.sh` → 22 棵交付树 **36 次** `cargo test --offline`（8 棵 r 树默认面 + 14 棵族/关树两两两面对）全部 rc=0 / 0 failed，外加 `g3-mcp`、`g3-cg` 的 `cargo run --example tree` 各 3 行；`PROBE_LOOP_FAIL=0`。
 
 ## 硬约束与矛盾（逐条给证据）

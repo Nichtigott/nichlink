@@ -1,7 +1,7 @@
 {
  "meta": {
-  "audit": "nichlink structure/quality/logic audit 2026-09-28 — task t1 mechanical census",
-  "produced_by": "executor (agent team nichlink-structure-audit)",
+  "audit": "xirang structure/quality/logic audit 2026-09-28 — task t1 mechanical census",
+  "produced_by": "executor (agent team xirang-structure-audit)",
   "sources": [
    "cargo metadata --no-deps --format-version 1 --offline",
    "working-tree source scan (lexer + module-mount resolver)",
@@ -9,7 +9,7 @@
   ],
   "workspace_root": "/home/nich/Moirai_N3/nichlink",
   "head": "cf0c378c68307927589c69d628a2a327ab91b680",
-  "head_subject": "清单第二项(记录那一面):nichlink.diff records:true——graft 记录相对源码,身份换了就报 re-identified",
+  "head_subject": "清单第二项(记录那一面):xirang.diff records:true——graft 记录相对源码,身份换了就报 re-identified",
   "dirty_entries": 122,
   "generated_at": "2026-09-28T12:43:11+0800",
   "toolchain": {
@@ -37,14 +37,14 @@
   "cfg_test_mounted": "文件是否经由某个带 #[cfg(test)] 的 mod 声明（或 #[cfg(test)] 内联模块里的声明）挂载。",
   "excluded": "target/ 下的一切构建产物；非 .rs 文件；Cargo.toml 只用于取包与 target 信息。",
   "nested_packages": "带自己的 Cargo.toml 但不属于本工作区的包（studio/tests/fixtures/node-editor）单独成一项，workspace_member=false，不计入工作区成员合计。",
-  "reproduce": "python3 /tmp/nichlink-audit-logs/census.py && python3 /tmp/nichlink-audit-logs/census2.py（脚本在 tmp，产物即本文件；解析器为纯词法，无网络）"
+  "reproduce": "python3 /tmp/xirang-audit-logs/census.py && python3 /tmp/xirang-audit-logs/census2.py（脚本在 tmp，产物即本文件；解析器为纯词法，无网络）"
  },
  "gates": {
   "cargo fmt --all -- --check": {
    "command": "cargo fmt --all -- --check",
    "status": "passed",
    "exit_code": 0,
-   "log": "/tmp/nichlink-audit-logs/fmt_check.log",
+   "log": "/tmp/xirang-audit-logs/fmt_check.log",
    "key_lines": [
     "EXIT_CODE=0"
    ],
@@ -54,7 +54,7 @@
    "command": "cargo test --workspace --offline",
    "status": "passed",
    "exit_code": 0,
-   "log": "/tmp/nichlink-audit-logs/test.log",
+   "log": "/tmp/xirang-audit-logs/test.log",
    "key_lines": [
     "running 75 tests",
     "test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
@@ -172,17 +172,17 @@
    "command": "cargo clippy --workspace --all-targets --offline -- -D warnings",
    "status": "passed",
    "exit_code": 0,
-   "log": "/tmp/nichlink-audit-logs/clippy.log",
+   "log": "/tmp/xirang-audit-logs/clippy.log",
    "key_lines": [
     "EXIT_CODE=0"
    ],
    "line_count": 4
   },
-  "tools/nichlink-publish --check-table": {
-   "command": "tools/nichlink-publish --check-table",
+  "tools/xirang-publish --check-table": {
+   "command": "tools/xirang-publish --check-table",
    "status": "passed",
    "exit_code": 0,
-   "log": "/tmp/nichlink-audit-logs/publish_check.log",
+   "log": "/tmp/xirang-audit-logs/publish_check.log",
    "key_lines": [
     "dependency table matches the manifests (9 crates)",
     "EXIT_CODE=0"
@@ -196,7 +196,7 @@
  },
  "crates": [
   {
-   "name": "nichlink-core",
+   "name": "xirang-core",
    "workspace_member": true,
    "manifest_path": "core/Cargo.toml",
    "dir": "core",
@@ -209,7 +209,7 @@
    },
    "targets": [
     {
-     "name": "nichlink",
+     "name": "xirang",
      "kind": [
       "lib"
      ],
@@ -20798,7 +20798,7 @@
    ]
   },
   {
-   "name": "nichlink-macro",
+   "name": "xirang-macro",
    "workspace_member": true,
    "manifest_path": "macro/Cargo.toml",
    "dir": "macro",
@@ -20806,7 +20806,7 @@
    "features": {},
    "targets": [
     {
-     "name": "nichlink_macro",
+     "name": "xirang_macro",
      "kind": [
       "proc-macro"
      ],
@@ -21471,20 +21471,20 @@
    ]
   },
   {
-   "name": "nichlink-run-method",
+   "name": "xirang-run-method",
    "workspace_member": true,
    "manifest_path": "run_method/Cargo.toml",
    "dir": "run_method",
    "publish_field": null,
    "features": {
     "authoring": [
-     "nichlink-core/syntax",
+     "xirang-core/syntax",
      "dep:syn"
     ]
    },
    "targets": [
     {
-     "name": "nichlink_run_method",
+     "name": "xirang_run_method",
      "kind": [
       "lib"
      ],
@@ -25582,7 +25582,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "run_method/src/authoring/operations/operations.rs",
      "file_line": "run_method/src/authoring/operations/operations.rs:262",
      "line": 262,
@@ -25605,7 +25605,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "run_method/src/authoring/operations/operations.rs",
      "file_line": "run_method/src/authoring/operations/operations.rs:266",
      "line": 266,
@@ -25628,7 +25628,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "run_method/src/authoring/operations/operations.rs",
      "file_line": "run_method/src/authoring/operations/operations.rs:277",
      "line": 277,
@@ -25716,7 +25716,7 @@
      "name_len": 15
     },
     {
-     "name": "is_nichlink_owned_source",
+     "name": "is_xirang_owned_source",
      "visibility": "private",
      "is_pub": false,
      "kind": "free_fn",
@@ -29809,7 +29809,7 @@
    ]
   },
   {
-   "name": "nichlink-build-method",
+   "name": "xirang-build-method",
    "workspace_member": true,
    "manifest_path": "build_method/Cargo.toml",
    "dir": "build_method",
@@ -29817,7 +29817,7 @@
    "features": {},
    "targets": [
     {
-     "name": "nichlink_build_method",
+     "name": "xirang_build_method",
      "kind": [
       "lib"
      ],
@@ -32260,7 +32260,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "build_method/src/discovery.rs",
      "file_line": "build_method/src/discovery.rs:241",
      "line": 241,
@@ -32281,7 +32281,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "build_method/src/discovery.rs",
      "file_line": "build_method/src/discovery.rs:245",
      "line": 245,
@@ -32302,7 +32302,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "build_method/src/discovery.rs",
      "file_line": "build_method/src/discovery.rs:256",
      "line": 256,
@@ -37781,7 +37781,7 @@
    ]
   },
   {
-   "name": "nichlink-cli",
+   "name": "xirang-cli",
    "workspace_member": true,
    "manifest_path": "cli/Cargo.toml",
    "dir": "cli",
@@ -37789,7 +37789,7 @@
    "features": {},
    "targets": [
     {
-     "name": "nichlink_cli",
+     "name": "xirang_cli",
      "kind": [
       "lib"
      ],
@@ -37797,19 +37797,19 @@
      "required_features": []
     },
     {
-     "name": "nichlink",
+     "name": "xirang",
      "kind": [
       "bin"
      ],
-     "src_path": "cli/src/bin/nichlink.rs",
+     "src_path": "cli/src/bin/xirang.rs",
      "required_features": []
     },
     {
-     "name": "cargo-nichlink",
+     "name": "cargo-xirang",
      "kind": [
       "bin"
      ],
-     "src_path": "cli/src/bin/cargo-nichlink.rs",
+     "src_path": "cli/src/bin/cargo-xirang.rs",
      "required_features": []
     }
    ],
@@ -37824,7 +37824,7 @@
    "generated_plan_file": null,
    "files": [
     {
-     "path": "cli/src/bin/cargo-nichlink.rs",
+     "path": "cli/src/bin/cargo-xirang.rs",
      "lines": 23,
      "bytes": 879,
      "role": "src/bin",
@@ -37833,7 +37833,7 @@
      "reachable_from_hand_written_mod_decls": true,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [],
-     "module_path": "cargo-nichlink",
+     "module_path": "cargo-xirang",
      "cfg_test_mounted": false,
      "cfg_features_mounted": [],
      "nested_package": null,
@@ -37841,7 +37841,7 @@
      "pub_fn_count": 0
     },
     {
-     "path": "cli/src/bin/nichlink.rs",
+     "path": "cli/src/bin/xirang.rs",
      "lines": 15,
      "bytes": 694,
      "role": "src/bin",
@@ -37850,7 +37850,7 @@
      "reachable_from_hand_written_mod_decls": true,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [],
-     "module_path": "nichlink",
+     "module_path": "xirang",
      "cfg_test_mounted": false,
      "cfg_features_mounted": [],
      "nested_package": null,
@@ -38308,14 +38308,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "cli/src/bin/cargo-nichlink.rs",
-     "file_line": "cli/src/bin/cargo-nichlink.rs:6",
+     "file": "cli/src/bin/cargo-xirang.rs",
+     "file_line": "cli/src/bin/cargo-xirang.rs:6",
      "line": 6,
      "end_line": 23,
      "lines": 18,
      "lines_incl_attrs": 18,
      "doc_attr_lines": 0,
-     "module_path": "cargo-nichlink",
+     "module_path": "cargo-xirang",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -38329,14 +38329,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "cli/src/bin/nichlink.rs",
-     "file_line": "cli/src/bin/nichlink.rs:10",
+     "file": "cli/src/bin/xirang.rs",
+     "file_line": "cli/src/bin/xirang.rs:10",
      "line": 10,
      "end_line": 15,
      "lines": 6,
      "lines_incl_attrs": 6,
      "doc_attr_lines": 0,
-     "module_path": "nichlink",
+     "module_path": "xirang",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -39733,7 +39733,7 @@
    ]
   },
   {
-   "name": "nichlink-mcp",
+   "name": "xirang-mcp",
    "workspace_member": true,
    "manifest_path": "mcp/Cargo.toml",
    "dir": "mcp",
@@ -39741,7 +39741,7 @@
    "features": {},
    "targets": [
     {
-     "name": "nichlink_mcp",
+     "name": "xirang_mcp",
      "kind": [
       "lib"
      ],
@@ -39749,7 +39749,7 @@
      "required_features": []
     },
     {
-     "name": "nichlink-mcp",
+     "name": "xirang-mcp",
      "kind": [
       "bin"
      ],
@@ -43156,7 +43156,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "mcp/src/index.rs",
      "file_line": "mcp/src/index.rs:76",
      "line": 76,
@@ -43177,7 +43177,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "mcp/src/index.rs",
      "file_line": "mcp/src/index.rs:80",
      "line": 80,
@@ -43198,7 +43198,7 @@
      "visibility": "private",
      "is_pub": false,
      "kind": "trait_impl_method",
-     "container": "nichlink::source::SourceTree for StdSourceTree",
+     "container": "xirang::source::SourceTree for StdSourceTree",
      "file": "mcp/src/index.rs",
      "file_line": "mcp/src/index.rs:91",
      "line": 91,
@@ -46346,7 +46346,7 @@
    ]
   },
   {
-   "name": "nichlink-debug-method",
+   "name": "xirang-debug-method",
    "workspace_member": true,
    "manifest_path": "debug_method/Cargo.toml",
    "dir": "debug_method",
@@ -46354,7 +46354,7 @@
    "features": {},
    "targets": [
     {
-     "name": "nichlink_debug_method",
+     "name": "xirang_debug_method",
      "kind": [
       "lib"
      ],
@@ -46734,7 +46734,7 @@
      "name_len": 55
     },
     {
-     "name": "span_contains_nichlink_fields",
+     "name": "span_contains_xirang_fields",
      "visibility": "private",
      "is_pub": false,
      "kind": "free_fn",
@@ -46925,7 +46925,7 @@
    ]
   },
   {
-   "name": "nichlink-studio",
+   "name": "xirang-studio",
    "workspace_member": true,
    "manifest_path": "studio/Cargo.toml",
    "dir": "studio",
@@ -46942,7 +46942,7 @@
    },
    "targets": [
     {
-     "name": "nichlink_studio",
+     "name": "xirang_studio",
      "kind": [
       "lib"
      ],
@@ -46950,17 +46950,17 @@
      "required_features": []
     },
     {
-     "name": "nichlink-dev",
+     "name": "xirang-dev",
      "kind": [
       "bin"
      ],
-     "src_path": "studio/src/bin/nichlink-dev.rs",
+     "src_path": "studio/src/bin/xirang-dev.rs",
      "required_features": [
       "dev-supervisor"
      ]
     },
     {
-     "name": "nichlink-studio",
+     "name": "xirang-studio",
      "kind": [
       "bin"
      ],
@@ -46987,7 +46987,7 @@
    "generated_plan_file": null,
    "files": [
     {
-     "path": "studio/src/bin/nichlink-dev.rs",
+     "path": "studio/src/bin/xirang-dev.rs",
      "lines": 427,
      "bytes": 17580,
      "role": "src/bin",
@@ -46996,7 +46996,7 @@
      "reachable_from_hand_written_mod_decls": true,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [],
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "cfg_test_mounted": false,
      "cfg_features_mounted": [],
      "nested_package": null,
@@ -49666,14 +49666,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:21",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:21",
      "line": 21,
      "end_line": 29,
      "lines": 9,
      "lines_incl_attrs": 9,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49687,14 +49687,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:31",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:31",
      "line": 31,
      "end_line": 84,
      "lines": 54,
      "lines_incl_attrs": 54,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49708,14 +49708,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:102",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:102",
      "line": 102,
      "end_line": 118,
      "lines": 17,
      "lines_incl_attrs": 33,
      "doc_attr_lines": 16,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49729,14 +49729,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:129",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:129",
      "line": 129,
      "end_line": 135,
      "lines": 7,
      "lines_incl_attrs": 16,
      "doc_attr_lines": 9,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49750,14 +49750,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:137",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:137",
      "line": 137,
      "end_line": 150,
      "lines": 14,
      "lines_incl_attrs": 14,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49771,14 +49771,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:152",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:152",
      "line": 152,
      "end_line": 167,
      "lines": 16,
      "lines_incl_attrs": 16,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49792,14 +49792,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:169",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:169",
      "line": 169,
      "end_line": 181,
      "lines": 13,
      "lines_incl_attrs": 13,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49813,14 +49813,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:184",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:184",
      "line": 184,
      "end_line": 193,
      "lines": 10,
      "lines_incl_attrs": 11,
      "doc_attr_lines": 1,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49834,14 +49834,14 @@
      "is_pub": false,
      "kind": "nested_fn",
      "container": "fn request_stop",
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:186",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:186",
      "line": 186,
      "end_line": 186,
      "lines": 1,
      "lines_incl_attrs": 1,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49855,14 +49855,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:196",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:196",
      "line": 196,
      "end_line": 199,
      "lines": 4,
      "lines_incl_attrs": 5,
      "doc_attr_lines": 1,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49876,14 +49876,14 @@
      "is_pub": false,
      "kind": "inherent_method",
      "container": "SourceWatcher",
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:207",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:207",
      "line": 207,
      "end_line": 233,
      "lines": 27,
      "lines_incl_attrs": 27,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49897,14 +49897,14 @@
      "is_pub": false,
      "kind": "inherent_method",
      "container": "SourceWatcher",
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:235",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:235",
      "line": 235,
      "end_line": 253,
      "lines": 19,
      "lines_incl_attrs": 19,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49918,14 +49918,14 @@
      "is_pub": false,
      "kind": "inherent_method",
      "container": "SourceWatcher",
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:255",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:255",
      "line": 255,
      "end_line": 257,
      "lines": 3,
      "lines_incl_attrs": 3,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49939,14 +49939,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:260",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:260",
      "line": 260,
      "end_line": 278,
      "lines": 19,
      "lines_incl_attrs": 19,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": false,
      "in_test_target": false,
      "is_test": false,
@@ -49960,14 +49960,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:288",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:288",
      "line": 288,
      "end_line": 297,
      "lines": 10,
      "lines_incl_attrs": 12,
      "doc_attr_lines": 2,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -49981,14 +49981,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:299",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:299",
      "line": 299,
      "end_line": 301,
      "lines": 3,
      "lines_incl_attrs": 3,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50002,14 +50002,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:303",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:303",
      "line": 303,
      "end_line": 305,
      "lines": 3,
      "lines_incl_attrs": 3,
      "doc_attr_lines": 0,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50023,14 +50023,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:313",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:313",
      "line": 313,
      "end_line": 329,
      "lines": 17,
      "lines_incl_attrs": 23,
      "doc_attr_lines": 6,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50044,14 +50044,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:334",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:334",
      "line": 334,
      "end_line": 349,
      "lines": 16,
      "lines_incl_attrs": 19,
      "doc_attr_lines": 3,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50065,14 +50065,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:355",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:355",
      "line": 355,
      "end_line": 369,
      "lines": 15,
      "lines_incl_attrs": 19,
      "doc_attr_lines": 4,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50086,14 +50086,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:372",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:372",
      "line": 372,
      "end_line": 379,
      "lines": 8,
      "lines_incl_attrs": 9,
      "doc_attr_lines": 1,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50107,14 +50107,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:382",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:382",
      "line": 382,
      "end_line": 386,
      "lines": 5,
      "lines_incl_attrs": 6,
      "doc_attr_lines": 1,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50128,14 +50128,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:389",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:389",
      "line": 389,
      "end_line": 403,
      "lines": 15,
      "lines_incl_attrs": 16,
      "doc_attr_lines": 1,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50149,14 +50149,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:408",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:408",
      "line": 408,
      "end_line": 415,
      "lines": 8,
      "lines_incl_attrs": 11,
      "doc_attr_lines": 3,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -50170,14 +50170,14 @@
      "is_pub": false,
      "kind": "free_fn",
      "container": null,
-     "file": "studio/src/bin/nichlink-dev.rs",
-     "file_line": "studio/src/bin/nichlink-dev.rs:422",
+     "file": "studio/src/bin/xirang-dev.rs",
+     "file_line": "studio/src/bin/xirang-dev.rs:422",
      "line": 422,
      "end_line": 426,
      "lines": 5,
      "lines_incl_attrs": 10,
      "doc_attr_lines": 5,
-     "module_path": "nichlink-dev",
+     "module_path": "xirang-dev",
      "in_cfg_test_module": true,
      "in_test_target": false,
      "is_test": true,
@@ -56768,7 +56768,7 @@
    ]
   },
   {
-   "name": "nichlink-plugin-host",
+   "name": "xirang-plugin-host",
    "workspace_member": true,
    "manifest_path": "plugin-host/Cargo.toml",
    "dir": "plugin-host",
@@ -56786,7 +56786,7 @@
    },
    "targets": [
     {
-     "name": "nichlink_plugin_host",
+     "name": "xirang_plugin_host",
      "kind": [
       "lib"
      ],
@@ -60334,7 +60334,7 @@
    ]
   },
   {
-   "name": "nichlink-example-control-button",
+   "name": "xirang-example-control-button",
    "workspace_member": true,
    "manifest_path": "examples/control-button/Cargo.toml",
    "dir": "examples/control-button",
@@ -60422,7 +60422,7 @@
    "pub_fn_count": 2,
    "test_fn_count": 40,
    "doc_comment_lines": 262,
-   "generated_plan_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+   "generated_plan_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
    "files": [
     {
      "path": "examples/control-button/build.rs",
@@ -60502,7 +60502,7 @@
      "reachable_from_hand_written_mod_decls": false,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [
-      "__nichlink_ra_control",
+      "__xirang_ra_control",
       "control"
      ],
      "module_path": null,
@@ -60522,7 +60522,7 @@
      "reachable_from_hand_written_mod_decls": false,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [
-      "__nichlink_ra_control_object_button",
+      "__xirang_ra_control_object_button",
       "button"
      ],
      "module_path": null,
@@ -60542,7 +60542,7 @@
      "reachable_from_hand_written_mod_decls": false,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [
-      "__nichlink_ra_control_object_slider",
+      "__xirang_ra_control_object_slider",
       "slider"
      ],
      "module_path": null,
@@ -60562,7 +60562,7 @@
      "reachable_from_hand_written_mod_decls": false,
      "reachable_in_compiled_crate": true,
      "generated_module_names": [
-      "__nichlink_ra_control_registry_rule",
+      "__xirang_ra_control_registry_rule",
       "registry_rule"
      ],
      "module_path": null,
@@ -60661,7 +60661,7 @@
    "unmounted_files": [],
    "module_edges": [
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
      "module_name": "control",
      "declaration_line": 79,
      "visibility": "private",
@@ -60676,10 +60676,10 @@
       "examples/control-button/src/control/control.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
      "module_name": "button",
      "declaration_line": 90,
      "visibility": "pub",
@@ -60694,10 +60694,10 @@
       "examples/control-button/src/control/object/button/button.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
      "module_name": "slider",
      "declaration_line": 96,
      "visibility": "pub",
@@ -60712,10 +60712,10 @@
       "examples/control-button/src/control/object/slider/slider.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
      "module_name": "registry_rule",
      "declaration_line": 103,
      "visibility": "pub",
@@ -60730,11 +60730,11 @@
       "examples/control-button/src/control/registry_rule/registry_rule.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
-     "module_name": "__nichlink_ra_control",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "module_name": "__xirang_ra_control",
      "declaration_line": 114,
      "visibility": "private",
      "path_attr": "/home/nich/Moirai_N3/nichlink/examples/control-button/src/control/control.rs",
@@ -60748,11 +60748,11 @@
       "examples/control-button/src/control/control.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
-     "module_name": "__nichlink_ra_control_object_button",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "module_name": "__xirang_ra_control_object_button",
      "declaration_line": 119,
      "visibility": "pub",
      "path_attr": "/home/nich/Moirai_N3/nichlink/examples/control-button/src/control/object/button/button.rs",
@@ -60766,11 +60766,11 @@
       "examples/control-button/src/control/object/button/button.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
-     "module_name": "__nichlink_ra_control_object_slider",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "module_name": "__xirang_ra_control_object_slider",
      "declaration_line": 124,
      "visibility": "pub",
      "path_attr": "/home/nich/Moirai_N3/nichlink/examples/control-button/src/control/object/slider/slider.rs",
@@ -60784,11 +60784,11 @@
       "examples/control-button/src/control/object/slider/slider.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     },
     {
-     "parent_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
-     "module_name": "__nichlink_ra_control_registry_rule",
+     "parent_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs",
+     "module_name": "__xirang_ra_control_registry_rule",
      "declaration_line": 129,
      "visibility": "pub",
      "path_attr": "/home/nich/Moirai_N3/nichlink/examples/control-button/src/control/registry_rule/registry_rule.rs",
@@ -60802,7 +60802,7 @@
       "examples/control-button/src/control/registry_rule/registry_rule.rs"
      ],
      "source": "generated-out-dir",
-     "generator_file": "target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
+     "generator_file": "target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs"
     }
    ],
    "functions": [
@@ -61922,7 +61922,7 @@
    ]
   },
   {
-   "name": "nichlink-example-control-button-graft",
+   "name": "xirang-example-control-button-graft",
    "workspace_member": true,
    "manifest_path": "examples/control-button-graft/Cargo.toml",
    "dir": "examples/control-button-graft",
@@ -62096,7 +62096,7 @@
    ]
   },
   {
-   "name": "nichlink-conventions",
+   "name": "xirang-conventions",
    "workspace_member": true,
    "manifest_path": "conventions/Cargo.toml",
    "dir": "conventions",
@@ -62104,7 +62104,7 @@
    "features": {},
    "targets": [
     {
-     "name": "nichlink_conventions",
+     "name": "xirang_conventions",
      "kind": [
       "lib"
      ],
@@ -66878,7 +66878,7 @@
      "name_len": 30
     },
     {
-     "name": "nichlink_reexports",
+     "name": "xirang_reexports",
      "visibility": "pub",
      "is_pub": true,
      "kind": "free_fn",
@@ -67279,7 +67279,7 @@
    ]
   },
   {
-   "name": "nichlink-fixture-node-editor",
+   "name": "xirang-fixture-node-editor",
    "workspace_member": false,
    "manifest_path": "studio/tests/fixtures/node-editor/Cargo.toml",
    "dir": "studio/tests/fixtures/node-editor",

@@ -19,38 +19,38 @@ set -eu
 # 的文件等于一个对任何人都编译不过的 crate，而在文件存在的本地它编译得好好的。
 #
 # A crate can only be *packaged* (built from the tarball in isolation, which is
-# what `cargo package` verifies) once every versioned `nichlink-*` dependency it
+# what `cargo package` verifies) once every versioned `xirang-*` dependency it
 # names is resolvable on the target registry. A crate whose dependency is not
 # there yet is warned about and its packaging half skipped; a skip is not a
 # failure, and every crate whose dependencies do resolve is checked in full. That
 # state recurs on every version bump, not only before a first publish. A
 # packaging failure in a checkable crate is a real error and makes the script
 # exit non-zero; the CI step that calls it does not set continue-on-error.
-# 只有当某个 crate 写下的每个带版本号的 `nichlink-*` 依赖都能在目标 registry 上解析
+# 只有当某个 crate 写下的每个带版本号的 `xirang-*` 依赖都能在目标 registry 上解析
 # 时，它才能被打包（从 tarball 隔离构建，也就是 `cargo package` 所校验的事）。依赖还不在
 # index 上的 crate 会被警告并跳过打包这一半；跳过不算失败，而依赖能解析的 crate 会被
 # 完整检查。这个状态每次推进版本线都会重现，而不只是首次发布之前。可检查的 crate 若打包失败
 # 就是真实错误，脚本以非零退出——调用它的 CI 步骤不设置 continue-on-error。
 #
 # The crate set and each crate's internal dependencies are derived from the
-# workspace, the same way `tools/nichlink-publish --check-table` derives them; the
+# workspace, the same way `tools/xirang-publish --check-table` derives them; the
 # derivation itself is commented at the `$crates` loop below. The release *order*
 # is deliberately not restated here: it is owned by the `levels` table in
-# `tools/nichlink-publish`, whose `--check-table` mode compares that table against
+# `tools/xirang-publish`, whose `--check-table` mode compares that table against
 # these manifests on every push and before every publish. A second copy of the
-# order in prose is a copy nothing checks, and this one had `nichlink-mcp` in the
+# order in prose is a copy nothing checks, and this one had `xirang-mcp` in the
 # wrong layer.
 # 已发布的 crate 集合与每个 crate 的内部依赖都从工作区推导，与
-# `tools/nichlink-publish --check-table` 同一口径；推导本身见下面 `$crates` 循环处的注释。
-# 发布**顺序**有意不在这里复述：它归 `tools/nichlink-publish` 的 `levels` 表所有，而它的
+# `tools/xirang-publish --check-table` 同一口径；推导本身见下面 `$crates` 循环处的注释。
+# 发布**顺序**有意不在这里复述：它归 `tools/xirang-publish` 的 `levels` 表所有，而它的
 # `--check-table` 模式在每次 push 与每次发布前把那张表与这些清单对比。散文里的第二份顺序是
-# 一份没有任何东西核对的副本——这一份曾把 `nichlink-mcp` 放在错误的层。
+# 一份没有任何东西核对的副本——这一份曾把 `xirang-mcp` 放在错误的层。
 #
-# Each entry is "<crate>:<directory>:<comma-separated versioned nichlink-* deps>".
+# Each entry is "<crate>:<directory>:<comma-separated versioned xirang-* deps>".
 # Dependencies are comma separated, not space separated: the entries are read by
 # `for entry in $crates`, so a space inside one would split it into several and
 # silently evaluate a crate with only its first dependency.
-# 每项形如 "<crate>:<目录>:<以逗号分隔的带版本号 nichlink-* 依赖>"。依赖用逗号而不是空格
+# 每项形如 "<crate>:<目录>:<以逗号分隔的带版本号 xirang-* 依赖>"。依赖用逗号而不是空格
 # 分隔：这些项由 `for entry in $crates` 读取，项内的空格会把它拆成多项，并静默地只按第一个
 # 依赖去评估一个 crate。
 
@@ -85,18 +85,18 @@ fi
 
 # Package dependencies and the declared readme/license-file come from `cargo
 # metadata --no-deps`, not from a scan of the TOML. Three spellings the scan
-# missed are ordinary manifest syntax: a dotted `[dependencies.nichlink-x]`
+# missed are ordinary manifest syntax: a dotted `[dependencies.xirang-x]`
 # table, a target-specific `[target.'cfg(…)'.dependencies]` table, and an
 # inherited `readme.workspace = true` / `license-file.workspace = true`. The
-# scan disagreed with `tools/nichlink-publish --check-table` about the first two
+# scan disagreed with `tools/xirang-publish --check-table` about the first two
 # and silently skipped the readme check for the third, so a crate whose declared
 # readme was not the one it packaged could still be reported as contents-checked.
 # `--no-deps` keeps the call offline: it asks only about the workspace members,
 # so no registry is consulted and a cold CI cache behaves like a warm local one.
 # 包的依赖与清单声明的 readme/license-file 改从 `cargo metadata --no-deps` 读取，而不是
-# 扫描 TOML。扫描漏掉的三种拼法都是普通清单语法：点表 `[dependencies.nichlink-x]`、按目标
+# 扫描 TOML。扫描漏掉的三种拼法都是普通清单语法：点表 `[dependencies.xirang-x]`、按目标
 # 限定的 `[target.'cfg(…)'.dependencies]` 表，以及继承的 `readme.workspace = true` /
-# `license-file.workspace = true`。扫描在前两者上与 `tools/nichlink-publish --check-table`
+# `license-file.workspace = true`。扫描在前两者上与 `tools/xirang-publish --check-table`
 # 不一致，在第三者上则静默跳过 readme 检查，因此一个声明的 readme 与实际打包不符的 crate 仍
 # 可能被报成内容已检查。`--no-deps` 让这次调用保持离线：它只问工作区成员，因此不查 registry，
 # 冷启动的 CI 缓存与本地热缓存行为一致。
@@ -189,7 +189,7 @@ metadata_field() {
               gsub(/"/, "", kind)
             }
             d = name_of(p)
-            if (kind != "dev" && d ~ /^nichlink-/) print d
+            if (kind != "dev" && d ~ /^xirang-/) print d
           }
         } else if (field == "readme") {
           r = readme_of(p)
@@ -207,11 +207,11 @@ metadata_field() {
 # The shipped crates are derived from the workspace, not listed: a hand-kept table
 # is one a new member can simply not appear in. The audit added a tenth published
 # member and this tool still reported "all nine crates" while
-# `tools/nichlink-publish --check-table` caught it — the derivation below is the
+# `tools/xirang-publish --check-table` caught it — the derivation below is the
 # same one, duplicated for the same reason the index probe is: each tool has to stay
 # runnable on its own.
 # 已发布的 crate 从工作区推导，而不是手列：手工表正是新成员可以干脆不出现的那种表。审计加了
-# 第十个已发布成员，而本工具仍报"all nine crates"，反倒是 `tools/nichlink-publish --check-table`
+# 第十个已发布成员，而本工具仍报"all nine crates"，反倒是 `tools/xirang-publish --check-table`
 # 抓到了它——下面这段推导与它相同，复刻的理由与 index 探针一样：每个工具都必须能独立运行。
 members=$(awk '
   /^members *= *\[/ { inside = 1 }
@@ -453,13 +453,13 @@ Package audit summary
   skipped:${skipped:- none}
   failed:${failed:- none}
 Contents are checked for every crate. Skipped crates have a
-versioned nichlink-* dependency that is not on $index_url yet; they become
+versioned xirang-* dependency that is not on $index_url yet; they become
 checkable automatically once that dependency is published. The publish order is
-the levels table in tools/nichlink-publish, whose --check-table mode compares it
+the levels table in tools/xirang-publish, whose --check-table mode compares it
 against the manifests.
 内容检查对每个 crate 都生效。跳过的 crate 有尚未发布到 $index_url 的
-nichlink-* 版本依赖；该依赖发布后它们会自动变为可检查。发布顺序见
-tools/nichlink-publish 的 levels 表，--check-table 会把它与清单核对。
+xirang-* 版本依赖；该依赖发布后它们会自动变为可检查。发布顺序见
+tools/xirang-publish 的 levels 表，--check-table 会把它与清单核对。
 EOF
 
 if [ -n "$content_failed" ]; then

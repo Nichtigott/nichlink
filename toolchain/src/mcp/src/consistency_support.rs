@@ -16,7 +16,7 @@
 
 use std::path::Path;
 
-use nichlink_kernel::syntax::FaceSyntax;
+use xirang_kernel::syntax::FaceSyntax;
 
 use crate::build_method::FaceView;
 use crate::mcp::source_index::load_sources;
@@ -544,15 +544,15 @@ pub(super) fn repair_request(
     gaps: &[String],
     text: Option<&str>,
 ) -> Option<serde_json::Value> {
-    // The write path's own question, asked before a request is handed back: is this file NichLink's
+    // The write path's own question, asked before a request is handed back: is this file XiRang's
     // to rewrite? The marker is the kernel's text contract (`lexicon::GENERATED_MARKER`), not a
     // literal spelled here — and a file the index could not read is not one to claim either way.
-    // 交回请求之前先问写入路径自己的问题：这个文件是 NichLink 可以重写的吗？那个标记是内核的文本契约
+    // 交回请求之前先问写入路径自己的问题：这个文件是 XiRang 可以重写的吗？那个标记是内核的文本契约
     // （`lexicon::GENERATED_MARKER`），不是在这里拼的字面量——而索引读不到的文件，两种情况都不该替它断言。
     let text = text?;
     if !text
         .lines()
-        .any(|line| line.trim() == nichlink_kernel::lexicon::GENERATED_MARKER)
+        .any(|line| line.trim() == xirang_kernel::lexicon::GENERATED_MARKER)
     {
         return None;
     }
@@ -879,7 +879,7 @@ pub(crate) fn roots_with_freshness(root: &Path) -> Vec<(std::path::PathBuf, bool
 pub(crate) fn current_identity(
     root: &Path,
     row: &crate::build_method::PruningRow,
-) -> Option<nichlink_kernel::identity::NodeId> {
+) -> Option<xirang_kernel::identity::NodeId> {
     let namespace = crate::mcp::registry::namespace(root).ok()?;
     let text = std::fs::read_to_string(root.join("src").join(&row.source)).ok()?;
     let face = crate::mcp::consistency::one_face(&text).ok()?;
@@ -889,7 +889,7 @@ pub(crate) fn current_identity(
     // 用 `field` 而不是 `string`：声明写的是 `kind: X`，内核的面读取器把它保留为字段的原始取值（实测：
     // 这里 `string("kind")` 是 `None`，而 `field("kind")` 是 `Some("RenamedButton")`）。
     let kind = face.field("kind").or_else(|| row.kind.clone())?;
-    Some(nichlink_kernel::identity::NodeId::from_namespaced_path(
+    Some(xirang_kernel::identity::NodeId::from_namespaced_path(
         &namespace,
         &row.source,
         &kind,

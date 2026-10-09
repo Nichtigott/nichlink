@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="./picture/NichLink_wordmark.svg" alt="NichLink ASCII wordmark">
+<img src="./picture/XiRang_wordmark.svg" alt="XiRang ASCII wordmark">
 
 <p><strong>A Rust code-organization model built for how communities actually extend software, for engineering collaboration, and for agentic coding: passive recursive registration, explicit contracts, atomic replacement at any level.</strong></p>
 
-[![license](https://img.shields.io/github/license/Nichtigott/nichlink?style=flat-square)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/Nichtigott/xirang?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/xirang/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-Rust%201.96-8250df?style=flat-square)](Cargo.toml)
 
 
@@ -19,10 +19,10 @@
 
 </div>
 
-💬 [Discuss the graft model](https://github.com/Nichtigott/nichlink/discussions)
+💬 [Discuss the graft model](https://github.com/Nichtigott/xirang/discussions)
 
 In a large Rust project, a localized change can cut across half the
-repository. NichLink addresses this at the structural level: objects carry
+repository. XiRang addresses this at the structural level: objects carry
 small, explicit boundaries; a replacement is validated where it plugs in; and
 the source location of every object remains visible to the people and tools
 working on it.
@@ -30,7 +30,7 @@ working on it.
 AI-assisted and agentic coding amplify this pressure rather than create it.
 Neither a model nor a human reviewer sustains complete attention over a large
 codebase; hallucinated references and missed context are routine failure
-modes, not exceptions. NichLink therefore turns assumptions that usually live
+modes, not exceptions. XiRang therefore turns assumptions that usually live
 in convention into inspectable structure: atomic objects, explicit contracts,
 source provenance, and a development-time registry graph that a team can read
 together. The same boundaries serve code review, community contributions, and
@@ -43,7 +43,7 @@ replaces, and lets the host validate the graft. Competing implementations
 coexist without turning upstream into a patch queue: the project keeps its
 shape, and experimentation happens inside named contracts.
 
-NichLink is early-stage software: the core protocol is usable in real projects
+XiRang is early-stage software: the core protocol is usable in real projects
 today, and both static analysis and runtime evidence report their coverage
 explicitly.
 
@@ -71,46 +71,46 @@ explicitly.
 
 ## Get started
 
-There are two supported ways to try NichLink.
+There are two supported ways to try XiRang.
 
-### Install the NichLink CLI
+### Install the XiRang CLI
 
-This keeps the NichLink source outside your application. Install the CLI from
-crates.io; it provides the `nichlink` command, including `nichlink
+This keeps the XiRang source outside your application. Install the CLI from
+crates.io; it provides the `xirang` command, including `xirang
 studio` for the Ratatui Studio:
 
 ```sh
-cargo install nichlink-toolchain
-nichlink new my-app
-cd my-app && nichlink studio
+cargo install xirang-toolchain
+xirang new my-app
+cd my-app && xirang studio
 ```
 
 The released versions are on crates.io (`CHANGELOG.md` names the newest). The Git source still works if you want the checkout's tip
 rather than the released version: `cargo install --git
-https://github.com/Nichtigott/nichlink nichlink-toolchain`.
-The plugin binary also answers to `cargo nichlink <command>`. To inspect an
+https://github.com/Nichtigott/xirang xirang-toolchain`.
+The plugin binary also answers to `cargo xirang <command>`. To inspect an
 existing project instead, point the CLI at it:
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
+XIRANG_PACKAGE_ROOT=/work/my-app xirang studio
 ```
 
-The standalone `nichlink-toolchain` binary remains available for direct installs.
+The standalone `xirang-toolchain` binary remains available for direct installs.
 
 ### Run from a clone
 
-This is handy while developing NichLink itself and does not install anything:
+This is handy while developing XiRang itself and does not install anything:
 
 ```sh
-git clone https://github.com/Nichtigott/nichlink
-cd nichlink
-cargo run -p nichlink-toolchain -- studio
+git clone https://github.com/Nichtigott/xirang
+cd xirang
+cargo run -p xirang-toolchain -- studio
 ```
 
 To inspect another project from the clone:
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-toolchain -- studio
+XIRANG_PACKAGE_ROOT=/work/my-app cargo run -p xirang-toolchain -- studio
 ```
 
 Studio's `n` action creates a binary or library project. It writes the manifest,
@@ -118,41 +118,41 @@ the thin build entry, and the source entry point; the first face is added with
 `a`. It does not invent a `control` tree. A registry owner gets a local
 `registry_rule/` directory only when that rule is needed.
 
-### Add NichLink to an application
+### Add XiRang to an application
 
 The application owns its declarations, so Cargo needs one small build adapter:
 
 ```sh
-# From Git. `nichlink-toolchain` belongs to the build dependency table.
-cargo add nichlink-toolchain --git https://github.com/Nichtigott/nichlink --branch main
-cargo add nichlink-toolchain --build --git https://github.com/Nichtigott/nichlink --branch main
+# From Git. `xirang-toolchain` belongs to the build dependency table.
+cargo add xirang-toolchain --git https://github.com/Nichtigott/xirang --branch main
+cargo add xirang-toolchain --build --git https://github.com/Nichtigott/xirang --branch main
 
 # Or, while developing both projects from local checkouts:
-cargo add nichlink-toolchain --path /path/to/nichlink/run_method
-cargo add nichlink-toolchain --build --path /path/to/nichlink/build_method
+cargo add xirang-toolchain --path /path/to/xirang/run_method
+cargo add xirang-toolchain --build --path /path/to/xirang/build_method
 ```
 
-Do not add `nichlink-toolchain` once under `[dependencies]` and again from a
+Do not add `xirang-toolchain` once under `[dependencies]` and again from a
 different source under `[build-dependencies]`; Cargo requires one canonical
 source for a package throughout a manifest.
 
 ```rust
 // build.rs
 fn main() {
-    nichlink_toolchain::build_method::run();
+    xirang_toolchain::build_method::run();
 }
 ```
 
 In the crate root, connect the generated plan once:
 
 ```rust
-nichlink_toolchain::run_method::host!();
+xirang_toolchain::run_method::host!();
 ```
 
 This expands to `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`;
 writing the include directly is an equivalent, advanced alternative.
-`nichlink-toolchain` re-exports the kernel, so face code refers to
-contracts, plans, and traces through `nichlink_toolchain::run_method::…`.
+`xirang-toolchain` re-exports the kernel, so face code refers to
+contracts, plans, and traces through `xirang_toolchain::run_method::…`.
 
 `main.rs` is optional. A binary uses `src/main.rs` as the application entry; a
 framework library uses `src/lib.rs`. The build adapter scans the host crate's
@@ -171,12 +171,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_toolchain::run_method::PresetContract for CanvasPreset {
+impl xirang_toolchain::run_method::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_toolchain::run_method::PartsContract for CanvasParts {
+impl xirang_toolchain::run_method::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -199,8 +199,8 @@ crate::node_editor_object! {
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    flow: nichlink_toolchain::run_method::FlowContract::new(
-        nichlink_toolchain::run_method::ContractId::new("canvas.render.v1"),
+    flow: xirang_toolchain::run_method::FlowContract::new(
+        xirang_toolchain::run_method::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -231,7 +231,7 @@ For a replacement, both sides publish a flow contract. The host validates the
 contract id, version, input, and output before applying the graft:
 
 ```rust
-let plan = nichlink_toolchain::run_method::GraftPlan::command(
+let plan = xirang_toolchain::run_method::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -380,7 +380,7 @@ Four layers validate this declaration:
 
 | Check                    | Enforced by                                                                        | What it proves here                                                              |
 | ------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Parent topology          | `nichlink-toolchain`                                                               | Button's macro, folder, and `parent` all point to Control                        |
+| Parent topology          | `xirang-toolchain`                                                               | Button's macro, folder, and `parent` all point to Control                        |
 | Rust type contract       | rustc                                                                              | Both associated `Output` types are `ButtonParts`, and the real trait impls exist |
 | Parent registration rule | Aggregated build diagnostics, generated const checks, and the development Registry | Preset, parts, export, and interfaces are at least the Control minimum           |
 | External admission       | Registry connector                                                                 | Cross-tree `requires` stay within Control's allowed `admission` paths            |
@@ -478,11 +478,11 @@ or third-party source. The static macro constructs no `Vec` or `String`; the
 builder writes its contents directly into the `StaticPlan`:
 
 ```rust
-use nichlink_toolchain::run_method::{FrameworkId, Registry};
+use xirang_toolchain::run_method::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -533,7 +533,7 @@ When several data boundaries must change together, put all cuts in one static
 declaration:
 
 ```rust
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -546,7 +546,7 @@ reload path must construct and modify a plan at runtime.
 A path range can target contiguous siblings under one parent Registry:
 
 ```rust
-let plan = nichlink_toolchain::run_method::GraftPlan::command(
+let plan = xirang_toolchain::run_method::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -571,9 +571,9 @@ screen keeps them apart:
 * `Registry::overlay` is the **application**: it validates and returns the
   effective tree at runtime, leaving both the base registry and the external
   registry untouched.
-* `.nichlink/external-grafts/<selector>/graft.plan` is the **record** the screen
+* `.xirang/external-grafts/<selector>/graft.plan` is the **record** the screen
   writes: the authoring input the runtime can now apply over the declaration.
-  It is not compiled; `nichlink_toolchain::run_method::apply_recorded_grafts` loads it and
+  It is not compiled; `xirang_toolchain::run_method::apply_recorded_grafts` loads it and
   `Registry::overlay_recorded` reconciles it under the precedence rule in
   [`docs/graft.md`](docs/graft.md) — a record overrides a string-form
   `static_graft_plan!` cut, a typed-form cut stays final, and a record selector
@@ -586,10 +586,10 @@ children) or `full` (it replaces the subtree), checks the slot against the cuts
 the host entry declares — a face no `cut` names is not shipped — and prints the
 exact `static_graft_plan!` clause to paste into that entry, because Studio never
 rewrites host source. `s` writes the plan and opens it, `o` opens it again, `f`
-flips `full`, and `d` moves it to `.nichlink/trash/external-grafts/`. There is
+flips `full`, and `d` moves it to `.xirang/trash/external-grafts/`. There is
 no source-copy or source-replacement graft path.
 
-NichLink does not prescribe the programming paradigm inside a face. Functions,
+XiRang does not prescribe the programming paradigm inside a face. Functions,
 traits, generics, closures, dependency injection, and message passing remain
 ordinary Rust. The registration face governs the published boundary. Declared
 `requires/provides` and `FlowContract` edges are checked automatically during
@@ -597,25 +597,25 @@ registration, connection, and grafting. Changing an implementation is fine; a
 failure occurs only when an input has no admitted provider or a replacement no
 longer reconnects to the declared data flow. The diagnostic names the broken
 capability, consumer, candidate provider, source location, and phase. This is
-not a claim that NichLink guesses every undeclared value flow inside arbitrary
+not a claim that XiRang guesses every undeclared value flow inside arbitrary
 Rust code.
 
 ## Static release plans, performance, and two-stage pruning
 
-NichLink's two pruning stages solve different problems.
+XiRang's two pruning stages solve different problems.
 
 The first stage runs before rustc expands the generated module tree. Its unit is
 a complete registration face:
 
-1. the host crate's thin `build.rs` calls `nichlink-toolchain`;
+1. the host crate's thin `build.rs` calls `xirang-toolchain`;
 2. the builder reads folder-backed faces and the entry in `main.rs`, `lib.rs`,
-   `application!(entry = …)`, or whatever `NICH_LINK_ENTRY` names (a value that
+   `application!(entry = …)`, or whatever `XIRANG_ENTRY` names (a value that
    names no file fails the build; the same entry feeds pruning and the cut
    table);
 3. it conservatively derives the faces needed by this crate — what the entry
    reaches plus the slot each `cut(` in `static_graft_plan!` names — and emits
    only those faces into the generated modules and `StaticPlan`, so a face
-   nobody declared is not shipped (`NICH_LINK_SCOPE` widens that scope on
+   nobody declared is not shipped (`XIRANG_SCOPE` widens that scope on
    purpose);
 4. dynamic dispatch, generated code, or an unresolved path forces a full-tree
    fallback instead of an unsafe deletion.
@@ -627,9 +627,9 @@ active face.
 The second stage is the normal Rust toolchain. Rustc reachability and
 monomorphisation, LLVM, ThinLTO, and linker garbage collection remove unused
 functions and symbols. The workspace release profile enables ThinLTO with one
-codegen unit. `tools/nichlink-release-audit` checks release artifacts, rejects a
+codegen unit. `tools/xirang-release-audit` checks release artifacts, rejects a
 remaining `.inventory` linker section, and can compare the symbols and bytes of
-full and minimal application binaries. NichLink does not present source-level
+full and minimal application binaries. XiRang does not present source-level
 function-name matching as compiler-accurate elimination.
 
 A release build also does not reconstruct the built-in Registry at startup.
@@ -668,7 +668,7 @@ plugins, or applies a graft. Studio, MCP, debug, and plugin-host are separate
 tools or optional dependencies; an application that does not link them does
 not carry them in its binary.
 
-NichLink core does not rewrite arbitrary Rust call sites. A framework that
+XiRang core does not rewrite arbitrary Rust call sites. A framework that
 wants a fully static implementation binding uses its own generated layer to
 select a concrete Rust type or function from these checked selectors. A
 runtime plugin has no implementation to link ahead of time, so it still needs
@@ -680,15 +680,15 @@ ships reproducible checks instead of a fixed benchmark claim:
 
 ```sh
 # Build and index a large Registry
-cargo run --release -p nichlink-toolchain --example scale_audit -- 100000
+cargo run --release -p xirang-toolchain --example scale_audit -- 100000
 
 # fmt, tests, Clippy, docs, release artifacts, symbols, and linker sections
-tools/nichlink-release-audit
+tools/xirang-release-audit
 
 # Optional: compare two real application artifacts
-NICH_LINK_FULL_BINARY=/path/to/full \
-NICH_LINK_MINIMAL_BINARY=/path/to/minimal \
-tools/nichlink-release-audit
+XIRANG_FULL_BINARY=/path/to/full \
+XIRANG_MINIMAL_BINARY=/path/to/minimal \
+tools/xirang-release-audit
 ```
 
 ## Studio and CLI
@@ -697,7 +697,7 @@ Studio is a resident Ratatui application, not a stream of printed snapshots. It
 opens an alternate terminal screen, watches the selected project, and redraws
 on input, resize, or a file event.
 
-![NichLink Studio](https://raw.githubusercontent.com/Nichtigott/nichlink/main/picture/NichLink_studio.png)
+![XiRang Studio](https://raw.githubusercontent.com/Nichtigott/xirang/main/picture/XiRang_studio.png)
 
 | Key              | Action                                               |
 | ---------------- | ---------------------------------------------------- |
@@ -716,92 +716,92 @@ on input, resize, or a file event.
 For source-driven hot rebuild while working on Studio itself:
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app \
-  cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch
+XIRANG_PACKAGE_ROOT=/work/my-app \
+  cargo run -p xirang-toolchain --features dev-supervisor --bin xirang-dev -- watch
 ```
 
-`nichlink-dev` is **workspace-only**: it rebuilds Studio from this checkout and
+`xirang-dev` is **workspace-only**: it rebuilds Studio from this checkout and
 launches that checkout's `target/debug` binary. The `dev-supervisor` feature is
-not enabled by default, so `cargo install nichlink-toolchain` installs the TUI and
+not enabled by default, so `cargo install xirang-toolchain` installs the TUI and
 not a supervisor that would have nothing to rebuild.
 
-The command-line surface is intentionally small. `nichlink` is the unified
-entry point: `nichlink new` scaffolds host projects, `nichlink check` runs the
-registration discovery and validation pass without a full compile, `nichlink
+The command-line surface is intentionally small. `xirang` is the unified
+entry point: `xirang new` scaffolds host projects, `xirang check` runs the
+registration discovery and validation pass without a full compile, `xirang
 build` validates the registration tree and then invokes `cargo build`,
-`nichlink snippets` injects the face-field editor snippets — a VS Code project
+`xirang snippets` injects the face-field editor snippets — a VS Code project
 file, a LuaSnip file, or blink.cmp's snippet file (`new` writes the VS Code one
 too; `--editor vscode|nvim|blink` picks one, `--editor auto` installs the
 editors found on the machine in their user-level locations, skipping the ones
 that match snippets fuzzily — blink.cmp and LuaSnip also offer a field trigger
 at value positions, so those need `--editor blink`/`--editor nvim` explicitly —
 and `--stdout` prints any of them). Value completion needs no snippet at all.
-`nichlink grafts` lists the `.nichlink/external-grafts/` records and whether the
-host entry declares their slots, and `nichlink explain <node|path>` reports one
+`xirang grafts` lists the `.xirang/external-grafts/` records and whether the
+host entry declares their slots, and `xirang explain <node|path>` reports one
 node's identity, build scope, pruning state, and naming cuts (`explain
 --overlay` renders the build's static overlay projection, not a live tree;
 the live effective tree is the host-side `Registry::dump_effective`).
-`nichlink studio` is the interactive authoring/debug surface, and `nichlink
+`xirang studio` is the interactive authoring/debug surface, and `xirang
 mcp` is the JSON-RPC/MCP bridge for AI clients: source and registry queries, plus
 authoring writes that preview unless `apply: true`. `cargo check`
 remains the build validation command:
 
 ```sh
 cargo check
-NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
+XIRANG_PACKAGE_ROOT=/work/my-app xirang mcp
 ```
 
-MCP tools include `nichlink.search` (faces first, matched on logical path, kind, module,
+MCP tools include `xirang.search` (faces first, matched on logical path, kind, module,
 or `registry_name` and annotated with the build's verdict — `ok`, `added since build`,
 `re-identified`, or `build unknown`; a manifest that no longer describes these sources is
-announced above the verdicts as `stale (run nichlink check)` — then the file and function
+announced above the verdicts as `stale (run xirang check)` — then the file and function
 hits),
-`nichlink.inspect`, `nichlink.callgraph`,
-`nichlink.read`, `nichlink.status`, and `nichlink.registry` — the last reports the
+`xirang.inspect`, `xirang.callgraph`,
+`xirang.read`, `xirang.status`, and `xirang.registry` — the last reports the
 registration tree the build derives, so an agent can read the registry instead of
-reconstructing it from macro names — plus `nichlink.explain` (the build's published
+reconstructing it from macro names — plus `xirang.explain` (the build's published
 scope and release pruning, which source text cannot answer; with `overlay: true` the
 overlay projection instead — which slot each declared cut replaces and which faces the
-scope prunes, the published state after replacement), `nichlink.diff` (the
+scope prunes, the published state after replacement), `xirang.diff` (the
 face-level delta between the sources and the build, including identities that
 changed under an unmoved file — and, with `records: true`, between the external graft
 records and the sources, where a record whose slot moved identity is `re-identified`
-instead of silently broken), and `nichlink.trace` (the recorded trace's call
+instead of silently broken), and `xirang.trace` (the recorded trace's call
 report — what actually ran — refused when the artifact describes another tree; with
 `values: true` it reports the recorded values and data edges instead, grouped by the
 frame that captured them),
-`nichlink.mir` (a `-Zunpretty=mir` text dump or the compact JSONL artifact, read
+`xirang.mir` (a `-Zunpretty=mir` text dump or the compact JSONL artifact, read
 either way and *written* when `jsonl: true` — the portable channel nothing in the
 workspace produced before; what it writes is a snapshot naming its tree, and with
 `against` two snapshots diff into the call-graph delta, a foreign one refused by name),
-`nichlink.unified` (that graph merged with the recorded
+`xirang.unified` (that graph merged with the recorded
 trace through `debug_method`'s own `UnifiedCallGraph`, where a live call confirms its
 compiler candidate instead of sitting beside it), and
-`nichlink.usages` (a face's neighbourhood: its tree edges, the fields `apply` can set
+`xirang.usages` (a face's neighbourhood: its tree edges, the fields `apply` can set
 read back, and the capability tokens other faces mention in either direction),
-`nichlink.impact` (the transitive blast radius of a change: descendants, capability
+`xirang.impact` (the transitive blast radius of a change: descendants, capability
 consumers, and declared graft cuts, each with its hop distance and reasons),
-`nichlink.grafts` (every external graft plan and whether the host entry declares the slot
+`xirang.grafts` (every external graft plan and whether the host entry declares the slot
 it targets, so an unkept record is visible before a release prunes it), and
-`nichlink.converge` (one call that returns the converged starting point for a face:
+`xirang.converge` (one call that returns the converged starting point for a face:
 scope and pruning verdicts, its neighbourhood, whether each requirement is answered,
 and the files to read — reporting a kernel rejection as its verdict rather than as an
 error; with `trace: true` it starts from the recorded run instead and collapses the
 tree to the files that both declare a face and actually ran, carrying the values those
-frames captured and the edges between them), `nichlink.verify` (re-run the kernel's validation and report the tree delta the
+frames captured and the edges between them), `xirang.verify` (re-run the kernel's validation and report the tree delta the
 run published, so an edit is confirmed rather than merely written), and
-`nichlink.apply`, which adds, edits, renames, or deletes a face through the
+`xirang.apply`, which adds, edits, renames, or deletes a face through the
 same authoring executor Studio uses and previews the change on a throwaway copy
 unless `apply: true` is given. Static call-graph answers are labelled
 heuristic; dynamic calls and runtime values are authoritative only when a host
 records a real `CallTrace`, which Studio loads from the artifact that host writes
 (`docs/design-trace-ingest.md`); a session with no artifact says `TRACE: none`
-rather than showing values it does not have, and `nichlink.unified` is where a
+rather than showing values it does not have, and `xirang.unified` is where a
 recorded trace and the compiler's MIR candidates are joined.
 
-## When NichLink is worth it
+## When XiRang is worth it
 
-NichLink is not a replacement for Rust's module system. It earns its place when
+XiRang is not a replacement for Rust's module system. It earns its place when
 an object graph is maintained by several people or tools, when a middle layer
 must be swapped without rebuilding its neighbours, or when an AI agent needs a
 machine-readable explanation of what an object accepts and provides. For a
@@ -816,7 +816,7 @@ choice.
 | `inventory` / `linkme` | Distributed collection of static items                                                                                     | Tree semantics, contracts, provenance, atomic grafts       |
 | Bevy-style plugins     | Explicit composition of an application                                                                                     | Generic source paths and middle-layer contract checks      |
 | CodeGraph / CodeQL     | Symbol and call evidence                                                                                                   | Runtime registration and replacement decisions             |
-| NichLink               | Passive recursive tree, contracts, admission, graft validation, Studio views, and MCP source queries with previewed writes | Rust's own rules for dynamic dispatch and optimised values |
+| XiRang               | Passive recursive tree, contracts, admission, graft validation, Studio views, and MCP source queries with previewed writes | Rust's own rules for dynamic dispatch and optimised values |
 
 ## Boundaries
 
@@ -844,9 +844,9 @@ choice.
 ## Runtime tracing
 
 ```rust
-let trace = nichlink_toolchain::run_method::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_toolchain::run_method::CallTrace::disabled();
-let detailed = nichlink_toolchain::run_method::CallTrace::full();
+let trace = xirang_toolchain::run_method::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = xirang_toolchain::run_method::CallTrace::disabled();
+let detailed = xirang_toolchain::run_method::CallTrace::full();
 ```
 
 `errors-only` keeps failed chains and discards successful evidence. `full` keeps
@@ -855,13 +855,13 @@ path collects nothing unless the application opts in.
 
 ## Kernel and execution surfaces
 
-NichLink splits the workspace into one pure kernel and a set of thin
+XiRang splits the workspace into one pure kernel and a set of thin
 execution surfaces. The sinking rule is simple: **logic with no I/O, no
 `std::env`, and no time or process binding belongs in the kernel**; anything
 that reads the filesystem, spawns processes, or drives a terminal stays in an
 execution surface that binds kernel methods to its own context.
 
-`nichlink-kernel` (library name `nichlink_kernel`) is the kernel. It holds the
+`xirang-kernel` (library name `xirang_kernel`) is the kernel. It holds the
 protocol vocabulary and the complete set of pure operations: identity,
 declaration, parsing, tree operations, policy, and rendering. Nothing in the
 kernel performs I/O or binds to the environment, so every tool can reuse the
@@ -869,15 +869,15 @@ same methods.
 
 | Crate                | Directory                  | Execution surface                                                                                                                                                                                          |
 | -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nichlink-toolchain` | `toolchain/build_method/`    | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives                                                  |
-| `nichlink-toolchain` | `toolchain/runtime/`       | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor                                                                            |
-| `nichlink-toolchain` | `toolchain/call_evidence/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
-| `nichlink-toolchain` | `toolchain/plugin_host/`   | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table                                                                                                 |
-| `nichlink-toolchain` | `toolchain/studio/`        | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods                                                                                                 |
-| `nichlink-toolchain` | `toolchain/mcp/`           | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding                                                                                                                                         |
-| `nichlink-toolchain` | `toolchain/cli/`           | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding                                                                                                                                     |
+| `xirang-toolchain` | `toolchain/build_method/`    | Build-time filesystem and `OUT_DIR` orchestration: source scanning, kernel validation, `generated_lib` rendering, manifest/cache writes, cargo directives                                                  |
+| `xirang-toolchain` | `toolchain/runtime/`       | Runtime state and tracing: `CallTrace` frame stack and data edges, the `host!`/`trace_call!` macros, and the authoring executor                                                                            |
+| `xirang-toolchain` | `toolchain/call_evidence/` | Observation evidence: MIR text/JSONL parsing and merge, `CallTrace` and data-flow models, tracing/petgraph adapters, `UnifiedCallGraph` (the `cargo rustc` that *produces* MIR runs from Studio, not here) |
+| `xirang-toolchain` | `toolchain/plugin_host/`   | Plugin host execution: Wasm/process sandbox instances, generational deployment, lazy activation slot table                                                                                                 |
+| `xirang-toolchain` | `toolchain/studio/`        | TUI surface: rendering and keyboard/mouse state machines that consume kernel queries and authoring methods                                                                                                 |
+| `xirang-toolchain` | `toolchain/mcp/`           | AI-agent stdio bridge: JSON-RPC loop, tool dispatch, path guarding                                                                                                                                         |
+| `xirang-toolchain` | `toolchain/cli/`           | Process glue: argv dispatch, cargo subprocesses, subcommand forwarding                                                                                                                                     |
 
-`nichlink-macro` is the ninth published crate: a proc-macro crate that
+`xirang-macro` is the ninth published crate: a proc-macro crate that
 normalises face fields at compile time (tolerant separators and order, spanned
 diagnostics, editor mirror). It is a build-time front end rather than an
 execution surface, so it has no row above.
@@ -885,25 +885,25 @@ execution surface, so it has no row above.
 ## Workspace layout
 
 ```text
-kernel/       nichlink-kernel (lib nichlink_kernel): protocol vocabulary and pure methods — identity,
+kernel/       xirang-kernel (lib xirang_kernel): protocol vocabulary and pure methods — identity,
               declaration, diagnostic, tree, plugin, mir, requirements, release,
               source, authoring, syntax, json, lexicon
-macro/        nichlink-macro: compile-time face-field front end (tolerant
+macro/        xirang-macro: compile-time face-field front end (tolerant
               separators and order, spanned diagnostics, editor mirror)
-build_method/ nichlink-toolchain: build-time discovery, cache, coarse StaticPlan
-run_method/   nichlink-toolchain: runtime trace state, host!/trace_call! macros,
+build_method/ xirang-toolchain: build-time discovery, cache, coarse StaticPlan
+run_method/   xirang-toolchain: runtime trace state, host!/trace_call! macros,
               authoring executor
-debug_method/ nichlink-toolchain: optional CallTrace adapters, MIR evidence,
+debug_method/ xirang-toolchain: optional CallTrace adapters, MIR evidence,
               data-flow and graph models
-cli/          nichlink-toolchain: unified entry (nichlink new/check/build/snippets/
-              explain/grafts/studio/mcp, cargo-nichlink)
+cli/          xirang-toolchain: unified entry (xirang new/check/build/snippets/
+              explain/grafts/studio/mcp, cargo-xirang)
 studio/       Ratatui authoring, search, watch and source navigation
 mcp/          MCP bridge for AI-assisted queries and previewed writes
 plugin-host/  optional Wasm/process adapters and atomic deployment
 examples/     two host packages (not cargo example targets): control-button
               plus its out-of-project graft
 picture/      brand wordmark and Studio screenshots
-conventions/  nichlink-conventions: gates that walk this checkout (kernel
+conventions/  xirang-conventions: gates that walk this checkout (kernel
               purity, module mounting, size ratchet, doc blocks); not published
 ```
 
@@ -919,7 +919,7 @@ cargo test --workspace --offline
 cargo clippy --workspace --all-targets --offline -- -D warnings
 ```
 
-NichLink is released under the [MIT License](LICENSE). Contributions, design
+XiRang is released under the [MIT License](LICENSE). Contributions, design
 critique, and real-world failure reports are welcome in GitHub Issues and
 Discussions.
 

@@ -19,7 +19,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
 use super::discovery_node::{Node, relative_display};
@@ -64,8 +64,8 @@ impl SourceScope {
         Self::from_raw(&raw.to_string_lossy(), src, nodes, entry, claims, errors)
     }
 
-    /// Read the scope from one explicit `NICH_LINK_SCOPE` value.
-    /// 从明确的 `NICH_LINK_SCOPE` 取值读取范围。
+    /// Read the scope from one explicit `XIRANG_SCOPE` value.
+    /// 从明确的 `XIRANG_SCOPE` 取值读取范围。
     ///
     /// The value arrives as a parameter rather than from the environment so the
     /// refusals below can be pinned by tests: `#[test]` threads share the process
@@ -263,7 +263,7 @@ impl SourceScope {
             .iter()
             .filter_map(|cut| cut_subtree(&cut.cut).map(|subtree| (subtree, cut.cut.clone())))
             .collect();
-        let (superseded, _) = nichlink_kernel::registry_core::shape::superseded_by_later(&pairs);
+        let (superseded, _) = xirang_kernel::registry_core::shape::superseded_by_later(&pairs);
         let cuts: Vec<_> = cuts
             .into_iter()
             .enumerate()
@@ -591,7 +591,7 @@ pub(crate) fn outside_slots_note(
         .join(" · ");
     let more = outside.len().saturating_sub(5);
     let mut lines = vec![format!(
-        "nichlink: the cuts in {} name the subtrees this build publishes, so {} of {} face(s) are \
+        "xirang: the cuts in {} name the subtrees this build publishes, so {} of {} face(s) are \
          outside them and are not shipped: {named}{}",
         entry.display(),
         outside.len(),
@@ -604,13 +604,13 @@ pub(crate) fn outside_slots_note(
     )];
     for face in outside.iter().take(3) {
         lines.push(format!(
-            "nichlink:   to keep `{}`, declare a slot for it: \
+            "xirang:   to keep `{}`, declare a slot for it: \
              cut(crate::{}::NODE_ID) graft(crate::{}::NODE_ID),",
             face.module, face.module, face.module
         ));
     }
     lines.push(format!(
-        "nichlink: `{}=all` keeps the whole tree instead",
+        "xirang: `{}=all` keeps the whole tree instead",
         lexicon::SCOPE_ENV
     ));
     Some(lines)

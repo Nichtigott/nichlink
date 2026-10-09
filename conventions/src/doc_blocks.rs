@@ -434,8 +434,7 @@ fn parses(code: &str) -> Result<(), String> {
     // 栈溢出不是可捕获的 panic，而 `syn` 是无自带深度守卫的递归下降解析器，因此嵌套越过内核
     // 度量的围栏会带走整套门禁而不是让它失败。度量来自内核的 `guard_nesting`，内核自己的解析
     // 入口用的也是它；只留一份正是防止两者漂移的办法。
-    nichlink_kernel::registry_core::syntax::guard_nesting(code)
-        .map_err(|error| error.to_string())?;
+    xirang_kernel::registry_core::syntax::guard_nesting(code).map_err(|error| error.to_string())?;
     // A fence whose whole body is one identifier is a word, not an excerpt, and *every*
     // reading below accepts it: a path expression is a valid statement tail, so
     // `{ TODO }` parses. The audit measured `TODO` passing while `fix this later` did not;

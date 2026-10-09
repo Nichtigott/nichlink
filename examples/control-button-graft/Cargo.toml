@@ -1,16 +1,16 @@
 [package]
-name = "nichlink-example-control-button-graft"
+name = "xirang-example-control-button-graft"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "NichLink example: an out-of-project implementation that grafts over the Control/Button tree."
+description = "XiRang example: an out-of-project implementation that grafts over the Control/Button tree."
 
 [lib]
 name = "control_button_graft"
 path = "src/lib.rs"
 
 [dependencies]
-nichlink-toolchain = { path = "../../toolchain", version = "0.2.2", features = ["run", "authoring"] }
+xirang-toolchain = { path = "../../toolchain", version = "0.1.0", features = ["run", "authoring"] }
 
 # This crate declares faces but has no build script, so nothing passes
 # `--check-cfg` for it. The IDE-only field splice uses `cfg(rust_analyzer)`,

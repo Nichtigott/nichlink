@@ -32,7 +32,7 @@ Now g3, fa, fb (host trees), then fd, fe.
 
 **g3**: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" (add an internal layer to this object, without touching its registration tree and public paths; explain why you believe it's untouched; gate must be green).
 
-The g3 tree: 160K, 13 files, 102 nodes. Let me look: it's a nichlink control-button host with `.nichlink`, examples, src, tests, build.rs, Cargo.toml. Let me read its structure and lib.rs, control.rs, and one object file.
+The g3 tree: 160K, 13 files, 102 nodes. Let me look: it's a xirang control-button host with `.xirang`, examples, src, tests, build.rs, Cargo.toml. Let me read its structure and lib.rs, control.rs, and one object file.
 
 Plan for g3:
 1. Read the tree (files, lib.rs, control.rs, an object file) via codegraph.

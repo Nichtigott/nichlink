@@ -4,11 +4,11 @@ English | [简体中文](discussion-introduction.md)
 
 ## Title
 
-NichLink: declarative recursive registration and atomic grafting for Rust object graphs
+XiRang: declarative recursive registration and atomic grafting for Rust object graphs
 
 ## Post
 
-Hi everyone. I am open-sourcing NichLink, a Rust-first infrastructure project for large object graphs.
+Hi everyone. I am open-sourcing XiRang, a Rust-first infrastructure project for large object graphs.
 
 It is not another way to define a trait. It lets an object declare its parent registry, lets children register recursively without a central roster, checks admission and input/output contracts, and atomically replaces a middle layer without rewriting the whole tree. A host records its calls with `CallTrace`, and Studio exposes the registry tree that results and loads the trace artifact that host writes. (MCP serves read-only queries: it reports the registration tree the build derives, and still has no contract or admission query, which needs the built face snapshots.)
 
@@ -18,7 +18,7 @@ crate::root_object! { kind: Button, parent: crate::root_node_id(env!("CARGO_PKG_
 
 A typical replacement looks like `NodeEditor -> Canvas2D -> WGPU`: a new `Canvas2D` must satisfy the old input, output, and structural contracts before the graft is published.
 
-The repository contains `nichlink-kernel`, `nichlink-macro`, `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`, and `nichlink-toolchain`.
+The repository contains `xirang-kernel`, `xirang-macro`, `xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`, and `xirang-toolchain`.
 
 I would value feedback on three points:
 
@@ -28,5 +28,5 @@ I would value feedback on three points:
 
 Known limits are explicit: static calls are heuristic around dynamic dispatch and FFI; uninstrumented locals may be unavailable; process plugins are not security sandboxes; and Cargo build scripts cannot read a consuming `main.rs` from a dependency crate.
 
-Repository: <https://github.com/Nichtigott/nichlink>  
+Repository: <https://github.com/Nichtigott/xirang>  
 Roadmap: [`ROADMAP.md`](ROADMAP.md)

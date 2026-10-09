@@ -6,7 +6,7 @@
 
 use crate::run_method::registry_core::declaration::portable_path;
 
-crate::__nichlink_object!(collector: debug, kind: DebugProbe);
+crate::__xirang_object!(collector: debug, kind: DebugProbe);
 
 #[test]
 #[cfg(debug_assertions)]

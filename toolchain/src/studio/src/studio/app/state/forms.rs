@@ -25,8 +25,8 @@ pub struct NewProjectState {
 impl NewProjectState {
     pub(crate) fn new() -> Self {
         let mut values: [String; new_project_field::COUNT] = std::array::from_fn(|_| String::new());
-        values[new_project_field::DIRECTORY] = "./nichlink-app".to_owned();
-        values[new_project_field::PACKAGE] = "nichlink-app".to_owned();
+        values[new_project_field::DIRECTORY] = "./xirang-app".to_owned();
+        values[new_project_field::PACKAGE] = "xirang-app".to_owned();
         values[new_project_field::KIND] = "binary".to_owned();
         Self {
             values,
@@ -141,7 +141,7 @@ impl PluginState {
     pub(crate) fn new() -> Self {
         let mut values: [String; plugin_field::COUNT] = std::array::from_fn(|_| String::new());
         values[plugin_field::SOURCE] = "official".to_owned();
-        values[plugin_field::FRAMEWORK] = "nichlink.default".to_owned();
+        values[plugin_field::FRAMEWORK] = "xirang.default".to_owned();
         values[plugin_field::MODE] = "extension".to_owned();
         Self {
             values,

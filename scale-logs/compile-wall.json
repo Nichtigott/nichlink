@@ -1,5 +1,5 @@
 {
-  "what": "W6-1 compile-wall attribution for a single-crate NichLink host, measured 2026-10-04",
+  "what": "W6-1 compile-wall attribution for a single-crate XiRang host, measured 2026-10-04",
   "tree": "tools/gen_scale_tree.py <dir> <faces> --host (minimal faces: root_object + control_object with NoParts, one file per face in its own directory)",
   "machine": "same checkout, --offline, debug profile, warm dependency cache unless noted",
   "protocol": "cargo build (warm) -> touch src/lib.rs -> time cargo build = total; then time the build-script binary itself with cargo's own CARGO_MANIFEST_DIR/OUT_DIR/CARGO_PKG_NAME = buildrs; rustc share = total - buildrs; generated = bytes of generated_lib.rs",

@@ -12,8 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 fn synthetic(files: &[(&str, &str)]) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
-    let root =
-        std::env::temp_dir().join(format!("nichlink-shape-{}-{sequence}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-shape-{}-{sequence}", std::process::id()));
     fs::create_dir_all(&root).expect("fixture root");
     for (relative, contents) in files {
         let path = root.join("probe").join(relative);
@@ -181,7 +180,7 @@ fn the_tests_component_is_read_below_the_member() {
     // 检出本身住在名为 `tests` 的目录之下——"读整条路径"的实现会把这个祖先目录误认成受认可的
     // 组件。
     let root = std::env::temp_dir()
-        .join("nichlink-shape-tests")
+        .join("xirang-shape-tests")
         .join(format!("{}-{sequence}", std::process::id()));
     fs::create_dir_all(root.join("probe/src")).expect("fixture src");
     fs::write(root.join("probe/src/lib.rs"), "#[cfg(test)]\nmod plain;\n").expect("fixture lib");

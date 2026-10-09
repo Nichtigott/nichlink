@@ -1,5 +1,5 @@
-//! NichLink Studio: an optional Ratatui adapter for the registration core.
-//! NichLink Studio：注册核心的可选 Ratatui 适配器。
+//! XiRang Studio: an optional Ratatui adapter for the registration core.
+//! XiRang Studio：注册核心的可选 Ratatui 适配器。
 
 #[path = "app/app.rs"]
 mod app;
@@ -56,13 +56,13 @@ pub fn launch_with(project: Option<std::path::PathBuf>) -> io::Result<()> {
     // 才能据此行动。
     if !stdout().is_terminal() {
         return Err(io::Error::other(
-            "nichlink-toolchain draws to a terminal, but stdout is not one (it is redirected or a \
+            "xirang-toolchain draws to a terminal, but stdout is not one (it is redirected or a \
              pipe); run it directly",
         ));
     }
     if !io::stdin().is_terminal() {
         return Err(io::Error::other(
-            "nichlink-toolchain reads keys from a terminal, but stdin is not one; run it directly",
+            "xirang-toolchain reads keys from a terminal, but stdin is not one; run it directly",
         ));
     }
     install_panic_restore();

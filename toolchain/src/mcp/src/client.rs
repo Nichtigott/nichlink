@@ -14,11 +14,11 @@
 //! 匹配上的 `pkill`、以及被自己脚本截断在 6,000 字符的清单——**块 11** 才点名病灶。而有 CLI 的 codegraph
 //! 在**块 3** 就点名了。这里的两条命令就是全部修法：
 //!
-//! - `nichlink-mcp --list` prints the workflow table and one line per tool, so the surface arrives
+//! - `xirang-mcp --list` prints the workflow table and one line per tool, so the surface arrives
 //!   ordered and short instead of as ~36,000 characters of prose in one truncated payload.
 //!   `--list` 打印流程表与每个工具一行，于是描述面以"有组织且短"的形式到达，而不是一帧约 36,000 字符、
 //!   还被截断的散文。
-//! - `nichlink-mcp --call <tool> --json '{…}'` runs exactly one tool; **its exit code is the
+//! - `xirang-mcp --call <tool> --json '{…}'` runs exactly one tool; **its exit code is the
 //!   call's, never the tool's**: `0` the tool answered (its text goes to stdout), `1` it refused (its
 //!   text goes to stderr), `2` the request itself was malformed (a usage error). The tool's own
 //!   **verdict is in the reply body** — `check`, the one tool that judges a run, puts it on the
@@ -85,16 +85,16 @@ One tool's page is `--list <tool>`; the long page is `--shapes`.\n\
 /// seven kilobytes read by every session and referenced by none. Its budget is 550 characters — the
 /// map says **where each capability lives**, not what it answers, because the answers are the tools'
 /// own replies and their refusals. The long page is `--shapes`; one tool's whole description is
-/// `--list <tool>`; the whole surface on demand is the `nichlink_tools` call.
+/// `--list <tool>`; the whole surface on demand is the `xirang_tools` call.
 /// 审计 `W1-1`：这是 `initialize` 交给客户端的东西，而那一轮量到旧文本是"每场都读、无一引用"的七千字节。
 /// 它的预算是 550 字符——地图说的是**每项能力住在哪**，不是它答什么，因为答案在各工具自己的回复与拒绝里。
-/// 长页是 `--shapes`；一个工具的完整描述是 `--list <tool>`；整面按需取是 `nichlink_tools`。
+/// 长页是 `--shapes`；一个工具的完整描述是 `--list <tool>`；整面按需取是 `xirang_tools`。
 pub const INSTRUCTIONS: &str = "\
 **Capability map**: `check` runs one face and carries the tree census; `apply` is the only write \
 path (previewed unless `apply: true`; `add`/`deepen`/`cut`/`promote` reach hand-written faces, \
-`edit`/`rename`/`delete` only generated ones). Everything else is one `nichlink_tools` call away. \
+`edit`/`rename`/`delete` only generated ones). Everything else is one `xirang_tools` call away. \
 Route understanding questions to `read --whole`, structural ones to the bounded answer. \
-能力地图：`check` 跑一个面；`apply` 是唯一写入路径；其余用 `nichlink_tools`。理解型用 \
+能力地图：`check` 跑一个面；`apply` 是唯一写入路径；其余用 `xirang_tools`。理解型用 \
 `read --whole`，结构型用有界答案。";
 
 /// The long guidance page: the prose behind every branch above. Read it by name with `--shapes`.
@@ -189,10 +189,10 @@ window is ±8 lines by default, so pass `context` for a wider one and `whole` fo
 Which \
 tests a change reaches: `affected`. Registration faces: `registry`, `explain`, `diff`, then `apply` \
 (a preview unless `apply: true`). \\
-             If the tree carries an adoption ledger (`.nichlink/adopted/entries`), `adopted` reads it \
+             If the tree carries an adoption ledger (`.xirang/adopted/entries`), `adopted` reads it \
              and says which entries still hold; a byte that moved makes an entry need a **person**, \
              not an edit, and a confirmation is one more line appended. 若这棵树带采信台账 \
-             （`.nichlink/adopted/entries`），`adopted` 读它并说出哪些条目仍然成立；字节一动，条目就需要 \
+             （`.xirang/adopted/entries`），`adopted` 读它并说出哪些条目仍然成立；字节一动，条目就需要 \
              **人来确认**而不是改代码，而确认就是**再追加一行**。 A route the ledger never named is a **new anchor** — a first confirmation, not a \
              renewal; the read names that action. 台账从未点名的路线是**新锚**——首次确认、不是续期，\
              读取时会把该动作点出来。 **Did the design get carried through?** `conformance {anchor}` \
@@ -276,19 +276,19 @@ const DISCOVERY_LIMIT: usize = 250;
 /// 审计 `W2-7`：一个会话需要第二件仪器时，不该把整份目录再读一遍。这就是那个集合——`SHAPES_SHORT`
 /// 里七种形状入口调用的并集——而它是一**视图**，不是第二份目录：`--list` 仍列出每个工具。
 pub const COMMON_TOOLS: &[&str] = &[
-    "nichlink.check",
-    "nichlink.apply",
-    "nichlink.new_project",
-    "nichlink.registry",
-    "nichlink.search",
-    "nichlink.locate",
-    "nichlink.read",
-    "nichlink.callgraph",
-    "nichlink.why",
-    "nichlink.consistency",
-    "nichlink.explain",
-    "nichlink.affected",
-    "nichlink.grafts",
+    "xirang.check",
+    "xirang.apply",
+    "xirang.new_project",
+    "xirang.registry",
+    "xirang.search",
+    "xirang.locate",
+    "xirang.read",
+    "xirang.callgraph",
+    "xirang.why",
+    "xirang.consistency",
+    "xirang.explain",
+    "xirang.affected",
+    "xirang.grafts",
 ];
 
 /// One tool's discovery page: its keys, its decision text, and the way to the rest.
@@ -413,12 +413,12 @@ fn describe_tool_within(name: &str, limit: usize) -> Option<String> {
 /// The catalogue name a command line spelled, with the redundant prefix added only when needed.
 /// 命令行写出的目录名；只在必要时补上那个冗余前缀。
 ///
-/// The `nichlink.` prefix is redundant on a command line whose only tool source is this bridge, so a
-/// bare `callgraph` resolves to `nichlink.callgraph`. What it is **not** is universal: the catalogue
-/// tool is called `nichlink_tools` (audit `W1-1`), and blindly prefixing made the one tool the
+/// The `xirang.` prefix is redundant on a command line whose only tool source is this bridge, so a
+/// bare `callgraph` resolves to `xirang.callgraph`. What it is **not** is universal: the catalogue
+/// tool is called `xirang_tools` (audit `W1-1`), and blindly prefixing made the one tool the
 /// advertisement tells a session to reach everything else with unreachable by name from the CLI.
-/// `nichlink.` 前缀在"唯一工具来源就是这个桥"的命令行上是冗余的，因此裸写 `callgraph` 解析成
-/// `nichlink.callgraph`。但它**不是**普遍的：目录工具叫 `nichlink_tools`（审计 `W1-1`），而盲目补前缀
+/// `xirang.` 前缀在"唯一工具来源就是这个桥"的命令行上是冗余的，因此裸写 `callgraph` 解析成
+/// `xirang.callgraph`。但它**不是**普遍的：目录工具叫 `xirang_tools`（审计 `W1-1`），而盲目补前缀
 /// 让那个"广告让会话用它去够其余一切"的工具，在命令行上按名字够不着。
 pub fn resolve_name(spelled: &str) -> String {
     let exact = crate::mcp::tools::tools()
@@ -427,7 +427,7 @@ pub fn resolve_name(spelled: &str) -> String {
     if exact || spelled.contains('.') {
         return spelled.to_owned();
     }
-    format!("nichlink.{spelled}")
+    format!("xirang.{spelled}")
 }
 
 /// One line per tool: its name, the first sentence of its description, and the keys it takes
@@ -555,7 +555,7 @@ fn emit_or_stop(text: &str) -> Option<i32> {
         Ok(()) => None,
         Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Some(0),
         Err(error) => {
-            eprintln!("nichlink-toolchain: cannot write stdout: {error}");
+            eprintln!("xirang-toolchain: cannot write stdout: {error}");
             Some(2)
         }
     }
@@ -628,11 +628,11 @@ pub fn run_client(arguments: &[String]) -> Client {
         // 长页，按名字取。一行式清单带形状；这一支带散文，给主动要它的读者，而不是每场都塞给它。
         "--shapes" => Client::Called(emit_or_stop(GUIDANCE).unwrap_or(0)),
         "--help" | "-h" => Client::Called(emit_or_stop(USAGE).unwrap_or(0)),
-        // A bare tool name is a call: `nichlink-mcp callgraph --function x` reads the way a command
+        // A bare tool name is a call: `xirang-mcp callgraph --function x` reads the way a command
         // line reads, and requiring `--call` first cost the round a refused call.
-        // 裸工具名就是一次调用：`nichlink-mcp callgraph --function x` 是命令行的读法，而此前必须先写
+        // 裸工具名就是一次调用：`xirang-mcp callgraph --function x` 是命令行的读法，而此前必须先写
         // `--call` 让那一轮白吃了一次拒绝。
-        other if other.starts_with("nichlink.") || !other.starts_with('-') => {
+        other if other.starts_with("xirang.") || !other.starts_with('-') => {
             answered(&log, &request, call_from_arguments(arguments))
         }
         "--call" => answered(&log, &request, call_from_arguments(&arguments[1..])),
@@ -751,9 +751,9 @@ enum Refusal {
 /// The usage text.
 /// 用法文本。
 const USAGE: &str = "\
-nichlink-mcp                 serve the stdio bridge (JSON-RPC 2.0)
-nichlink-mcp --list          the workflow table and one line per tool
-nichlink-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage error
+xirang-mcp                 serve the stdio bridge (JSON-RPC 2.0)
+xirang-mcp --list          the workflow table and one line per tool
+xirang-mcp --call <tool>   run one tool; exit 0 answered, 1 refused, 2 usage error
                              (the tool's own verdict is in its output, e.g. `check`'s first line)
     [--json '<object>'] [--root <path>] [--<key> <value> …]";
 
@@ -802,10 +802,10 @@ fn call_from_arguments(arguments: &[String]) -> Result<String, Refusal> {
             }
         },
     };
-    // The `nichlink.` prefix is the catalogue's spelling; on a command line whose only tool source is
-    // this bridge it is redundant, so a bare `callgraph` resolves to `nichlink.callgraph`.
-    // `nichlink.` 前缀是目录里的拼法；在命令行上，唯一的工具来源就是这个桥，因此它是冗余的 ——
-    // 裸写 `callgraph` 就解析成 `nichlink.callgraph`。
+    // The `xirang.` prefix is the catalogue's spelling; on a command line whose only tool source is
+    // this bridge it is redundant, so a bare `callgraph` resolves to `xirang.callgraph`.
+    // `xirang.` 前缀是目录里的拼法；在命令行上，唯一的工具来源就是这个桥，因此它是冗余的 ——
+    // 裸写 `callgraph` 就解析成 `xirang.callgraph`。
     let resolved = resolve_name(raw);
     let name = resolved.as_str();
     let mut object = Map::new();

@@ -11,11 +11,11 @@ use crate::mcp::tools::{advertised, tool_call};
 /// Protocol revision advertised during initialization.
 /// 初始化时通告的协议版本。
 const PROTOCOL_VERSION: &str = "2025-06-18";
-/// Default result cap for `nichlink.search`.
-/// `nichlink.search` 的默认结果上限。
+/// Default result cap for `xirang.search`.
+/// `xirang.search` 的默认结果上限。
 pub(crate) const DEFAULT_LIMIT: usize = 40;
-/// Hard cap on lines returned by `nichlink.read`.
-/// `nichlink.read` 返回行数的硬上限。
+/// Hard cap on lines returned by `xirang.read`.
+/// `xirang.read` 返回行数的硬上限。
 pub(crate) const MAX_READ_LINES: usize = 240;
 
 /// Largest request line the bridge accepts, in bytes.
@@ -46,10 +46,10 @@ pub(crate) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 /// 为当前目录：stdio 桥是在代理正在处理的项目里启动的，而本 crate 自己的清单路径是编译它的
 /// 那台机器上的路径——对已安装的二进制来说是错的。
 pub(crate) fn package_root() -> PathBuf {
-    let configured = env::var_os(nichlink_kernel::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let configured = env::var_os(xirang_kernel::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = env::current_dir().ok();
     let fallback = current.clone().unwrap_or_else(|| PathBuf::from("."));
-    nichlink_kernel::lexicon::resolve_package_root(
+    xirang_kernel::lexicon::resolve_package_root(
         configured.as_deref(),
         current.as_deref(),
         current
@@ -286,7 +286,7 @@ fn dispatch(root: &Path, request: &Value) -> Value {
             json!({
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": { "tools": { "listChanged": false } },
-                "serverInfo": { "name": "nichlink-toolchain", "version": env!("CARGO_PKG_VERSION") },
+                "serverInfo": { "name": "xirang-toolchain", "version": env!("CARGO_PKG_VERSION") },
                 "instructions": crate::mcp::client::INSTRUCTIONS
             }),
         ),

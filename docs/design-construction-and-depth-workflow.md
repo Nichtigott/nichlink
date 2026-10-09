@@ -1,7 +1,7 @@
-# 建造与纵深修改：nichlink 的核心优势应当被量出来
+# 建造与纵深修改：xirang 的核心优势应当被量出来
 
 维护者的定性（2026-10-02 原话）：「**当有一个项目开始的时候是有工作流的：就和素描一样，先是大的角色对象的
-模块组织，（分crate的时候我的nichlink的机制是如何的）然后是大角色中的小角色是如何组织的，让ai可以参与到
+模块组织，（分crate的时候我的xirang的机制是如何的）然后是大角色中的小角色是如何组织的，让ai可以参与到
 前期的项目构建中，在前期形成优秀的架构设计，并且能用规范约束ai的文件内的组织逻辑，让整个项目的代码质量
 提高，逻辑清晰，层层提升，层层都可以修改，甚至我的截断就是为了让深度方向上的修改能更加快速地落实（比如
 我要改内核中的某个算法），会从整个代码调用链上进行层层的设计跟进，稳稳锁定设计目标等，不跑偏。这是我们的
@@ -15,7 +15,7 @@
 
 | 层 | 机制 | 在哪 |
 | --- | --- | --- |
-| crate 划分 | `new_project` 走 `build_time::scaffold::create_project`——与 CLI 的 `nichlink new`、Studio 向导**同一份**渲染 | `apply.rs` / `new_project.rs` |
+| crate 划分 | `new_project` 走 `build_time::scaffold::create_project`——与 CLI 的 `xirang new`、Studio 向导**同一份**渲染 | `apply.rs` / `new_project.rs` |
 | 大角色（面） | `apply {action: "add", parent: …}`——写入经**内核准入 + 父面规则 + 拓扑检查** | `apply.rs` |
 | 小角色（面内） | `apply {action: "deepen", node, inside}`——把零件层写进那个面**自己的文件**，不动树、公开路径与出厂形状钉子 | `apply.rs` |
 | 字段/契约 | `apply {action: "edit", fields}`；面携带的 `///` 契约行是它的承诺 | `apply.rs` |

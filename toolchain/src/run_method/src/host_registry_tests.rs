@@ -17,7 +17,7 @@ use crate::run_method::registry_core::FrameworkId;
 /// 另一半——真宿主拿到自己的面——由 `examples/control-button` 端到端跑到，工作区门禁会编译并测试它。
 #[test]
 fn the_framework_is_the_one_the_host_passed() {
-    let framework = FrameworkId::new("nichlink.pin.host-registry");
+    let framework = FrameworkId::new("xirang.pin.host-registry");
     let registry = host_registry(framework, "pin.namespace", &[]).expect("an empty plan assembles");
     assert_eq!(
         registry.framework(),

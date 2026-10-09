@@ -2,14 +2,14 @@
 //! 一个成员已发布的记录，作为一份树级答案来读。
 //!
 //! The build already derives this tree once and writes it to
-//! `<package>/target/nichlink/out`; re-deriving it per member is what made a
+//! `<package>/target/xirang/out`; re-deriving it per member is what made a
 //! workspace-rooted call cost the sum of every member's source walk. This module
 //! reads those files instead — through `build_method`'s own readers, so the
 //! formats keep their one parser and it is not here — and hands the answer on in
 //! the record's own vocabulary: the face rows `pruning_manifest.tsv` carries
 //! (`node`, `source`, `symbol`), the scope verdict `source_scope.tsv` carries,
 //! and the `discovery.fingerprint` the freshness rule reads.
-//! 构建已经把这棵树推导过一次并写进 `<package>/target/nichlink/out`；逐成员重新推导正是让
+//! 构建已经把这棵树推导过一次并写进 `<package>/target/xirang/out`；逐成员重新推导正是让
 //! 工作区根上的一次调用等于每个成员源码遍历之和的原因。本模块改为读那些文件——经
 //! `build_method` 自己的读取器，因此各格式保持它们唯一的解析器、而且不在本模块——并用记录
 //! 自己的词汇交出答案：`pruning_manifest.tsv` 携带的面行（`node`、`source`、`symbol`）、
@@ -31,15 +31,15 @@
 //!
 //! Never glob `target/debug/build/<pkg>-<hash>/out/`: one package measured 134
 //! hashed copies with the old ones still there, so a glob can hand back a stale
-//! record. The published path is `<package>/target/nichlink/out` and nothing else.
+//! record. The published path is `<package>/target/xirang/out` and nothing else.
 //! 绝不要 glob `target/debug/build/<pkg>-<hash>/out/`：同一个包实测有 134 份哈希分身、旧的还
-//! 在，因此 glob 可能取到陈旧记录。已发布的路径就是 `<package>/target/nichlink/out`，不是别的。
+//! 在，因此 glob 可能取到陈旧记录。已发布的路径就是 `<package>/target/xirang/out`，不是别的。
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 
 use crate::build_method::{BuildScopeView, PruningRow, read_build_scope, read_pruning_manifest};
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 use crate::mcp::build_evidence::out_dir;
 
@@ -59,10 +59,10 @@ pub(crate) const NO_FACE_REASON: &str = "no-registration-face";
 /// 作答。把它报成没有面会把一份损坏的记录变成关于这个包的断言，而区分这两个状态正是要阻止这件事。
 /// 只有一份词形，放在产出该状态的模块里，因此普查行与报告不会漂开。
 pub(crate) const FACES_UNKNOWN: &str =
-    "faces unknown (no readable pruning_manifest.tsv; run `nichlink check`)";
+    "faces unknown (no readable pruning_manifest.tsv; run `xirang check`)";
 
-/// What one member's own `target/nichlink/out` says.
-/// 一个成员自己的 `target/nichlink/out` 说了什么。
+/// What one member's own `target/xirang/out` says.
+/// 一个成员自己的 `target/xirang/out` 说了什么。
 pub(crate) struct PublishedTree {
     /// The directory the reading came from, named in every answer built on it.
     /// 读数来自哪个目录；每一份由它构成的答案都会点名它。
@@ -218,8 +218,8 @@ impl PublishedTree {
     }
 }
 
-/// What a member's own `target/nichlink/out` holds.
-/// 一个成员自己的 `target/nichlink/out` 里有什么。
+/// What a member's own `target/xirang/out` holds.
+/// 一个成员自己的 `target/xirang/out` 里有什么。
 pub(crate) enum Publication {
     /// `source_scope.tsv` was readable, so this member has published records.
     /// `source_scope.tsv` 可读，因此这个成员有已发布的记录。

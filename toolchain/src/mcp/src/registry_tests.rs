@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use nichlink_kernel::NodeId;
+use xirang_kernel::NodeId;
 
 use super::{namespace_from, registry};
 
@@ -22,7 +22,7 @@ fn fixture(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-registry-{label}-{}-{sequence}",
+        "xirang-toolchain-registry-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -42,10 +42,10 @@ fn fixture(label: &str) -> PathBuf {
 /// the package's own name — Cargo's answer, not the documented default. The id
 /// assertion is the load-bearing half: it is a hash over
 /// `(namespace, "control/control.rs", "Control")`, so a tool that answered under
-/// `nichlink.default` would report an id nothing in the package holds.
+/// `xirang.default` would report an id nothing in the package holds.
 /// 行携带的是宿主编译出的身份，因此命名空间必须是这个包自己的名字——Cargo 的答案，而不是
 /// 文档化的默认值。id 断言是承重的那一半：它是对
-/// `(namespace, "control/control.rs", "Control")` 的散列，因此若工具在 `nichlink.default`
+/// `(namespace, "control/control.rs", "Control")` 的散列，因此若工具在 `xirang.default`
 /// 之下作答，报告的 id 就是包里没有任何东西持有的。
 #[test]
 fn a_face_is_reported_under_the_namespace_the_package_compiled_with() {
@@ -72,7 +72,7 @@ fn a_face_is_reported_under_the_namespace_the_package_compiled_with() {
 #[test]
 fn a_configured_namespace_wins_verbatim_before_cargo_is_asked() {
     let bare = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-registry-bare-{}",
+        "xirang-toolchain-registry-bare-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&bare);
@@ -92,14 +92,14 @@ fn a_configured_namespace_wins_verbatim_before_cargo_is_asked() {
 #[test]
 fn a_directory_without_a_package_is_refused_with_the_way_out() {
     let bare = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-registry-nameless-{}",
+        "xirang-toolchain-registry-nameless-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&bare);
     std::fs::create_dir_all(&bare).expect("bare directory");
     let error = namespace_from(None, &bare).expect_err("no manifest means no namespace");
     assert!(error.contains("identity namespace"), "{error}");
-    assert!(error.contains("NICH_LINK_NAMESPACE"), "{error}");
+    assert!(error.contains("XIRANG_NAMESPACE"), "{error}");
     let _ = std::fs::remove_dir_all(&bare);
 }
 
@@ -159,7 +159,7 @@ fn workspace(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-registry-ws-{label}-{}-{sequence}",
+        "xirang-toolchain-registry-ws-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -250,10 +250,10 @@ fn a_virtual_root_answers_members_and_faces_until_full_is_asked_for() {
 ///
 /// The check half is pinned by advertisement here, because this batch's in-scope test file is this
 /// one: `check_tests.rs` is out of it, and calling `check` runs `cargo test`. `--census` end to end
-/// is in the measured evidence (`target/nichlink-t1/granularity-compare.txt`).
+/// is in the measured evidence (`target/xirang-t1/granularity-compare.txt`).
 /// `census` 那一半在这里按"被声明"钉住，因为本任务 in-scope 的测试文件就是这一个：`check_tests.rs`
 /// 不在其中，而调用 `check` 会跑 `cargo test`。`--census` 的端到端证据在量到的记录里
-/// （`target/nichlink-t1/granularity-compare.txt`）。
+/// （`target/xirang-t1/granularity-compare.txt`）。
 #[test]
 fn the_new_granularity_switches_are_advertised_and_the_registry_one_is_accepted() {
     let listed = crate::mcp::tools::tools();
@@ -265,14 +265,14 @@ fn the_new_granularity_switches_are_advertised_and_the_registry_one_is_accepted(
             .clone()
     };
     assert!(
-        schema("nichlink.registry").get("full").is_some(),
-        "nichlink.registry advertises `full`"
+        schema("xirang.registry").get("full").is_some(),
+        "xirang.registry advertises `full`"
     );
     assert!(
-        schema("nichlink.check").get("census").is_some(),
-        "nichlink.check advertises `census`"
+        schema("xirang.check").get("census").is_some(),
+        "xirang.check advertises `census`"
     );
-    let context = schema("nichlink.read")["context"]["description"]
+    let context = schema("xirang.read")["context"]["description"]
         .as_str()
         .unwrap_or_default()
         .to_owned();
@@ -285,7 +285,7 @@ fn the_new_granularity_switches_are_advertised_and_the_registry_one_is_accepted(
     let reply = crate::mcp::tools::tool_call(
         &root,
         serde_json::json!(1),
-        &serde_json::json!({"name": "nichlink.registry", "arguments": {"full": true}}),
+        &serde_json::json!({"name": "xirang.registry", "arguments": {"full": true}}),
     );
     let text = reply["result"]["content"][0]["text"]
         .as_str()

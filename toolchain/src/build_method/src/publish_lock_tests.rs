@@ -20,10 +20,10 @@ fn out_dir(label: &str) -> std::path::PathBuf {
     // 每个用例有自己的**容器**，因为锁住在输出目录旁边：共用一个父目录会让所有夹具（以及并行的每个
     // 测试）争抢同一把锁文件。
     let container = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-lock-{label}-{}-{sequence}",
+            "xirang-lock-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&container);
@@ -95,8 +95,7 @@ fn a_live_holder_is_refused_by_name() {
         "the refusal names the holder: {refused}"
     );
     assert!(
-        refused.contains("way forward")
-            && refused.contains(nichlink_kernel::lexicon::LOCK_WAIT_ENV),
+        refused.contains("way forward") && refused.contains(xirang_kernel::lexicon::LOCK_WAIT_ENV),
         "the refusal is actionable and names the bound: {refused}"
     );
     assert!(
@@ -177,10 +176,10 @@ fn the_wait_budget_comes_from_the_environment() {
     // SAFETY: this test is the only one that touches the variable, and it restores nothing because it
     // ends immediately after reading it.
     // 安全：本测试是唯一碰这个变量的，而且读完立刻结束，所以无需还原。
-    unsafe { std::env::set_var(nichlink_kernel::lexicon::LOCK_WAIT_ENV, "1234") };
+    unsafe { std::env::set_var(xirang_kernel::lexicon::LOCK_WAIT_ENV, "1234") };
     assert_eq!(super::wait_budget(), Duration::from_millis(1234));
     assert_eq!(DEFAULT_WAIT_MS, 30_000, "the documented default");
-    unsafe { std::env::remove_var(nichlink_kernel::lexicon::LOCK_WAIT_ENV) };
+    unsafe { std::env::remove_var(xirang_kernel::lexicon::LOCK_WAIT_ENV) };
 }
 
 /// A fixture host with one registration face, and its output directory.
@@ -189,10 +188,10 @@ fn fixture_host(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-lock-host-{label}-{}-{sequence}",
+            "xirang-lock-host-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
@@ -206,7 +205,7 @@ fn fixture_host(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     std::fs::write(manifest.join("src/lib.rs"), "// host entry\n").expect("lib");
     std::fs::write(
         manifest.join("src/button/button.rs"),
-        "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+        "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),\n}\n",
     )
     .expect("face");
     let out = root.join("out");
@@ -258,7 +257,7 @@ fn a_held_lock_stops_the_publish_and_names_itself() {
         "the run names the lock it could not take: {report}"
     );
     assert!(
-        !out.join(nichlink_kernel::lexicon::GENERATION_FILE).exists(),
+        !out.join(xirang_kernel::lexicon::GENERATION_FILE).exists(),
         "nothing was published while another run holds the tree"
     );
     assert!(
@@ -291,7 +290,7 @@ fn publish_in_child(manifest: &std::path::Path, out: &std::path::Path) -> Option
             "build_method::publish_lock::publish_lock_tests::lock_child_publishes",
             "--nocapture",
         ])
-        .env(nichlink_kernel::lexicon::LOCK_WAIT_ENV, "1")
+        .env(xirang_kernel::lexicon::LOCK_WAIT_ENV, "1")
         .env("N49_MANIFEST", manifest)
         .env("N49_OUT", out)
         .output()

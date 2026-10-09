@@ -1,24 +1,24 @@
 //! The external graft plans on disk, joined with the declarations that keep them.
 //! 磁盘上的外部 graft 计划，与保住它们的那些声明对照。
 //!
-//! A plan under `.nichlink/external-grafts/<selector>/graft.plan` is an authoring
+//! A plan under `.xirang/external-grafts/<selector>/graft.plan` is an authoring
 //! record the build never opens; the build only *warns* when the host entry's
 //! `static_graft_plan!` does not name the slot the plan targets, and the release then
 //! prunes that slot so the record can never take effect. That warning is easy to miss
 //! in a long `cargo` log, so one question — "does the host entry declare what this plan
 //! addresses" — has two surfaces asking it: the CLI's `grafts` verb and the MCP
-//! bridge's `nichlink.grafts`. The rule lives here so they cannot answer differently.
-//! `.nichlink/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录；只有
+//! bridge's `xirang.grafts`. The rule lives here so they cannot answer differently.
+//! `.xirang/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录；只有
 //! 宿主入口的 `static_graft_plan!` 没有点名该计划所针对的槽位时构建才**警告**，而发布随后会剪掉
 //! 那个槽位，使这条记录永远无法生效。在冗长的 `cargo` 日志里这条警告容易被漏掉，因此"宿主入口是否
 //! 声明了这条计划所针对的东西"这一个问题有两个执行面在问：CLI 的 `grafts` 与 MCP 桥的
-//! `nichlink.grafts`。规则住在这里，两者就不可能给出不同答案。
+//! `xirang.grafts`。规则住在这里，两者就不可能给出不同答案。
 
 use std::path::Path;
 
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::lexicon;
-use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::lexicon;
+use xirang_kernel::plugin::graft_document::GraftPlanDocument;
 
 use crate::build_method::face_view::FaceView;
 use crate::build_method::graft_view::{DeclaredGraft, DeclaredGrafts};
@@ -86,9 +86,9 @@ pub struct GraftPlanRow {
     pub selector_matches: Option<bool>,
 }
 
-/// Read every plan under `<package_root>/.nichlink/external-grafts/*/graft.plan`, sorted
+/// Read every plan under `<package_root>/.xirang/external-grafts/*/graft.plan`, sorted
 /// by selector, and join each with the declaration that keeps it.
-/// 读取 `<package_root>/.nichlink/external-grafts/*/graft.plan` 下的每个计划、按 selector
+/// 读取 `<package_root>/.xirang/external-grafts/*/graft.plan` 下的每个计划、按 selector
 /// 排序，并把每一条与保住它的声明对照起来。
 ///
 /// `faces` is what maps a plan's stored identity back to a module, and a typed cut can
@@ -105,7 +105,7 @@ pub fn graft_plan_rows(
     declared: Option<&DeclaredGrafts>,
 ) -> Result<Vec<GraftPlanRow>, String> {
     let directory = package_root
-        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::XIRANG_DIR)
         .join(lexicon::EXTERNAL_GRAFT_DIR);
     let entries = match std::fs::read_dir(&directory) {
         Ok(entries) => entries,

@@ -3,16 +3,16 @@
 //!
 //! A host's package name *is* its `NodeId` namespace: every face identity is a
 //! hash over `(namespace, source path, declared name)`, and the declaration
-//! macros read `crate::NICHLINK_NAMESPACE` as that namespace, and `host!()` defines that constant
+//! macros read `crate::XIRANG_NAMESPACE` as that namespace, and `host!()` defines that constant
 //! from `env!("CARGO_PKG_NAME")` (audit `M7`, P3.3). Two surfaces need
-//! the same answer — `nichlink-toolchain` to name faces from the command line, and the
+//! the same answer — `xirang-toolchain` to name faces from the command line, and the
 //! MCP bridge to report the tree it is asked about — so the read lives in one
 //! place and the policy is stated once: Cargo answers, and a question Cargo
 //! cannot answer is an error rather than a guess.
 //! 宿主的包名**就是**它的 `NodeId` 命名空间：每个面的身份都是对
 //! `(命名空间, 源码路径, 声明名)` 的散列，而声明宏读的是 crate 根常量
-//! `crate::NICHLINK_NAMESPACE` 作为该命名空间——那个常量由 `host!()` 用 `env!("CARGO_PKG_NAME")`
-//! 定义（审计 `M7`，P3.3）。两个执行面需要同一个答案——`nichlink-toolchain` 从命令行命名面，MCP 桥报告被问到的
+//! `crate::XIRANG_NAMESPACE` 作为该命名空间——那个常量由 `host!()` 用 `env!("CARGO_PKG_NAME")`
+//! 定义（审计 `M7`，P3.3）。两个执行面需要同一个答案——`xirang-toolchain` 从命令行命名面，MCP 桥报告被问到的
 //! 那棵树——因此这次读取只有一个住址，策略也只声明一次：由 Cargo 作答，而 Cargo 答不出的问题
 //! 是错误，不是猜测。
 //!
@@ -55,10 +55,10 @@ use std::path::Path;
 /// 它们有意**不**共享的是"Cargo 答不出时怎么办"：创作是在创建一棵树，因此 Studio 回落到文档化的默认值；
 /// 而对已存在树的查询宁可拒绝也不凭空造一个。把这个差别留在各自调用处的那一行，正是让它可见而不是被埋掉。
 ///
-/// An empty or whitespace-only override counts as absent: `NICH_LINK_NAMESPACE=` is how a shell
+/// An empty or whitespace-only override counts as absent: `XIRANG_NAMESPACE=` is how a shell
 /// clears a variable it inherited, and taking it literally produced a namespace no `NodeId` was ever
 /// hashed under — every identity in that session came back as one the tree had never seen.
-/// 空或只有空白的覆盖算作没有设置：`NICH_LINK_NAMESPACE=` 正是 shell 清掉一个继承来的变量的写法，而
+/// 空或只有空白的覆盖算作没有设置：`XIRANG_NAMESPACE=` 正是 shell 清掉一个继承来的变量的写法，而
 /// 照字面采用它会得到一个从未有任何 `NodeId` 在其下散列的命名空间——那个会话里的每个身份都会被报成
 /// 这棵树从未见过的。
 pub fn identity_namespace(configured: Option<&str>, manifest: &Path) -> Result<String, String> {
@@ -72,12 +72,12 @@ pub fn identity_namespace(configured: Option<&str>, manifest: &Path) -> Result<S
 /// know TOML sections, so a `[lib]` or `[[bin]]` name key could answer first; it
 /// did not know single-quoted strings; and when it found nothing it silently
 /// returned the directory name. The package name is the `NodeId` namespace, so a
-/// wrong answer makes the same crate report one identity under `nichlink check`
+/// wrong answer makes the same crate report one identity under `xirang check`
 /// and another under a real build. Cargo is the authority, and a question it
 /// cannot answer is an error rather than a guess.
 /// 手写读 `[package] name` 同时错了三处：它不认识 TOML 区段，于是 `[lib]` 或
 /// `[[bin]]` 的 name 键可能抢先作答；它不认识单引号字符串；找不到时还会静默返回目录
-/// 名。包名是 `NodeId` 的命名空间，答错就会让同一个 crate 在 `nichlink check` 与真实
+/// 名。包名是 `NodeId` 的命名空间，答错就会让同一个 crate 在 `xirang check` 与真实
 /// 编译下报告两种身份。Cargo 才是权威；它答不出的问题一律报错，而不是猜。
 pub fn package_name(manifest: &Path) -> Result<String, String> {
     let output = std::process::Command::new("cargo")
@@ -147,7 +147,7 @@ mod tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-package-{label}-{}-{sequence}",
+            "xirang-package-{label}-{}-{sequence}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
@@ -220,16 +220,16 @@ mod tests {
     }
 
     /// A configured namespace wins **verbatim** and without asking Cargo, and an empty one counts
-    /// as absent: `NICH_LINK_NAMESPACE=` is how a shell clears an inherited variable, and taking it
+    /// as absent: `XIRANG_NAMESPACE=` is how a shell clears an inherited variable, and taking it
     /// literally would name an identity domain no `NodeId` was ever hashed under.
-    /// 配置的命名空间**原样**胜出、且不问 Cargo；空的算作没设置：`NICH_LINK_NAMESPACE=` 正是 shell 清掉
+    /// 配置的命名空间**原样**胜出、且不问 Cargo；空的算作没设置：`XIRANG_NAMESPACE=` 正是 shell 清掉
     /// 继承变量的写法，照字面采用它会得到一个从未有任何 `NodeId` 在其下散列的命名域。
     #[test]
     fn a_configured_namespace_wins_verbatim_and_an_empty_one_is_absent() {
         // A directory rather than a manifest: any Cargo answer at all would fail, so a `Some`
         // override proves it never asked.
         // 给的是目录而不是清单：任何 Cargo 回答都会失败，因此有覆盖时能成功就证明它根本没问。
-        let root = std::env::temp_dir().join(format!("nichlink-namespace-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("xirang-namespace-{}", std::process::id()));
         std::fs::create_dir_all(&root).expect("scratch");
         assert_eq!(
             super::identity_namespace(Some("trace-recorded-host"), &root)
@@ -248,12 +248,12 @@ mod tests {
 /// Every copy of this workspace's own crates in a project's dependency graph, grouped by name.
 /// 一个项目的依赖图里属于本工作区那些 crate 的每一份拷贝，按名字分组。
 ///
-/// Two copies of `nichlink-toolchain` are **two different types** to rustc, and the generated tree names
+/// Two copies of `xirang-toolchain` are **two different types** to rustc, and the generated tree names
 /// both: the host resolves its own copy, the graft implementation resolves the one it was built against.
 /// The failure then lands inside a file the author cannot edit — measured on a hand-built host whose own
 /// manifest took the toolchain from a checkout while its external implementation took it from the
 /// registry:
-/// `nichlink-toolchain` 的两份拷贝对 rustc 是**两个不同的类型**，而生成树把两者都点名：宿主解析自己那一份，
+/// `xirang-toolchain` 的两份拷贝对 rustc 是**两个不同的类型**，而生成树把两者都点名：宿主解析自己那一份，
 /// 嫁接实现解析它编译时用的那一份。失败随后落在作者无法编辑的文件里——在一个手工宿主上实测，它的清单从检出取
 /// toolchain，而它的项目外实现从注册局取：
 ///
@@ -310,7 +310,7 @@ fn duplicated_in(packages: &[serde_json::Value]) -> Vec<(String, Vec<String>)> {
         let Some(name) = package["name"].as_str() else {
             continue;
         };
-        if !name.starts_with("nichlink-") {
+        if !name.starts_with("xirang-") {
             continue;
         }
         let spelling = match package["source"].as_str() {
@@ -340,7 +340,7 @@ mod duplicated_tests {
     #[test]
     fn one_copy_each_is_silent() {
         let packages = vec![
-            serde_json::json!({"name": "nichlink-kernel", "version": "0.2.2", "source": null,
+            serde_json::json!({"name": "xirang-kernel", "version": "0.2.2", "source": null,
                                "manifest_path": "/w/kernel/Cargo.toml"}),
             serde_json::json!({"name": "serde", "version": "1.0.0", "source": "registry+x",
                                "manifest_path": "/r/serde/Cargo.toml"}),
@@ -368,15 +368,15 @@ mod duplicated_tests {
     #[test]
     fn a_checkout_copy_beside_a_registry_copy_is_reported() {
         let packages = vec![
-            serde_json::json!({"name": "nichlink-toolchain", "version": "0.2.2", "source": null,
+            serde_json::json!({"name": "xirang-toolchain", "version": "0.2.2", "source": null,
                                "manifest_path": "/w/toolchain/Cargo.toml"}),
-            serde_json::json!({"name": "nichlink-toolchain", "version": "0.2.2",
+            serde_json::json!({"name": "xirang-toolchain", "version": "0.2.2",
                                "source": "registry+https://github.com/rust-lang/crates.io-index",
-                               "manifest_path": "/r/nichlink-toolchain/Cargo.toml"}),
+                               "manifest_path": "/r/xirang-toolchain/Cargo.toml"}),
         ];
         let found = duplicated_in(&packages);
         assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].0, "nichlink-toolchain");
+        assert_eq!(found[0].0, "xirang-toolchain");
         assert_eq!(found[0].1.len(), 2);
         assert!(
             found[0].1[0].contains("this checkout") && found[0].1[1].contains("registry+"),

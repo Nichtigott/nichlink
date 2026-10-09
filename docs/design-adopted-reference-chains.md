@@ -14,7 +14,7 @@
 | 横向扩展的**机械规范** | **已经存在**：父级 `RegistrationRule`（`require_preset`/`require_parts`/`require_exports`/`require_handle_traits`/`require_part_traits`，`kernel/src/registry_core/declaration/registration.rs:100`）+ `Admission::accepts`（`:64`）+ 面的 `contract`（required/provided parts）、`requires`/`provides`、`runtime_checks`。"同级该长成什么样"本来就是框架在机械检查的东西 ⇒ 规范不必发明，只需**从已采信的同级身上提取并差分** |
 | 实现侧"哪一块"的**颗粒度** | 已有：`function_symbols(source) -> Vec<SourceFunction>`（含 `is_function`/`end_line`，`kernel/src/registry_core/source/source.rs:125`、`source/items.rs`）、`body_calls(body, target)`（`source/calls.rs:27`） |
 | 调用链的**证据等级** | 已有：`unified`/`converge` 给每条关系标 `Live` 或 compiler candidate；`diff --records` 把记录分成 `ok / undeclared / stale / re-identified / unreadable` |
-| **落盘位置** | 已有约定：`NICHLINK_DIR = ".nichlink"`，其下已有 `external-grafts/`（`graft.plan`）与 `traces/`（`kernel/src/registry_core/lexicon/lexicon.rs:121-133`）⇒ 采信台账应住 `.nichlink/` 下，**不是 `target/`**（那是可丢弃的） |
+| **落盘位置** | 已有约定：`XIRANG_DIR = ".xirang"`，其下已有 `external-grafts/`（`graft.plan`）与 `traces/`（`kernel/src/registry_core/lexicon/lexicon.rs:121-133`）⇒ 采信台账应住 `.xirang/` 下，**不是 `target/`**（那是可丢弃的） |
 | **"采信 / 标本 / 参考链路"这个概念** | **不存在** ✓（全仓 grep 只有插件签名的 `trust`，语义不同）⇒ 这一件是真的新 |
 
 ## 2. 采信台账的最小可判形状（否则它会变成会撒谎的标签）
@@ -38,7 +38,7 @@
    - **调用链侧** ⇒ 哪条边，以及它的证据等级（`Live` / compiler candidate）；
    - **两者都有** ⇒ 分开写，并说清边界。
    定位是**算法**的活，agent 只调工具 ⇒ 这正是"减少 ai 自己的判断与读取"的落点。
-4. **保留全量通路（默认不投喂，但通路要在）**：`read` 的整文件/行区间（现在是 ±40 行窗口、且不报文件总行数）、发布记录 `<pkg>/target/nichlink/out/`、trace artifact `.nichlink/traces/` 三条通路明确可及，并由答案告诉 agent"要全量就走哪条"。
+4. **保留全量通路（默认不投喂，但通路要在）**：`read` 的整文件/行区间（现在是 ±40 行窗口、且不报文件总行数）、发布记录 `<pkg>/target/xirang/out/`、trace artifact `.xirang/traces/` 三条通路明确可及，并由答案告诉 agent"要全量就走哪条"。
 
 ## 4. 与 codegraph 的关系
 
@@ -47,7 +47,7 @@
 
 ## 5. 落地顺序与前置
 
-- **前置**：先把"漂移作废"做成机械检查（每条采信都要有 invalidation 键，键漂了就红），照 `.nichlink/` 既有棘轮（`BASELINE`/`SHIMS`）的形态；否则台账会撒谎 ✗。
+- **前置**：先把"漂移作废"做成机械检查（每条采信都要有 invalidation 键，键漂了就红），照 `.xirang/` 既有棘轮（`BASELINE`/`SHIMS`）的形态；否则台账会撒谎 ✗。
 - 顺序：① 补 `RegistryError` 链的读者 → ② 规范提取与差分 → ③ 采信台账 + 门禁 → ④ 四条通路工具化。
 - **在飞依赖**：测试治理与"全树入口"两批正在跑；`toolchain/src/mcp/**` 同一目录不安排两个写者。
 - 本记录只含设计与现状证据，不含实现。
@@ -61,7 +61,7 @@
 - **条目天生是临时的**：带 `provisional: true` 与"被采信时的指纹"，措辞上**不是**"已验证 / 已保证"。
 - **漂移不自动撤销，也不自动续期** ✗✓：漂移把条目置为 `needs-confirmation`。工具在**答案里**就不再称它"已采信"（agent 因此拿不到过期的绿灯 ✓），但它既不悄悄续期，也不因此回退代码。
 - **续期是一次显式追加**：`confirm` 必须带**新指纹 + 证据 + 谁确认的 + 为什么**；台账**只追加不覆盖**，因此"这条链路被采信过几次、每次为什么重新确认"是可读的历史。
-- **门禁在 `needs-confirmation` 时红，而它要求的动作是"人工确认"，不是"改代码"** —— 这正是"强制人去确认"的机械形态；形状照 `.nichlink/` 既有的棘轮（`BASELINE` 的过期条目会红、`SHIMS` 的钉住语句会红）。
+- **门禁在 `needs-confirmation` 时红，而它要求的动作是"人工确认"，不是"改代码"** —— 这正是"强制人去确认"的机械形态；形状照 `.xirang/` 既有的棘轮（`BASELINE` 的过期条目会红、`SHIMS` 的钉住语句会红）。
 - **答案措辞随之定死**：正常时说 `adopted since <date> at <fingerprint> (provisional)`；漂移后说 `adoption lapsed at <file>; needs confirmation`。**永远不出现**"已保证 / 已验证"这类口气。
 
 这样"稳步发展"与"强制确认"同时成立：开发可以随便往前走，但**每一次让某条链路重新配得上"采信"这两个字，都要有人签字** ✓。

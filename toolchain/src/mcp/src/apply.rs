@@ -33,16 +33,16 @@ mod apply_promote;
 
 use crate::build_method::{face_views, source_layout};
 use crate::run_method::{AuthoringContext, NewModuleFace};
-use nichlink_kernel::Registry;
 use serde_json::Value;
+use xirang_kernel::Registry;
 
 use crate::mcp::apply_target::Target;
 use crate::mcp::preview::{copy_package, declaration_line, diff_package};
 use crate::mcp::registry::namespace;
 use crate::mcp::resolve::{parent_id, resolve_node};
 
-/// One `nichlink.apply` request.
-/// 一次 `nichlink.apply` 请求。
+/// One `xirang.apply` request.
+/// 一次 `xirang.apply` 请求。
 #[derive(Clone, Copy)]
 enum Action {
     /// Create a module registration face.
@@ -114,7 +114,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
                 .ok()
                 .map(|namespace| write_example(root, &namespace, Action::Add));
             return Err(format!(
-                "nichlink.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, \
+                "xirang.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, \
                  `cut`, `promote`, or `move`){}",
                 example.map_or(String::new(), |example| format!("\n{example}"))
             ));
@@ -138,11 +138,11 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Action::Delete => run_delete(work, &namespace, arguments),
         // `deepen`'s consumer story has two halves that live in different trees: the face it
         // deepened is in the **work** directory (a copy, in a preview), while the graft plans it must
-        // name are in the **project** — the preview copy skips `.nichlink` by design. Passing both is
+        // name are in the **project** — the preview copy skips `.xirang` by design. Passing both is
         // what keeps the preview from telling a different consumer story than the write, which is the
         // one thing a preview must never do (audit `W5-3`).
         // `deepen` 的消费方说法有两半，住在两棵不同的树上：它做深的那个面在**工作**目录里（预览时是副本），
-        // 而它必须点名的 graft 计划在**项目**里——预览副本按设计跳过 `.nichlink`。两棵都传进去，才让预览
+        // 而它必须点名的 graft 计划在**项目**里——预览副本按设计跳过 `.xirang`。两棵都传进去，才让预览
         // 不讲述一个与写入不同的消费方故事，而那正是预览绝不能做的事（审计 `W5-3`）。
         Action::Deepen => run_deepen(work, root, &namespace, arguments),
         Action::Cut => apply_cut::run_cut(work, arguments),
@@ -497,10 +497,10 @@ fn run_edit(
     // back resolves its path from the context's package root, so a read outside it
     // would look for the face under whatever directory the process happens to be in
     // — a bug this pin caught, because the CLI-shaped manual run had
-    // `NICH_LINK_PACKAGE_ROOT` set and the unit test did not.
+    // `XIRANG_PACKAGE_ROOT` set and the unit test did not.
     // 两半都在同一个上下文里运行，而且不只是写入那一半：读回该面时它的路径由上下文的包根解析，因此
     // 在上下文之外读会去进程碰巧所在的目录里找那个面——正是这个缺陷被钉子抓住：手工的 CLI 式运行设了
-    // `NICH_LINK_PACKAGE_ROOT`，而单元测试没设。
+    // `XIRANG_PACKAGE_ROOT`，而单元测试没设。
     let context = AuthoringContext::new(root.to_path_buf(), namespace.to_owned());
     let (change, previous_kind, new_kind) = context.scope(|| -> Result<_, String> {
         let mut authored = crate::run_method::authored_face(&registry, id)?;
@@ -534,7 +534,7 @@ fn run_edit(
             "\nidentity changed: `kind` `{previous_kind}` → `{new_kind}` is an identity input \
              (`NodeId = hash(namespace, source, name)`, and a face's name is its kind), so this face \
              is no longer `{id}`; graft records keyed by the old identity no longer resolve — \
-             `nichlink.diff {{\"records\": true}}` lists them\n"
+             `xirang.diff {{\"records\": true}}` lists them\n"
         ));
     }
     Ok(Outcome {
@@ -672,10 +672,10 @@ fn run_deepen(
     // Every message names the file **relative to the package**, because a preview's absolute path is
     // a throwaway copy deleted a moment later — and the write path's own rule is that a preview must
     // never tell a caller to look somewhere that will not exist. An independent review of the first
-    // cut caught this by quoting the `/tmp/nichlink-toolchain-preview-…` path out of a refusal.
+    // cut caught this by quoting the `/tmp/xirang-toolchain-preview-…` path out of a refusal.
     // 所有文案都用**相对包**的路径：预览的绝对路径是一份随后就被删掉的一次性副本，而写入路径自己的
     // 规矩就是"预览绝不能叫调用方去看一个随后不存在的目录"。第一版的独立复核正是从一条拒绝文案里
-    // 把 `/tmp/nichlink-toolchain-preview-…` 抄出来抓到这个的。
+    // 把 `/tmp/xirang-toolchain-preview-…` 抄出来抓到这个的。
     let named = format!("src/{}", face.source);
     let text = std::fs::read_to_string(&path)
         .map_err(|error| format!("{named} is not readable: {error}"))?;
@@ -708,7 +708,7 @@ fn run_deepen(
         "\n/// The layer inside this face: the parts its own declaration already describes.\n\
          /// 这个面内部的那一层：它自己的声明已经描述过的那些零件。\npub struct {kind}Parts {{\n\
          {declarations}}}\n\
-         \nimpl nichlink_toolchain::run_method::PartsContract for {kind}Parts {{\n\
+         \nimpl xirang_toolchain::run_method::PartsContract for {kind}Parts {{\n\
          \x20   type Output = {kind}Parts;\n\
          \x20   const PROVIDED_PARTS: &'static [&'static str] = &[{listed}];\n}}\n\
          \nimpl {kind} {{\n\
@@ -833,7 +833,7 @@ pub(crate) const REJECTED_VERDICT: &str = "kernel verdict: this package's own fa
 /// 构建执行器据以校验的注册树：该包自己的注册面，位于 Cargo 报告的命名空间之下。
 pub(crate) fn load_registry(root: &Path, namespace: &str) -> Result<Registry, String> {
     let mut registry =
-        Registry::root_for_namespace(nichlink_kernel::FrameworkId::new("nichlink.mcp"), namespace);
+        Registry::root_for_namespace(xirang_kernel::FrameworkId::new("xirang.mcp"), namespace);
     let source_root = source_layout(root)?.scan_root;
     let snapshots = AuthoringContext::new(root.to_path_buf(), namespace.to_owned())
         .scope(|| crate::run_method::generated_snapshots_from(&source_root))?;

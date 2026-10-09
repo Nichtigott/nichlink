@@ -28,9 +28,9 @@ mod contracts;
 #[path = "crate_plan.rs"]
 pub(crate) mod crate_plan;
 
-// Its only caller is the authoring CLI face (`nichlink crates`), so the module rides that feature:
+// Its only caller is the authoring CLI face (`xirang crates`), so the module rides that feature:
 // a default build has no writer, and dead code is a warning this workspace refuses.
-// 它唯一的调用方是创作面的 CLI（`nichlink crates`），因此该模块随那个特性走：默认构建没有写入方，而死代码是
+// 它唯一的调用方是创作面的 CLI（`xirang crates`），因此该模块随那个特性走：默认构建没有写入方，而死代码是
 // 本工作区拒绝的告警。
 #[cfg(any(feature = "cli", feature = "studio", feature = "mcp"))]
 #[path = "crate_facade.rs"]
@@ -187,10 +187,10 @@ pub(crate) use source_walk::{parallel_map_with_threshold, worker_budget};
 // would be an unused import in a non-test build.
 // 这里刻意不导出 `resolve_host_entry`：生产代码只经 `host_entry_from_environment`
 // 到达它，仅为测试而导出会在非测试构建里成为未使用导入。
-// The authoring surface's CLI face (`nichlink crates`) is the only caller of these, so they ride the
+// The authoring surface's CLI face (`xirang crates`) is the only caller of these, so they ride the
 // same feature: a default build has no use for them, and an unused re-export is a warning this
 // workspace refuses.
-// 这些名字唯一的调用方是创作面的 CLI（`nichlink crates`），因此它们随着同一个特性走：默认构建用不到它们，
+// 这些名字唯一的调用方是创作面的 CLI（`xirang crates`），因此它们随着同一个特性走：默认构建用不到它们，
 // 而未使用的再导出是本工作区拒绝的告警。
 #[cfg(feature = "cli")]
 pub(crate) use crate_facade::plan_facade;
@@ -411,30 +411,30 @@ fn run_shape_with_cuts(
 /// 它生成的构建脚本什么都不设置。
 fn legacy_shape_from_environment() -> (Option<String>, bool) {
     (
-        std::env::var(nichlink_kernel::lexicon::SHAPE_ONLY_ENV).ok(),
-        std::env::var(nichlink_kernel::lexicon::SHAPE_FACADE_ENV).is_ok(),
+        std::env::var(xirang_kernel::lexicon::SHAPE_ONLY_ENV).ok(),
+        std::env::var(xirang_kernel::lexicon::SHAPE_FACADE_ENV).is_ok(),
     )
 }
 
 /// Run the same discovery and validation pipeline as [`run_for`], but hand the
-/// caller the structured [`nichlink_kernel::BuildDiagnostics`] instead of the text a
+/// caller the structured [`xirang_kernel::BuildDiagnostics`] instead of the text a
 /// terminal or `compile_error!` reads.
 /// 运行与 [`run_for`] 相同的发现与校验管线，但把结构化的
-/// [`nichlink_kernel::BuildDiagnostics`] 交给调用方，而不是终端或 `compile_error!` 读的文本。
+/// [`xirang_kernel::BuildDiagnostics`] 交给调用方，而不是终端或 `compile_error!` 读的文本。
 ///
-/// This is the machine-readable twin of `run_for`: a CI job or `nichlink check
+/// This is the machine-readable twin of `run_for`: a CI job or `xirang check
 /// --json` needs to count and serialize individual failures, and re-parsing the
 /// rendered frame would make the layout part of the contract. The rendered text
 /// stays byte-identical because `run_for` renders exactly this value with the
 /// unchanged `render()`.
-/// 这是 `run_for` 的机器可读孪生：CI 或 `nichlink check --json` 需要逐条计数并序列化
+/// 这是 `run_for` 的机器可读孪生：CI 或 `xirang check --json` 需要逐条计数并序列化
 /// 失败，而重新解析渲染文本会让版式变成契约。渲染文本保持逐字节一致，因为 `run_for`
 /// 用未改动的 `render()` 渲染的正是这个值。
 pub fn check_for(
     manifest: &Path,
     out_dir: &Path,
     package: &str,
-) -> Result<(), nichlink_kernel::BuildDiagnostics> {
+) -> Result<(), xirang_kernel::BuildDiagnostics> {
     check_for_shape(manifest, out_dir, package, None, false, false)
 }
 
@@ -447,7 +447,7 @@ pub fn check_for_shape(
     only: Option<String>,
     facade: bool,
     emit_cargo_directives: bool,
-) -> Result<(), nichlink_kernel::BuildDiagnostics> {
+) -> Result<(), xirang_kernel::BuildDiagnostics> {
     check_for_shape_with_cuts(
         manifest,
         out_dir,
@@ -470,10 +470,10 @@ pub fn check_for_shape_with_cuts(
     facade: bool,
     emit_cargo_directives: bool,
     cuts: &[HostCut],
-) -> Result<(), nichlink_kernel::BuildDiagnostics> {
+) -> Result<(), xirang_kernel::BuildDiagnostics> {
     std::fs::create_dir_all(out_dir).map_err(|error| {
-        let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
-        diagnostics.push(nichlink_kernel::BuildDiagnostic::new(
+        let mut diagnostics = xirang_kernel::BuildDiagnostics::default();
+        diagnostics.push(xirang_kernel::BuildDiagnostic::new(
             "out-dir",
             format!("create {}: {error}", out_dir.display()),
         ));

@@ -17,7 +17,7 @@
 
 use std::time::Instant;
 
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::run_method::{
     FrameworkId, NodeId, OwnedAdmission, OwnedFlowContract, OwnedLocalizedText,
     OwnedObjectContract, OwnedRegistrationRule, OwnedSourceLocation, RegistrationSnapshot,
     Registry, root_node_id,
@@ -106,11 +106,11 @@ fn main() {
     // 40 µs and 20 µs per node: roughly eight times the 5.2 µs and 2.6 µs measured
     // for 100 000 nodes when this budget was added.
     // 每节点 40 µs 与 20 µs：约等于加入本预算时 100 000 个节点实测 5.2 µs 与 2.6 µs 的八倍。
-    let register_ceiling = ceiling("NICHLINK_SCALE_REGISTER_US", 40);
-    let index_ceiling = ceiling("NICHLINK_SCALE_INDEX_US", 20);
+    let register_ceiling = ceiling("XIRANG_SCALE_REGISTER_US", 40);
+    let index_ceiling = ceiling("XIRANG_SCALE_INDEX_US", 20);
     for size in sizes {
         let namespace = format!("scale-{size}");
-        let root = Registry::root_for_namespace(FrameworkId::new("nichlink.scale"), &namespace);
+        let root = Registry::root_for_namespace(FrameworkId::new("xirang.scale"), &namespace);
         let parent = root_node_id(&namespace);
         let submissions = (0..size)
             .map(|index| snapshot(&namespace, index, parent))
@@ -131,15 +131,15 @@ fn main() {
             "{size}\t{register_ms}\t{register_budget_ms}\t{index_ms}\t{index_budget_ms}\t{}\t{}\t{}",
             index.len(),
             stats.pages,
-            size * std::mem::size_of::<nichlink_kernel::StaticFace>()
+            size * std::mem::size_of::<xirang_kernel::StaticFace>()
         );
         assert!(
             register_ms <= register_budget_ms,
-            "registering {size} nodes took {register_ms} ms, over the {register_budget_ms} ms              budget ({register_ceiling} µs per node); raise NICHLINK_SCALE_REGISTER_US if this              machine is simply slower, and update docs/performance-baseline.md if the baseline moved"
+            "registering {size} nodes took {register_ms} ms, over the {register_budget_ms} ms              budget ({register_ceiling} µs per node); raise XIRANG_SCALE_REGISTER_US if this              machine is simply slower, and update docs/performance-baseline.md if the baseline moved"
         );
         assert!(
             index_ms <= index_budget_ms,
-            "indexing {size} nodes took {index_ms} ms, over the {index_budget_ms} ms budget              ({index_ceiling} µs per node); raise NICHLINK_SCALE_INDEX_US if this machine is              simply slower, and update docs/performance-baseline.md if the baseline moved"
+            "indexing {size} nodes took {index_ms} ms, over the {index_budget_ms} ms budget              ({index_ceiling} µs per node); raise XIRANG_SCALE_INDEX_US if this machine is              simply slower, and update docs/performance-baseline.md if the baseline moved"
         );
         let extra = snapshot(&namespace, size, parent);
         registry

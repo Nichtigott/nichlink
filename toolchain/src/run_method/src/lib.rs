@@ -1,7 +1,7 @@
-//! NichLink runtime: trace state, macros, and the authoring executor.
+//! XiRang runtime: trace state, macros, and the authoring executor.
 //! The registry tree and plugin protocol live in the kernel; this crate is
 //! the run_method execution surface.
-//! NichLink 运行期：trace 状态、宏与 authoring 执行器。
+//! XiRang 运行期：trace 状态、宏与 authoring 执行器。
 //! 注册树与插件协议在 kernel；本 crate 是 run_method 执行面。
 
 // The published surface must be readable on docs.rs without leaving the page,
@@ -32,31 +32,31 @@ pub mod runtime;
 #[path = "shape.rs"]
 pub mod shape;
 
-pub use nichlink_kernel::registry_core;
-// This glob names the same kernel items the historical `nichlink_kernel::*` glob did,
+pub use xirang_kernel::registry_core;
+// This glob names the same kernel items the historical `xirang_kernel::*` glob did,
 // and it overlaps this crate's own `authoring` shim (`parse`, `snapshot`,
 // `validation`). Both paths are the same surface, so the overlap is allowed
 // here rather than resolved.
-// 本 glob 命名的内核条目与历史上的 `nichlink_kernel::*` 完全相同，并与本 crate 自己的
+// 本 glob 命名的内核条目与历史上的 `xirang_kernel::*` 完全相同，并与本 crate 自己的
 // `authoring` shim（`parse`、`snapshot`、`validation`）重叠。两条路径同属一个执行面，
 // 因此这里允许重叠而不做消解。
 #[allow(ambiguous_glob_reexports)]
-pub use nichlink_kernel::registry_core::*;
+pub use xirang_kernel::registry_core::*;
 /// The face field front end, re-exported so a host does not have to depend on
 /// the proc-macro crate itself.
 /// 注册面字段前端；再导出后宿主无需自己依赖 proc-macro crate。
-pub use nichlink_macro::face_fields;
+pub use xirang_macro::face_fields;
 /// The editor-only field mirror used by generated aliases.
 /// 生成的别名使用的、仅供编辑器的字段镜像。
-pub use nichlink_macro::face_fields_mirror;
+pub use xirang_macro::face_fields_mirror;
 /// The default `registry_rule` resolver used by the declarative face arms.
 /// 声明式注册面分支使用的 `registry_rule` 默认值解析器。
 #[doc(hidden)]
-pub use nichlink_macro::face_rule_or as __face_rule_or;
-pub use nichlink_macro::face_trait_labels_or as __face_trait_labels_or;
+pub use xirang_macro::face_rule_or as __face_rule_or;
+pub use xirang_macro::face_trait_labels_or as __face_trait_labels_or;
 
-// `#[macro_export]` 把宏放在 crate 根（`nichlink_toolchain::host!`），而宿主与生成代码写的是
-// 模块路径（`nichlink_toolchain::run_method::host!`）。根路径那几个带
+// `#[macro_export]` 把宏放在 crate 根（`xirang_toolchain::host!`），而宿主与生成代码写的是
+// 模块路径（`xirang_toolchain::run_method::host!`）。根路径那几个带
 // `#[rust_analyzer::macro_style]`（属性宏展开过），因此**不能**用 `pub use crate::…`
 // 再导出；这里改成薄转发宏：`$crate` 是 toolchain crate 根，转发到真正的实现。
 // `#[macro_export]` lands the implementations at the crate root, while hosts and generated
@@ -100,11 +100,11 @@ pub use shape::*;
 // This line deliberately still names `artifact`: the module is `snapshot` now (`NAM-11`),
 // and the alias in `runtime/trace/trace.rs` is what keeps the published path
 // `crate::run_method::runtime::trace::artifact` alive. Naming it here is the pin the
-// shim ratchet cannot express (it only reads `pub use nichlink_kernel::…` statements): delete the
+// shim ratchet cannot express (it only reads `pub use xirang_kernel::…` statements): delete the
 // alias and this line stops compiling.
 // 这一行有意仍写 `artifact`：模块现在是 `snapshot`（`NAM-11`），保住已发布路径
 // `crate::run_method::runtime::trace::artifact` 的是 `runtime/trace/trace.rs` 里的别名。
-// 把旧路径写在这里，正是 shim 棘轮表达不了的那根钉子（它只读 `pub use nichlink_kernel::…`）：
+// 把旧路径写在这里，正是 shim 棘轮表达不了的那根钉子（它只读 `pub use xirang_kernel::…`）：
 // 删掉别名，这一行就编译不过。
 pub use runtime::trace::artifact::{
     TRACE_ARTIFACT_VERSION, TraceArtifact, TraceArtifactError, TraceFrame, read_trace_artifact,

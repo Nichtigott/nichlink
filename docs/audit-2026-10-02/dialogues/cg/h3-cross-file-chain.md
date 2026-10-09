@@ -38,7 +38,7 @@ Now let me try running the test to get the actual failure output — good eviden
 
 Risk: build time. Let me run with a generous timeout and in background if needed. Let me first check if the toolchain builds quickly... Let me just run it with timeoutMs 600000 (10 min) — the harness may move it to background if it exceeds.
 
-Actually, `cargo test --offline` for this host requires building nichlink-toolchain (a big crate with proc-macro deps like syn? maybe). The workspace's own build cache is at /home/nich/Moirai_N3/nichlink/target (the workspace target dir) — a DIFFERENT target dir than my probe cargo-target, so it will rebuild from scratch. Could take several minutes. The deps come from the local registry cache (offline OK).
+Actually, `cargo test --offline` for this host requires building xirang-toolchain (a big crate with proc-macro deps like syn? maybe). The workspace's own build cache is at /home/nich/Moirai_N3/nichlink/target (the workspace target dir) — a DIFFERENT target dir than my probe cargo-target, so it will rebuild from scratch. Could take several minutes. The deps come from the local registry cache (offline OK).
 
 Given the value (only for h1-supply-chain, h3, h2 evidence) — that's 3 questions × maybe 2-5 min = manageable. But if the toolchain build is heavy (it has a proc-macro crate, wasmtime? — plugin_host might pull heavy deps when features are off... default features = build+run, so maybe moderate).
 
@@ -46,7 +46,7 @@ Let me try once for h1-supply-chain and measure. If it's fast enough, I'll do h2
 
 Alternatively, I can verify the arithmetic without cargo: the test sums offset(10) over 8 widgets; toggle returns to_world(10)=41; others to_local(10)=17 ⇒ total = 7*17 + 41 = 160 ≠ 136. That's already a decisive, checkable claim derived from source (and codegraph callers). The cargo run adds "the test actually fails with 160" — nice-to-have but expensive.
 
-Hmm. The captain's measurement wants steps/context. Extra cargo runs inflate my nonbridge count and time. The ninth round arm (nichlink-mcp) probably didn't need cargo for read-only diagnostics... but the brief's "evidence = command + raw output + exit code" suggests some command.
+Hmm. The captain's measurement wants steps/context. Extra cargo runs inflate my nonbridge count and time. The ninth round arm (xirang-mcp) probably didn't need cargo for read-only diagnostics... but the brief's "evidence = command + raw output + exit code" suggests some command.
 
 I'll do ONE cargo run for h1-supply-chain as a feasibility probe; if it builds within ~3-4 min, I'll reuse the same target dir for h2/h3 (incremental → fast). This is valuable evidence for 3 questions. Let me run it in the background and continue working on h3 static analysis meanwhile.
 
@@ -125,7 +125,7 @@ Note that `scope` in build_time collects only faces named by the entry (path spe
 
 Let me read h3's lib.rs tail + tests/shipped.rs + the dial.rs file.
 
-Then, for the entry-plan check: also the process-level: `application!(entry = ...)` hint? The tree's build.rs might call `nichlink_toolchain::build_time::run()`.
+Then, for the entry-plan check: also the process-level: `application!(entry = ...)` hint? The tree's build.rs might call `xirang_toolchain::build_time::run()`.
 
 Let me look at h3's lib.rs lines 36-98 and shipped.rs.
 ```
@@ -138,8 +138,8 @@ Let me look at h3's lib.rs lines 36-98 and shipped.rs.
 ```
 **host/src/lib.rs** — 98 lines, 3 symbols · no other indexed file depends on it
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -148,7 +148,7 @@ Let me look at h3's lib.rs lines 36-98 and shipped.rs.
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -164,7 +164,7 @@ Let me look at h3's lib.rs lines 36-98 and shipped.rs.
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -185,7 +185,7 @@ Let me look at h3's lib.rs lines 36-98 and shipped.rs.
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -324,7 +324,7 @@ Wait — I should double check whether the scope is "the subtrees these cuts nam
 
 Also `dial` differs from the 8 in another way? Let me check the h1-supply-chain tree's lib.rs plan again — it also had 8 entries without dial; and the h1-supply-chain test (offsets.rs) sums 8 widgets, not including dial ✓ consistent. So in h1-supply-chain, dial is *intentionally* not grafted (offsets test sums 8). But in h3, the shipped.rs test expects 9 → dial missing from the plan is THE defect ✓.
 
-Let me verify that the shipped test's `outline()` comes from the build-scoped tree: `outline()` → `base_registry()` → `registrations()` (generated). The generated `registrations()` is produced at build time by the build script using the entry plan (scope). Evidence in the tree: `.nichlink/` dir? h3's host has no `.nichlink`? Layout earlier: h3 host has build.rs, Cargo.lock, src, target, tests, Cargo.toml — plus `.nichlink`? The find output for h3-cross-file-chain showed: host/{build.rs, Cargo.lock, src/..., Cargo.toml, tests/shipped.rs} — no .nichlink dir listed for h3 (h2 has host/.nichlink/adopted/entries). OK.
+Let me verify that the shipped test's `outline()` comes from the build-scoped tree: `outline()` → `base_registry()` → `registrations()` (generated). The generated `registrations()` is produced at build time by the build script using the entry plan (scope). Evidence in the tree: `.xirang/` dir? h3's host has no `.xirang`? Layout earlier: h3 host has build.rs, Cargo.lock, src, target, tests, Cargo.toml — plus `.xirang`? The find output for h3-cross-file-chain showed: host/{build.rs, Cargo.lock, src/..., Cargo.toml, tests/shipped.rs} — no .xirang dir listed for h3 (h2 has host/.xirang/adopted/entries). OK.
 
 Now, is the dial face also missing from the graft crate? `graft/src/dial_fast.rs` exists ✓ (24 files incl. dial_fast.rs). So the fix is one line pair in the plan.
 
@@ -332,7 +332,7 @@ Also worth checking: does `host/src/lib.rs` mention dial anywhere? The `query di
 
 Let me also check the cargo job status.
 
-Then h2-claim-unkept: need to read `.nichlink/adopted/entries`, the object files (one sibling missing exactly one declaration), and tests/offsets.rs (the h2 tree's test file is offsets.rs). Let me look after.
+Then h2-claim-unkept: need to read `.xirang/adopted/entries`, the object files (one sibling missing exactly one declaration), and tests/offsets.rs (the h2 tree's test file is offsets.rs). Let me look after.
 
 Let me run: `query dial` in h3, and job_output for the cargo job.
 ```
@@ -348,8 +348,8 @@ Let me run: `query dial` in h3, and job_output for the cargo job.
 ```
 **host/src/lib.rs** — 98 lines, 3 symbols · no other indexed file depends on it
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -358,7 +358,7 @@ Let me run: `query dial` in h3, and job_output for the cargo job.
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -374,7 +374,7 @@ Let me run: `query dial` in h3, and job_output for the cargo job.
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -395,7 +395,7 @@ Let me run: `query dial` in h3, and job_output for the cargo job.
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -540,7 +540,7 @@ Let me write the file.
 **host/build.rs** — 4 lines, 1 symbol · no other indexed file depends on it
 
 1	fn main() {
-2	    nichlink_toolchain::build_time::run();
+2	    xirang_toolchain::build_time::run();
 3	}
 4
 ```
@@ -707,8 +707,8 @@ file        dial_fast.rs
 
 **非桥 1**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/host && cargo test --offline > /tmp/cg26_h3.out 2>&1; rc=$?; cat /tmp/cg26_h3.out; exit $rc`
 ```
-Compiling nichlink-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/graft)
-   Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/host)
+Compiling xirang-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/graft)
+   Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/host)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 2.43s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target/debug/deps/control_button-ec43ad9ac874301c)
 

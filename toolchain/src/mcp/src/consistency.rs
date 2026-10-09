@@ -1,5 +1,5 @@
-//! `nichlink.consistency`: compare siblings under one parent, and name the ones that differ.
-//! `nichlink.consistency`：比较同一父级下的兄弟，点名不一样的那几个。
+//! `xirang.consistency`: compare siblings under one parent, and name the ones that differ.
+//! `xirang.consistency`：比较同一父级下的兄弟，点名不一样的那几个。
 //!
 //! The failure this answers is the one the maintainer named "供应链驳杂": one object under a parent
 //! follows a different convention from its siblings — a `button` computing offsets in a relative
@@ -22,9 +22,9 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use nichlink_kernel::adoption::{AdoptionVerdict, verdict_of};
-use nichlink_kernel::syntax::{FaceSyntax, parse_faces};
 use serde_json::Value;
+use xirang_kernel::adoption::{AdoptionVerdict, verdict_of};
+use xirang_kernel::syntax::{FaceSyntax, parse_faces};
 
 use crate::mcp::source_index::{SourceFile, load_sources};
 use crate::mcp::workspace::{Member, Scope};
@@ -270,11 +270,11 @@ fn specimen_comparison(root: &Path, anchor: &str) -> Result<String, String> {
             // 答案里——多数派声明了什么（标本自己的形状）与哪个兄弟偏离了——因此这一行带上**执行它的那个
             // 请求**，用写入路径自己的拼写，读者粘贴而不是重建。
             // A repair request is only handed back for a face the write path **may** rewrite: `edit`
-            // refuses a hand-written file by design (only generated faces are NichLink's to rewrite),
+            // refuses a hand-written file by design (only generated faces are XiRang's to rewrite),
             // so a `fix` line there would be a line that fails when pasted. The hand-written case gets
             // the same facts in the form that works — what to declare, in which file.
             // 只有写入路径**可以**重写的面才交回修复请求：`edit` 按设计拒绝手写的文件（只有生成的面才是
-            // NichLink 可改的），因此那种情况下给一条 `fix` 就是给一条粘贴即失败的行。手写的情形拿到的是
+            // XiRang 可改的），因此那种情况下给一条 `fix` 就是给一条粘贴即失败的行。手写的情形拿到的是
             // 同样的事实、以行得通的形式：要声明什么、在哪个文件。
             let text = source_text(&sources, &face.source);
             match repair_request(&shape, face, &gaps, text) {

@@ -22,8 +22,8 @@
 | LG-09 | MAJOR | 构建期「货币凭据」先于载荷发布，载荷非事务写 → 混代产物被读成 current | S2 | 🔍复核（t13） |
 | LG-10 | MAJOR | 模块迁移对整棵子树做无边界文本替换，兄弟模块被静默改写 | S5 | 🔍复核（t13） |
 | LG-11 | MAJOR | `face_views` 静默丢弃解析失败的注册面文件，并把子面改挂根（打印运行期从未有过的路径） | LH-02 | ✅实测（t8） |
-| LG-12 | MAJOR | `diff records:true` 只在「身份在树里」那一支查「是否被声明」→ 与 `nichlink.grafts` 结论互相矛盾 | LH-03 = BR-8 | ✅实测（t8/t12） |
-| LG-13 | MAJOR | `NICH_LINK_NAMESPACE` 下 `verify` 用 Cargo 名发布、`diff`/`search` 用覆盖名读 → 每个面都被自信地报成 re-identified | BR-6 | ✅实测（t12） |
+| LG-12 | MAJOR | `diff records:true` 只在「身份在树里」那一支查「是否被声明」→ 与 `xirang.grafts` 结论互相矛盾 | LH-03 = BR-8 | ✅实测（t8/t12） |
+| LG-13 | MAJOR | `XIRANG_NAMESPACE` 下 `verify` 用 Cargo 名发布、`diff`/`search` 用覆盖名读 → 每个面都被自信地报成 re-identified | BR-6 | ✅实测（t12） |
 | LG-14 | MAJOR | `linked` collector 分支什么都不提交，模块文档却说它决定进哪个链接段 | S9 | 📖读码（本轮） |
 | LG-15 | MAJOR | 剪枝清单的符号列是逐行匹配魔法标识符得到的，其中一支无条件返回 `Button::…` | S3 | ✅实测/读码（t13 计数 + 本轮 grep：全仓仅两处） |
 | LG-16 | MAJOR | `compile_error_demo` 这个魔法目录/文件名改写任意宿主的构建结果 | S7 | 📖读码（本轮，四处调用点） |
@@ -54,7 +54,7 @@
 ### LG-01 CRITICAL — 进程级身份缓存的键不含命名空间，跨包污染 `NodeId`
 - **=** LH-01（本路 t8）
 - **影响面**：`build_method` 的一次构建/校验发布的**每一个** `NodeId`；下游 `explain`/`registry`/`search`/`diff`/`graft` 记录解析、发布剪枝选择集（`cache.rs` 的 `collect_active_ids`/`source_is_active`）与 `contracts.rs`。
-- **触发条件**：长寿命进程（MCP 桥的 `verify`、Studio、跑多包的测试二进制）+ 两个包有相同相对源码路径 + 该进程的**第一次** `prime_node_id_cache` 能读到 unit 文件（此前跑过一次 `cargo build`/`nichlink check` 即满足；若设了 `CARGO_TARGET_DIR`，unit 目录跨包共享，两步即可）。
+- **触发条件**：长寿命进程（MCP 桥的 `verify`、Studio、跑多包的测试二进制）+ 两个包有相同相对源码路径 + 该进程的**第一次** `prime_node_id_cache` 能读到 unit 文件（此前跑过一次 `cargo build`/`xirang check` 即满足；若设了 `CARGO_TARGET_DIR`，unit 目录跨包共享，两步即可）。
 - **最小复现**：`/tmp/nichprobe/idprobe`——同一 fixture 复制成 A/B/C 三包，只改包名：
   ```text
   冷 unit 缓存：A→B 两跑均 ok
@@ -92,17 +92,17 @@
 
 ### LG-04 MAJOR — 插件锁 schema 门禁可按外观与行序被静默绕过
 - **=** K-07（MAJOR）+ X-2（t9 新发现，原评 MINOR）
-- **影响面**：`# nichlink-schema=` 是锁与内核身份 schema 的对账闸门。它一旦不生效，用另一版身份语义写下的锁会被当作当前语义读入，进而影响准入与身份解释。
+- **影响面**：`# xirang-schema=` 是锁与内核身份 schema 的对账闸门。它一旦不生效，用另一版身份语义写下的锁会被当作当前语义读入，进而影响准入与身份解释。
 - **触发条件**（四种形态，本轮的 `/tmp/nichverify/synthprobe` 一次跑出）：
   ```text
-  X2.typo_header（`# nichlink-schema v9`，少一个 `=`）= Ok(1)      ← 被当普通注释吞掉，门禁关闭
-  X2.correct_header_wrong_version（`# nichlink-schema=v9`）      = Err("uses identity schema v9, expected v3")
+  X2.typo_header（`# xirang-schema v9`，少一个 `=`）= Ok(1)      ← 被当普通注释吞掉，门禁关闭
+  X2.correct_header_wrong_version（`# xirang-schema=v9`）      = Err("uses identity schema v9, expected v3")
   K07.header_only_no_records                                    = Ok(0)   ← 无记录 ⇒ 检查不跑
   K07.header_after_record                                       = Ok(1)   ← 表头在记录之后 ⇒ 之前的记录从不检查
   K07.comments_only                                             = Ok(0)
   ```
-  代码位置：`core/src/registry_core/plugin/catalog/catalog.rs:131-137`（`strip_prefix("# nichlink-schema=")` 失败即落入 `starts_with('#') => continue`）与 `:138-145`（schema 检查在记录循环内）。
-- **修复方向**：表头识别改为「以 `# nichlink-schema` 开头就进 schema 处理」（拼错即报错，而不是当注释）；schema 校验提到循环之前，对整份文件（含无记录）生效；表头出现在记录之后即拒绝。
+  代码位置：`core/src/registry_core/plugin/catalog/catalog.rs:131-137`（`strip_prefix("# xirang-schema=")` 失败即落入 `starts_with('#') => continue`）与 `:138-145`（schema 检查在记录循环内）。
+- **修复方向**：表头识别改为「以 `# xirang-schema` 开头就进 schema 处理」（拼错即报错，而不是当注释）；schema 校验提到循环之前，对整份文件（含无记录）生效；表头出现在记录之后即拒绝。
 - **不修会怎样**：门禁的开启条件落在「某一行恰好长成那个样子」而不是「它在该在的位置」——见 §5.2；今天 schema 值只有 `3`，所以影响是潜在放行，一旦规则改版即成为实际错读。
 - **复核状态**：✅ t9（K-07 三形态 + X-2）；本轮用独立探针工程重跑四种形态，结论一致。**严重度**：把 K-07 与 X-2 合成一条 MAJOR；X-2 单独时仍是 MINOR（潜在），合并后按「门禁可静默失效」计。
 
@@ -110,7 +110,7 @@
 - **=** S19（surfaces，由 kernel-auditor 转达）+ K-22（kernel，t9 建议上调 MAJOR，同一机制的另一入口）
 - **影响面**：库内 **abort**（不是 `Result`）——栈溢出会带走整个宿主进程/桥进程。可达入口包括 authoring 的 `edit`（Studio 表单、MCP `apply`）与公开 API 的调用方预算递归。
 - **触发条件**：`flow_provider` 或同类类型路径文本深度超出调用线程可用栈。内核在 `core/src/registry_core/authoring/parse/flow.rs:107` 有 `guard_nesting`（注释自己写明「没有守卫时 542 字节的类型路径会以栈溢出 abort」），而 `run_method/src/authoring/manifest/face/face.rs:140-143` 直接 `syn::parse_str::<syn::Path>`，且 `flow_provider` 确实在 `EDIT_FIELD_ORDER`（`run_method/src/authoring/operations/face_write.rs:79`）里 → 编辑路径先于任何守卫执行。
-- **最小复现**（本轮的 `/tmp/nichverify/synprobe`，独立于 t3 的 `/tmp/nichlink-probe-surfaces/probe_syn`）：
+- **最小复现**（本轮的 `/tmp/nichverify/synprobe`，独立于 t3 的 `/tmp/xirang-probe-surfaces/probe_syn`）：
   ```text
   $ ./target/release/synprobe 100          # 256 KiB 栈，输入 301 字节
   input bytes = 301
@@ -152,7 +152,7 @@
 
 ### LG-09 MAJOR — 构建期「货币凭据」先于载荷发布，载荷非事务写
 - **=** S2（surfaces）
-- **影响面**：`target/nichlink/out` 是 `explain`/`registry`/`diff`/`search` 的「构建侧真值」；混代产物会被 `build_output_is_current` 读成 `current`。
+- **影响面**：`target/xirang/out` 是 `explain`/`registry`/`diff`/`search` 的「构建侧真值」；混代产物会被 `build_output_is_current` 读成 `current`。
 - **触发条件**：五份载荷逐个写的中途失败（磁盘满、权限、被中断）；或载荷写入被截断（`build_method/src/cache.rs:36-39` 的 `fs::write` 就地截断）。
 - **最小复现**：t13 复核（t13 §S2）；本轮 📖 复核了顺序（`build_method/src/pipeline.rs:155-164` 指纹在前、`:174-184` 五份载荷在后）。
 - **修复方向**：载荷先写、指纹最后且仅在全绿时发布；`write_if_changed` 改临时文件 + rename。
@@ -174,34 +174,34 @@
 - **触发条件**：包内任意一个注册面文件解析失败（两处宏调用、字段写坏、缺 `kind`）。
 - **最小复现**（t8，实测）：fixture 的 `control.rs` 追加第二个宏调用 →
   ```text
-  cargo-nichlink nichlink check → phase=face-syntax source=control/control.rs:43
-  nichlink.registry            → faces 2；root/button、root/slider（parent-unresolved）；Control 面消失
+  cargo-xirang xirang check → phase=face-syntax source=control/control.rs:43
+  xirang.registry            → faces 2；root/button、root/slider（parent-unresolved）；Control 面消失
   ```
   即「构建说有文件坏了，视图只少报，并且打印出运行期从未有过的逻辑路径 `root/button`」。
 - **修复方向**：`face_views` 返回不可读面的计数/清单；消费端在回复里说「有 N 个面文件解析不了」；子面保持 `parent-unresolved` 不回退路径。
-- **不修会怎样**：agent 会拿一个更小且路径被改写的树去做编辑（`apply` 的 `node` 用「`nichlink.registry` 报告的逻辑路径」点名）。
+- **不修会怎样**：agent 会拿一个更小且路径被改写的树去做编辑（`apply` 的 `node` 用「`xirang.registry` 报告的逻辑路径」点名）。
 - **复核状态**：✅ 实测（t8）；t3 的「不可读面文件会被 entry 阶段报错」结论与之不冲突（那条讲构建，这条讲视图）。
 
-### LG-12 MAJOR — `diff records:true` 的「是否被声明」只查一支，与 `nichlink.grafts` 互相矛盾
+### LG-12 MAJOR — `diff records:true` 的「是否被声明」只查一支，与 `xirang.grafts` 互相矛盾
 - **=** LH-03（本路）+ BR-8（bridges，同一处的工具自述半边）
 - **影响面**：agent 对 graft 记录健康度的判读；`undeclared`（会被发布剪枝、永不生效）是行动含义最强的一桶。
 - **触发条件**：一条记录的身份不在树里（典型：槽位没动、身份换了）且宿主入口用**类型化**切口点名该槽位（脚手架宿主默认写法）。
 - **最小复现**（t8/t12，实测）：只放一条 `moved_identity`：
   ```text
-  nichlink.diff {"records":true} → ok 0  undeclared 0  stale 0  re-identified 1  unreadable 0
-  nichlink.grafts                → [NOT declared by the host entry] / unkept plans 1: the release prunes these slots
+  xirang.diff {"records":true} → ok 0  undeclared 0  stale 0  re-identified 1  unreadable 0
+  xirang.grafts                → [NOT declared by the host entry] / unkept plans 1: the release prunes these slots
   ```
 - **修复方向**：把 `row.declared` 的应用提到桶分流之外（两维结论）；`plan_rows.rs` 在身份缺席时用「同路径的面」解析 module，使类型化切口也能被判为已声明。
 - **不修会怎样**：同一条记录两个工具给出相反的健康结论，`undeclared 0` 是错的计数。
 - **复核状态**：✅ 实测（t8 首次、t12 复核命令同形）。
 
-### LG-13 MAJOR — `NICH_LINK_NAMESPACE` 下 `verify` 与 `diff`/`search` 各用一套命名空间
+### LG-13 MAJOR — `XIRANG_NAMESPACE` 下 `verify` 与 `diff`/`search` 各用一套命名空间
 - **=** BR-6（bridges）
 - **影响面**：桥自述「verify 驱动与 CLI check 同一个入口」；一旦两侧命名空间不同，「刚校验过」的树被报成每个身份都变了。
-- **触发条件**：宿主显式设 `NICH_LINK_NAMESPACE`（桥在无分包根时**自己建议**设它），然后先 `verify` 再 `diff`/`search`。
+- **触发条件**：宿主显式设 `XIRANG_NAMESPACE`（桥在无分包根时**自己建议**设它），然后先 `verify` 再 `diff`/`search`。
 - **最小复现**（t12 实测）：
   ```text
-  NICH_LINK_NAMESPACE=alternate-ns
+  XIRANG_NAMESPACE=alternate-ns
   verify → verdict ok；diff → build current, faces 3 vs 3, added 0 gone 0 reidentified 3
                             ~ root/control 12df60c3…（Cargo 名的身份） -> 8ea79f01…
   search Button → [re-identified (371236fe… -> df5b6a7e…)]
@@ -270,12 +270,12 @@
 
 ### LG-18 MAJOR — MIR `jsonl:true` 可给任意可读文件盖上本包快照表头
 - **=** LH-04（本路）
-- **影响面**：MIR 快照的**来源凭据**（`nichlink.mir` 的 delta、`nichlink.unified` 的拒绝逻辑都依赖它）。
+- **影响面**：MIR 快照的**来源凭据**（`xirang.mir` 的 delta、`xirang.unified` 的拒绝逻辑都依赖它）。
 - **触发条件**：`path` 指向包内任意一个不以 `.jsonl` 结尾的可读文件（文本解析器对非 MIR 文本从不失败）。
 - **最小复现**（t8 实测）：
   ```text
-  nichlink.mir {"path":"notes.txt"}              → functions 0 calls 0 locals 0
-  nichlink.mir {"path":"notes.txt","jsonl":true} → {"kind":"snapshot","namespace":"probe-host","root":"cc05a41d…"}
+  xirang.mir {"path":"notes.txt"}              → functions 0 calls 0 locals 0
+  xirang.mir {"path":"notes.txt","jsonl":true} → {"kind":"snapshot","namespace":"probe-host","root":"cc05a41d…"}
   ```
   该行读回后被当作合法快照。
 - **修复方向**：零记录时拒绝盖章（或要求文本转储里至少出现一个 MIR 函数头）；把「未标识」与「已标识」的语义分开。
@@ -299,16 +299,16 @@
 
 ### LG-20 MAJOR — 预览副本的临时路径可预测：同名既有目录被删除重建（且失败会留残留）
 - **=** LH-07 + BR-19（本路 t8 + bridges t5/t12）
-- **影响面**：`/tmp/nichlink-mcp-preview-<pid>-<seq>` 上的既有数据；失败时把半份工程源码留在共享临时目录。
+- **影响面**：`/tmp/xirang-mcp-preview-<pid>-<seq>` 上的既有数据；失败时把半份工程源码留在共享临时目录。
 - **触发条件**：同机上有人（或另一个实例）在该可预测路径上已有目录；或复制中途失败（不可读文件/磁盘满）。
 - **最小复现**（t12 实测）：
   ```text
   预置真实目录 + important.txt 于预测路径（exec 保 pid）
-    → pre-created: /tmp/nichlink-mcp-preview-415521-0
+    → pre-created: /tmp/xirang-mcp-preview-415521-0
     → GONE after the run（既有数据被删）
   chmod 000 fixture 内一个文件后预览
     → cannot copy …/unreadable.txt: Permission denied
-    → 残留 /tmp/nichlink-mcp-preview-416016-0（find 到 .git/config、.git/index、binfile.dat…）
+    → 残留 /tmp/xirang-mcp-preview-416016-0（find 到 .git/config、.git/index、binfile.dat…）
   ```
   **机制更正**：作者设想的「符号链接被顺着写入」被证伪——`mcp/src/preview.rs:27` 先 `remove_dir_all(destination)`，符号链接本身被删、目标未被写入（t12 实测）。真后果是「删除并重建」与「失败泄漏」。
 - **修复方向**：`tempfile`/`O_EXCL` 排他创建 + 0700；`Drop` 守卫保证任何返回路径都清理（含 `copy_package` 自身失败）。
@@ -317,7 +317,7 @@
 
 ### LG-21 MAJOR — `apply edit` 静默忽略 `handle_contracts` / `part_contracts`
 - **=** NEW-B1（本路 t12）
-- **影响面**：agent 用 `nichlink.apply` 的 edit 设置「参与编译检查的契约」；实际得到的是未经检查的标签。
+- **影响面**：agent 用 `xirang.apply` 的 edit 设置「参与编译检查的契约」；实际得到的是未经检查的标签。
 - **触发条件**：`action: edit`（或 rename 之外任何非 add）时在 `fields` 里给这两个键。
 - **最小复现**（t12 实测）：
   ```text
@@ -336,7 +336,7 @@
 - **最小复现**（t12 实测，原始字节）：
   ```text
   exit code: 1  stdout lines: 0
-  stderr: nichlink-mcp: cannot read stdin: request line is not valid UTF-8
+  stderr: xirang-mcp: cannot read stdin: request line is not valid UTF-8
   对照：超长行 exit=0 replies=2；坏 JSON exit=0 replies=2；非对象成员 exit=0 replies=4
   ```
 - **修复方向**：把非 UTF-8 归入「坏帧」——写 `-32700` 后 `continue`；真正的传输故障才 `Err`。
@@ -454,7 +454,7 @@
 | LG-40 **=** K-13 + X-1 | MINOR | 插件锁读取的字段语义 | 10 字段记录的 8/9/10 列为空串 | 本轮实测：`X1.ten_fields_empty = Ok signature=None fingerprint=None revocation=None`（对照 `ten_fields_full = Some/Some/Some`） | 空的身份字段按「明确缺失」报错，或把 7/10 字段两种格式分开 | 记录看起来带身份三元组，实际三个都不在 | ✅ 本轮 |
 | LG-41 **=** K-11/K-12 | MINOR | 官方通道的信任判定 | 官方工件自述指纹；或 `require_digest` 与「必须已签名」耦合 | t9 复核（K-11 部分证实：缺陷成立、作者引用的测试说反了；K-12 成立） | 指纹必须来自信任根；把两条拒绝解耦 | 官方通道的密钥判定可被工件自述影响 | 🔍 t9 |
 | LG-42 **=** S16 | MINOR | 库内 panic 面 | 见 S16 清单（16 处） | 🔍 t13 逐条 | 逐条记账，需要时改 `Result` | 已知的 panic 面没有台账 | 🔍 t13 |
-| LG-43 **=** BR-3 | MINOR | `nichlink.callgraph` 的参数契约 | 客户端按 schema 校验参数 | t12 实测：schema 无 `limit`，回复却叫调用方 raise 它；`limit` 确实改变答案长度（1/5/10/50 → 1/5/10/39） | 在 catalog 补声明，或删掉 `limit` 读取 | 提示不可执行；未声明的键静默改变答案 | ✅ t12 |
+| LG-43 **=** BR-3 | MINOR | `xirang.callgraph` 的参数契约 | 客户端按 schema 校验参数 | t12 实测：schema 无 `limit`，回复却叫调用方 raise 它；`limit` 确实改变答案长度（1/5/10/50 → 1/5/10/39） | 在 catalog 补声明，或删掉 `limit` 读取 | 提示不可执行；未声明的键静默改变答案 | ✅ t12 |
 | LG-44 **=** NEW-B2 + BR-13 | MINOR | CLI `--help` 语义 | 七个子命令各带 `--help`；裸调 | t12 实测退出码矩阵：裸调/`--help` → 0；`check|explain|grafts|snippets --help` → 1；`studio --help` → 0 + usage；`new --help` → 1；`build --help` → 0（先跑校验再交给 cargo）；**`mcp --help` → 0 且两流 0 字节** | 共享 `help()`；裸调走 stderr + 非零 | 同一旗标五种语义；`mcp --help` 静默变成服务器 | ✅ t12 |
 | LG-45 **=** BR-14 | MINOR | `new` 的依赖来源 | `--path` 与 `--git` 同时给 | t12 实测：exit 0、项目已建、Cargo.toml 只有 `path=`、无 `git=` | 两来源同时给即拒绝（与 `build` 同款） | 静默二选一，与 USAGE 的 `|` 矛盾 | ✅ t12 |
 | LG-46 **=** BR-16 | MINOR | 进程适配器的 deadline | `ProcessLimits { timeout: Duration::MAX }` | t12 实测：panic（std time.rs:429），exit 101 | `checked_add` → `HostError::Limit` | 宿主配置错误在库内 panic | ✅ t12 |
@@ -462,7 +462,7 @@
 | LG-48 **=** S14 | MINOR | 失败回滚的可靠性 | create/operations/migration 的回滚链 | 🔍 t13 读码（全 `let _ =`） | 至少聚合成一条诊断 | 回滚失败无人知 | 🔍 t13 |
 | LG-49 **=** S12 | MINOR | trace artifact 读取 | 记录顺序与契约顺序不同 | 🔍 t13 复核（只降级不报错） | 顺序违例报错或明确声明 | 不一致的 artifact 被当作完整 | 🔍 t13 |
 | LG-50 **=** S-07/S-24 | MINOR | Studio 错误吞掉 | 见 studio 报告 | 🔍 t11 复核 | 把失败并入可见状态 | 用户看不到失败原因 | 🔍 t11 |
-| LG-51 **=** LH-10b | MINOR | `nichlink.mir` 的存在性 oracle | 传根外路径 | t8 实测：存在 → 「在配置根内」；不存在 → 「不可读文件」 | 根外统一回「不在根内」 | 泄露宿主路径存在性（低危） | ✅ t8 |
+| LG-51 **=** LH-10b | MINOR | `xirang.mir` 的存在性 oracle | 传根外路径 | t8 实测：存在 → 「在配置根内」；不存在 → 「不可读文件」 | 根外统一回「不在根内」 | 泄露宿主路径存在性（低危） | ✅ t8 |
 | LG-52 **=** LH-10a | MINOR | 坏帧的错误上下文 | 插件写半帧后 exit 0 | t8 实测：`Io("failed to fill whole buffer")` | 包装成带操作名/「帧」字样的错误 | 调用方拿不到任何上下文 | ✅ t8 |
 | LG-53 **=** G-06/G-23 | MINOR | 门禁豁免范围 | 文件名以 `audit`/`design` 开头的任何文件（含审计报告） | 队长 09-28 广播（我本人也撞到：报告改名即红/绿） | 豁免按目录或显式清单，而不是文件名前缀 | 报告被当活文档扫描；门禁红/绿取决于文件名 | 🔍 t14 |
 | LG-54 **=** G-03/G-04/G-07/G-08/G-05/G-17/G-18/G-19/G-20/G-22/G-24/G-25/G-26/G-27 | MINOR | 门禁的假阴性/假阳性/文档漂移 | 见 gates 报告逐条 | 🔍 t14 | 见逐条 | 门禁的覆盖面与其自述不符 | 🔍 t14 |
@@ -522,7 +522,7 @@
 | 3 | `mcp/src/tools.rs:139-157` vs `mcp/src/diff.rs:143-239` | 记录只有 ok/stale/re-identified + unreadable | 还有 `undeclared` 桶 | MINOR（LG-12 半边 / BR-8）✅ |
 | 4 | `mcp/src/diff.rs:34`（模块文档） | 两种比较共用 added/gone/re-identified 词汇 | `records:true` 用 ok/undeclared/stale/re-identified | MINOR（LH-09b）✅ |
 | 5 | `mcp/README.md:47`、`README.zh-CN.md:35` | 现在时承诺 `unmatched` 桶 | 该桶已删 | MAJOR（BR-1）✅ |
-| 6 | `mcp/README.md:164-166` | 「树 diff 仍待做」 | 同文件 120 行前就描述 `nichlink.diff` | MAJOR（BR-2）✅ |
+| 6 | `mcp/README.md:164-166` | 「树 diff 仍待做」 | 同文件 120 行前就描述 `xirang.diff` | MAJOR（BR-2）✅ |
 | 7 | `mcp/src/tools.rs:77-80` vs `mcp/src/callgraph.rs:41-44/108-113` | schema 只有 function/path/root | 实现读 `limit` 并叫调用方 raise 它 | MINOR（LG-43）✅ |
 | 8 | `plugin-host/src/process.rs:341-354`、`plugin-host/src/process/child.rs:119-127` | 已送达的答案不会再被报成超时 | 仍会（LG-32） | MAJOR（BR-C1）✅ |
 | 9 | `mcp/src/preview.rs:14-20` | `target/` 是唯一可能很大的目录 | `.git` 也被复制/列举 | MAJOR（BR-C2）✅ |
@@ -535,7 +535,7 @@
 | 16 | `studio/src/studio/app/navigation.rs:165-171` | `retreat_graph_focus` 注释称「反向走」 | 与 `advance` 逐字节相同 | MAJOR（C-01 studio）🔍 |
 | 17 | `studio/src/studio/app/search_queries.rs:9-17` | 「已去重」 | `dedup_by` 只消相邻 | MAJOR（C-03 studio）🔍 |
 | 18 | `studio/src/studio/app/support.rs:1-2` | 只声明几何 | 含项目解析与 cargo 子进程 | MAJOR（C-04 studio）🔍 |
-| 19 | `tools/nichlink-package-audit` 头部注释 | 描述一张表 | 该表已不存在 | MAJOR（G-21）🔍 |
+| 19 | `tools/xirang-package-audit` 头部注释 | 描述一张表 | 该表已不存在 | MAJOR（G-21）🔍 |
 | 20 | `conventions/src/lint.rs:225-227` | 带 `#![deny(warnings)]` 即「带着 missing_docs」 | 该 lint 仍 allow | MAJOR（LG-24）✅ |
 | 21 | `conventions/src/release_workflow.rs` 文档自述已堵住 `!startsWith` 绕过 | `== false` 等价写法放行 | MAJOR（LG-25）🔍 |
 | 22 | `.github/workflows/release.yml` 注释承诺 action pin | 无门禁 | MAJOR（LG-26）🔍 |
@@ -549,7 +549,7 @@
 
 | # | 判定 | 位置 | 落空方式 | 后果 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 锁 schema 门禁「文件里有 `# nichlink-schema=` 那一行」 | `core/src/registry_core/plugin/catalog/catalog.rs:131-137` | 写成 `# nichlink-schema v9`（少 `=`）→ 当注释跳过 | 门禁静默关闭 | ✅ 本轮 |
+| 1 | 锁 schema 门禁「文件里有 `# xirang-schema=` 那一行」 | `core/src/registry_core/plugin/catalog/catalog.rs:131-137` | 写成 `# xirang-schema v9`（少 `=`）→ 当注释跳过 | 门禁静默关闭 | ✅ 本轮 |
 | 2 | 同上：判定写在**记录循环内** | 同上 `:138-145` | 无记录 / 表头在记录之后 → 检查不跑 | 门禁对空锁与乱序锁不生效 | ✅ 本轮 |
 | 3 | 剪枝符号「这一行含某个魔法标识符」 | `build_method/src/manifests.rs:200-213` | 中文/别的面/注释里出现同样字样 | 写出错误符号（含硬编码 `Button::…`） | ✅ t13/本轮 |
 | 4 | 注册面「这一行含 `kind:`」 | `core/src/registry_core/source/source.rs:434-465` | 注释/字符串里出现 | 过收或漏收 | 🔍 t9 |
@@ -575,7 +575,7 @@
 ## 6. 附：已降级 / 已证伪 / 数字更正 / 未证实
 
 **已证伪（从总账移除或降级）**
-- **v7「debug_method 幻影依赖」**（t7 转达，boundary-architect）：`::nichlink_debug_method::submit!` 只在 `collector: debug` 且 `#[cfg(debug_assertions)]` 下发出；全树唯一生产方是测试 `debug_method/tests/collector_integration.rs:7`；两个示例走 `development` 空 arm。只依赖 run-method 的宿主显式 opt-in 时 debug 构建才 E0433、release 通过。**→ 出厂路径上不成立**（t8 LH-11 实测）。残留 MINOR：该 switch 无文档。
+- **v7「debug_method 幻影依赖」**（t7 转达，boundary-architect）：`::xirang_debug_method::submit!` 只在 `collector: debug` 且 `#[cfg(debug_assertions)]` 下发出；全树唯一生产方是测试 `debug_method/tests/collector_integration.rs:7`；两个示例走 `development` 空 arm。只依赖 run-method 的宿主显式 opt-in 时 debug 构建才 E0433、release 通过。**→ 出厂路径上不成立**（t8 LH-11 实测）。残留 MINOR：该 switch 无文档。
 - **K-03 的机制**：两条路径同判 `Err`，`UnknownTarget` 兜底不可达；只剩错误文案错指原因 → **降 MINOR**（t9）。
 - **V-03 的「静默抹掉 contract 字段」**：`EDIT_FIELD_ORDER` 不含这两个字段，端到端探针后契约行仍在 → **降为「表单显示歧义」（MINOR）**，真缺陷改写为 LG-21（t12）。
 - **BR-19 的「符号链接被顺着写入」**：`mcp/src/preview.rs:27` 先 `remove_dir_all` 删的是链接本身，实测受害目录未被写入 → 机制证伪，改成「删除并重建 + 失败泄漏」（t12）。
@@ -597,7 +597,7 @@
 ## 7. 查了、干净（本轮走通 / 探过的流）
 
 **我自己跑出来的探针（本轮新增，全部在 `/tmp`）**
-- `/tmp/nichverify/synthprobe`（dep：`nichlink-core`，features `syntax`）：K-01 读→写往返；X-2 表头拼错 vs 正确；K-07 三形态（空锁/表头在后/仅注释）；X-1 十字段空身份。
+- `/tmp/nichverify/synthprobe`（dep：`xirang-core`，features `syntax`）：K-01 读→写往返；X-2 表头拼错 vs 正确；K-07 三形态（空锁/表头在后/仅注释）；X-1 十字段空身份。
 - `/tmp/nichverify/synprobe`（dep：`syn`）：`syn::parse_str::<syn::Path>` 在 256 KiB 栈下 100 层（301 B）abort，exit 134——复现 LG-05。
 - `/tmp/nichverify/`：MCP 原始字节驱动 + `tools/list` + fixture 端到端（t12 的 BR-1…BR-6/19、LG-21/22/23 都在这里跑过）；`g01_*.rs` 三个 rustc 探针（LG-24）。
 - `/tmp/nichprobe/`：`idprobe`（LG-01，冷/热 + 六序）、`libleak`（LG-31，RSS 两组对照）、`procprobe`（LG-32/LG-46）、`pkg` fixture。
@@ -611,7 +611,7 @@
 6. 插件锁解析拒绝未知 schema/重复身份/空字段——✅ 本轮实测（**注意门禁的开启条件另有问题，LG-04**）。
 7. 「17 个 MCP 工具两处都在」（活体分派逐个调）——✅ t12。
 8. 内核 F 铁律（`core/src` 零 I/O/环境/进程/时间）——✅ t2，t9 复核（2 处文档注释命中不影响）。
-9. `cargo test -p nichlink-conventions --offline` = 99 passed（t4/t6 复核口径）——✅（本轮未复跑，引用复核报告）。
+9. `cargo test -p xirang-conventions --offline` = 99 passed（t4/t6 复核口径）——✅（本轮未复跑，引用复核报告）。
 
 **只读了代码、没有探针的（如实标注）**：LG-03（studio 写盘闸门）、LG-06/07/08/09/10/27/29/30（复核报告给了实测/复核，本轮未重跑）、LG-14/16/17/36/37/38/39/41/42/48/49/50、§5.2 里标 🔍/📖 的判定位置。凡标 `unverified` 的条目不应在下一轮重构中被当成已证实前提。
 

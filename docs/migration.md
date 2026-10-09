@@ -4,11 +4,11 @@
 
 ## From the pre-five-crate layout
 
-The registration protocol stays in `nichlink-kernel`. Build-time discovery,
+The registration protocol stays in `xirang-kernel`. Build-time discovery,
 identity caching, scope calculation, and `StaticPlan` generation are now in
-`nichlink-toolchain`; MIR and data-flow evidence are in `nichlink-toolchain`; the TUI
-is in `nichlink-toolchain`; isolated plugin execution is in `nichlink-toolchain`.
-The unified command-line entry (`nichlink new/check/build/snippets/explain/grafts/studio/mcp`) is in `nichlink-toolchain`.
+`xirang-toolchain`; MIR and data-flow evidence are in `xirang-toolchain`; the TUI
+is in `xirang-toolchain`; isolated plugin execution is in `xirang-toolchain`.
+The unified command-line entry (`xirang new/check/build/snippets/explain/grafts/studio/mcp`) is in `xirang-toolchain`.
 
 Applications provide their own root registry through
 `Registry::root_for_namespace`. Release builds consume the host application's
@@ -16,7 +16,7 @@ generated `StaticPlan`; this workspace does not ship a concrete `root_registry`.
 
 ## External declarations
 
-Use `nichlink_toolchain::run_method::external_object!` for declarations owned by another
+Use `xirang_toolchain::run_method::external_object!` for declarations owned by another
 crate. After B3b only `kind` is required; every other field is optional and
 defaults the way the generated compact form defaults it: `source` to the
 declaring file, `registry_name` to the module's last segment, `parent` to the
@@ -69,9 +69,9 @@ hover, even though `cargo` and `rustc` see it. Each such face therefore also
 gets an IDE-only view:
 
 - the real declaration carries `cfg(not(rust_analyzer))`;
-- a crate-root `#[cfg(rust_analyzer)] #[path = "..."] mod __nichlink_ra_<path>;`
+- a crate-root `#[cfg(rust_analyzer)] #[path = "..."] mod __xirang_ra_<path>;`
   loads the same file where rust-analyzer does apply `#[path]`;
-- a `#[cfg(rust_analyzer)] use crate::__nichlink_ra_<path> as <name>;` in the
+- a `#[cfg(rust_analyzer)] use crate::__xirang_ra_<path> as <name>;` in the
   face's real position rebuilds its module path, with the same visibility the
   real declaration has (`pub` for a leaf face, `pub(crate)` for a container).
 
@@ -90,7 +90,7 @@ fields:
 - `,` and `;` both separate fields, a forgotten separator ends a field at the
   next `name:`, a trailing separator is ignored, and the order is free;
 - a field the vocabulary does not know, or one given twice, is reported on its
-  own token with the accepted field list, by the `nichlink-macro` front end;
+  own token with the accepted field list, by the `xirang-macro` front end;
 - a well-formed declaration never reaches that front end: it is the last arm of
   the macro ladder, so its expansion is byte-for-byte what it always was.
 
@@ -154,11 +154,11 @@ implementation that grafts over it.
 
 Run the standalone package with `cargo run --manifest-path studio/Cargo.toml`.
 Use `1` through `3` to select Search, Inspect, or Data. `watch` is
-provided by `nichlink-dev`, a workspace-only binary behind the non-default
+provided by `xirang-dev`, a workspace-only binary behind the non-default
 `dev-supervisor` feature: it rebuilds the child Studio process after source,
 Cargo, or plugin catalog changes, so it needs this checkout
-(`cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch`)
-and is not installed by `cargo install nichlink-toolchain`.
+(`cargo run -p xirang-toolchain --features dev-supervisor --bin xirang-dev -- watch`)
+and is not installed by `cargo install xirang-toolchain`.
 
 ## Plugin host
 
@@ -172,7 +172,7 @@ The current graft model is an immutable overlay. A host keeps its original
 source tree and declares the external implementation at its entry point:
 
 ```rust
-let plan = nichlink_toolchain::run_method::graft_plan!(framework,
+let plan = xirang_toolchain::run_method::graft_plan!(framework,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/layout"] full graft "layout_v2",
 );
@@ -190,20 +190,20 @@ removed. The public execution path is `GraftPlan` followed by `Registry::overlay
 
 ## `graft.plan` records
 
-A `.nichlink/external-grafts/<selector>/graft.plan` file is an authoring record,
+A `.xirang/external-grafts/<selector>/graft.plan` file is an authoring record,
 not a declaration the compiler sees and not an `overlay` call. Its layout is
 unchanged (`version=1`, `target`, `target_path`, `graft`, `full`), but the
 format now has a reader: `GraftPlanDocument` in the kernel parses and renders it,
 refuses an unknown version or key instead of guessing, and is the only place the
 layout is defined. The record is also now the **input** to an overlay:
-`nichlink_toolchain::run_method::apply_recorded_grafts` loads `.nichlink/external-grafts/`
+`xirang_toolchain::run_method::apply_recorded_grafts` loads `.xirang/external-grafts/`
 and `Registry::overlay_recorded` reconciles each record against the static
 declarations, applies it, and reports every adjustment; see [`graft.md`](graft.md)
 for the precedence policy and which reports are fatal.
-`nichlink-toolchain` gained `declared_grafts`/`host_entry_source`
+`xirang-toolchain` gained `declared_grafts`/`host_entry_source`
 for authoring surfaces that need to know which slots the build ships.
 
-`nichlink_toolchain::run_method::ExternalGraftPlanFile` no longer exposes `target`,
+`xirang_toolchain::run_method::ExternalGraftPlanFile` no longer exposes `target`,
 `graft`, and `full` as public fields; it carries the parsed `GraftPlanDocument`
 and the selector, and answers through `target()`, `target_path()`, `graft()`,
 `full()`, and `plan_path()`. `root` is still a public `PathBuf` field — there is

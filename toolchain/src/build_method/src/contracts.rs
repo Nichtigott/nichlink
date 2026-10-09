@@ -89,7 +89,7 @@ fn visit_contract_errors(
             });
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !nichlink_kernel::lexicon::is_registration_path(&relative)
+            if !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
             {
@@ -538,7 +538,7 @@ mod tests {
             .expect("clock after Unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "nichlink-build-{label}-{}-{stamp}",
+            "xirang-build-{label}-{}-{stamp}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("temporary fixture root");

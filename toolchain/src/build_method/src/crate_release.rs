@@ -17,7 +17,7 @@
 //!
 //! * a face file copied **under the package's own `src/`** keeps its identity, because the declaration
 //!   macro derives the identity input from `file!()` by dropping `CARGO_MANIFEST_DIR` and one leading
-//!   `src/` ([`nichlink_kernel::identity::manifest_relative_source`]) — so the copied file yields the
+//!   `src/` ([`xirang_kernel::identity::manifest_relative_source`]) — so the copied file yields the
 //!   same `<module>/<file>.rs` the host baked, with **no remap at all**. Measured: the release ghost's
 //!   `StaticFace` rows and the cut face's own `assert_static_identity` are byte-identical to the
 //!   unpartitioned tree's;
@@ -25,7 +25,7 @@
 //!   that survives publishing: an inline `path` is rewritten to a registry requirement in the packaged
 //!   manifest. Measured: a facade that resolves its host that way builds green.
 //! * 一个被复制到**包自己的 `src/` 之下**的注册面文件仍保住身份，因为声明宏从 `file!()` 推导身份输入的方式
-//!   是去掉 `CARGO_MANIFEST_DIR` 与其后的一个 `src/`（[`nichlink_kernel::identity::manifest_relative_source`]）
+//!   是去掉 `CARGO_MANIFEST_DIR` 与其后的一个 `src/`（[`xirang_kernel::identity::manifest_relative_source`]）
 //!   ——因此被复制的文件产出的正是宿主烤进去的那个 `<模块>/<文件>.rs`，**完全不需要 remap**。实测：发布幽灵的
 //!   `StaticFace` 行与切口面自己的 `assert_static_identity` 都与不分区那棵树逐字节相同；
 //! * facade 可以在**构建期**经 `cargo metadata` 找到它的宿主，而那是唯一能在发布后成立的拼写：行内 `path`
@@ -35,8 +35,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::HostCut;
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::lexicon;
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::lexicon;
 
 use super::crate_facade::sibling_dependencies;
 use super::crate_plan::respell_dependency_paths;
@@ -95,9 +95,9 @@ pub(crate) fn plan_ghost(
     );
     let mut cargo_toml = format!(
         "# {marker}: the dependencies are the host's, with their relative paths re-spelled.\n\
-         # 由 NichLink 生成：依赖是宿主的，相对路径已按本包所在目录重拼。\n\
+         # 由 XiRang 生成：依赖是宿主的，相对路径已按本包所在目录重拼。\n\
          [package]\nname = {package:?}\nversion = {version:?}\nedition = {edition:?}\n\n\
-         [package.metadata.nichlink]\nshape = \"release\"\n\
+         [package.metadata.xirang]\nshape = \"release\"\n\
          # The host this fragment was split out of, for a reader of the published package.\n\
          # 这个碎片是从哪个宿主拆出来的，供发布包的读者查看。\n\
          host = {host:?}\n\n[dependencies]\n{dependencies}",
@@ -265,9 +265,9 @@ fn lib_rs(namespace: &str) -> String {
     format!(
         "//! {marker}: compile one package of a host's registration tree as published sources.\n\
          //! Do not edit — the declaration lives in this package's `{declaration}`.\n\
-         //! 由 NichLink 生成：把宿主注册树的一个包当作已发布的源码来编译。请勿手工修改——声明住在本包的\n\
+         //! 由 XiRang 生成：把宿主注册树的一个包当作已发布的源码来编译。请勿手工修改——声明住在本包的\n\
          //! `{declaration}` 里。\n\n\
-         pub const NICHLINK_NAMESPACE: &str = {namespace:?};\n\n\
+         pub const XIRANG_NAMESPACE: &str = {namespace:?};\n\n\
          include!(concat!(env!(\"OUT_DIR\"), \"/generated_lib.rs\"));\n",
         marker = super::crate_plan::GENERATED_MARKER,
         declaration = lexicon::ADD_CRATES_FILE,
@@ -287,13 +287,13 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String], cuts: &[HostCut]) -> Str
     let (function, cuts_argument) = super::crate_plan::partition_call(cuts);
     format!(
         "//! {marker}: build this fragment out of its own sources.\n\
-         //! 由 NichLink 生成：从它自己的源码构建这个碎片。\n\n\
+         //! 由 XiRang 生成：从它自己的源码构建这个碎片。\n\n\
          fn main() {{\n\
          {i}println!(\"cargo:rerun-if-changed=src\");\n\
          {i}println!(\"cargo:rerun-if-changed={declaration}\");\n\
          {i}let root = std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\"));\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}nichlink_toolchain::build_method::{function}(\n\
+         {i}xirang_toolchain::build_method::{function}(\n\
          {i}    root,\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
@@ -301,7 +301,7 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String], cuts: &[HostCut]) -> Str
          {i}    false,\n\
          {cuts_argument}\
          {i})\n\
-         {i}.expect(\"nichlink\");\n\
+         {i}.expect(\"xirang\");\n\
          }}\n",
         i = "    ",
         marker = super::crate_plan::GENERATED_MARKER,
@@ -393,7 +393,7 @@ fn facade_build_rs(host_package: &str, namespace: &str, cuts: &[HostCut]) -> Str
     let (function, cuts_argument) = super::crate_plan::partition_call(cuts);
     format!(
         "//! {marker}: build the cross-crate half out of the host package it depends on.\n\
-         //! 由 NichLink 生成：从它依赖的那个宿主包里构建跨 crate 那一半。\n\n\
+         //! 由 XiRang 生成：从它依赖的那个宿主包里构建跨 crate 那一半。\n\n\
          /// The host package's root, as cargo placed it.\n\
          fn host_root() -> std::path::PathBuf {{\n\
          {i}let manifest = std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"Cargo.toml\");\n\
@@ -422,7 +422,7 @@ fn facade_build_rs(host_package: &str, namespace: &str, cuts: &[HostCut]) -> Str
          {i}let host = host_root();\n\
          {i}println!(\"cargo:rerun-if-changed={{}}\", host.join(\"src\").display());\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}nichlink_toolchain::build_method::{function}(\n\
+         {i}xirang_toolchain::build_method::{function}(\n\
          {i}    &host,\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
@@ -430,7 +430,7 @@ fn facade_build_rs(host_package: &str, namespace: &str, cuts: &[HostCut]) -> Str
          {i}    true,\n\
          {cuts_argument}\
          {i})\n\
-         {i}.expect(\"nichlink\");\n\
+         {i}.expect(\"xirang\");\n\
          }}\n",
         i = "    ",
         marker = super::crate_plan::GENERATED_MARKER,
@@ -470,9 +470,9 @@ fn facade_cargo_toml(
     let mut output = format!(
         "# {marker}: the dependencies are the host's, with their relative paths re-spelled, plus the\n\
          # crates it hands work to.\n\
-         # 由 NichLink 生成：依赖是宿主的（相对路径已重拼），再加上它把工作交出去的那些 crate。\n\
+         # 由 XiRang 生成：依赖是宿主的（相对路径已重拼），再加上它把工作交出去的那些 crate。\n\
          [package]\nname = {package:?}\nversion = {version:?}\nedition = {edition:?}\n\n\
-         [package.metadata.nichlink]\nshape = \"release\"\nhost = {namespace:?}\n\n[dependencies]\n{dependencies}",
+         [package.metadata.xirang]\nshape = \"release\"\nhost = {namespace:?}\n\n[dependencies]\n{dependencies}",
         marker = super::crate_plan::GENERATED_MARKER,
     );
     if let Some(block) = toml_section(&text, "build-dependencies") {

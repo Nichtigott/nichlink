@@ -8,7 +8,7 @@
 //!   reads to keep a slot alive and to fill the release-time static plan.
 //! * `Registry::overlay` is the **application** that produces the effective
 //!   tree at runtime; it never edits either registry.
-//! * `graft.plan` under `.nichlink/external-grafts/` is the **record** this
+//! * `graft.plan` under `.xirang/external-grafts/` is the **record** this
 //!   screen writes. The screen consumes it here, and the runtime overlay path
 //!   (`run_method::apply_recorded_grafts` → `Registry::overlay_recorded`)
 //!   consumes it too.
@@ -16,7 +16,7 @@
 //! * 宿主入口的 `static_graft_plan!` 是构建读取的**声明**，用来保住槽位并填充发布态
 //!   静态计划。
 //! * `Registry::overlay` 是运行期产生有效树的**应用**；它不改动任何一棵树。
-//! * `.nichlink/external-grafts/` 下的 `graft.plan` 是本界面写下的**记录**：本界面在
+//! * `.xirang/external-grafts/` 下的 `graft.plan` 是本界面写下的**记录**：本界面在
 //!   这里消费它，运行期覆盖路径（`run_method::apply_recorded_grafts` →
 //!   `Registry::overlay_recorded`）也会消费它。
 //!

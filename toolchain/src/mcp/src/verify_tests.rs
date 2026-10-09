@@ -224,11 +224,11 @@ fn an_undeclared_argument_does_not_change_the_delta() {
 }
 
 /// The namespace the run publishes under is the **readers'** one, even when
-/// `NICH_LINK_NAMESPACE` overrides it. `verify` used to hand `check_for` Cargo's package name
+/// `XIRANG_NAMESPACE` overrides it. `verify` used to hand `check_for` Cargo's package name
 /// while `diff`/`search` resolve identities through `registry::namespace` (which honours the
 /// override), so a tree that had just verified as healthy came back with *every* face
 /// `re-identified` — a wrong answer that looks like a right one (audit `LGC-LG-13`).
-/// 本次运行用于发布的命名空间是**读取者**的那一个，即使 `NICH_LINK_NAMESPACE` 覆盖了它。`verify`
+/// 本次运行用于发布的命名空间是**读取者**的那一个，即使 `XIRANG_NAMESPACE` 覆盖了它。`verify`
 /// 过去把 Cargo 的包名交给 `check_for`，而 `diff`/`search` 经 `registry::namespace`（认可覆盖值）
 /// 解析身份，于是刚刚校验为健康的树会带着**每个**面 `re-identified` 回来——一个看起来正确的错误答案
 /// （审计 `LGC-LG-13`）。
@@ -266,7 +266,7 @@ fn the_override_is_the_namespace_the_run_publishes_under() {
             "mcp::verify::verify_tests::the_override_child",
             "--nocapture",
         ])
-        .env("NICH_LINK_NAMESPACE", "t48-override")
+        .env("XIRANG_NAMESPACE", "t48-override")
         .env("T48_FIXTURE", &root)
         .output()
         .expect("the child runs");

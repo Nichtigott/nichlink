@@ -22,11 +22,11 @@ settled by reading, `[报告]` is relayed and unverified.
 
 Not checked by anyone: an online `cargo publish`/`--dry-run` or a real upload (no token);
 GitHub-runner execution of either workflow; the macOS/Windows CI legs; `cargo-deny`'s schema;
-`tools/nichlink-release-audit`, `nichlink-scale-audit` and `nichlink-external-rehearsal` end
+`tools/xirang-release-audit`, `xirang-scale-audit` and `xirang-external-rehearsal` end
 to end; a full visual Studio session.
 谁都没查的：在线 `cargo publish`/`--dry-run` 与真实上传（无 token）；两个工作流在 GitHub runner
-上的实际执行；macOS/Windows 两条 CI 腿；`cargo-deny` 的 schema；`tools/nichlink-release-audit`、
-`nichlink-scale-audit`、`nichlink-external-rehearsal` 的完整运行；完整的 Studio 视觉会话。
+上的实际执行；macOS/Windows 两条 CI 腿；`cargo-deny` 的 schema；`tools/xirang-release-audit`、
+`xirang-scale-audit`、`xirang-external-rehearsal` 的完整运行；完整的 Studio 视觉会话。
 
 ## CRITICAL / 致命
 
@@ -37,39 +37,39 @@ to end; a full visual Studio session.
 `version = "…"` line of the root manifest — and `cargo publish` reads it from **each member's**
 manifest. Nothing compares the two.
 
-- `tools/nichlink-publish:184` — `workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)`
+- `tools/xirang-publish:184` — `workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)`
 - `.github/workflows/release.yml:48-49` — the same `sed` for the tag check
-- `tools/nichlink-publish:411,453` — the index wait probes `$workspace_version`; `:437,468` print it
-- `tools/nichlink-publish:432` — `cargo publish -p "$crate"` uses that crate's manifest version
-- `tools/nichlink-publish:339-358` — `--check-table` compares dependency **names** and never versions
+- `tools/xirang-publish:411,453` — the index wait probes `$workspace_version`; `:437,468` print it
+- `tools/xirang-publish:432` — `cargo publish -p "$crate"` uses that crate's manifest version
+- `tools/xirang-publish:339-358` — `--check-table` compares dependency **names** and never versions
 
 **证据 `[实测]`（我复现）**：在 `/tmp/nla3` 的副本里把 `core/Cargo.toml` 的
 `version.workspace = true` 改成 `version = "0.1.1"`：
 
 ```
-$ tools/nichlink-publish --check-table
+$ tools/xirang-publish --check-table
 dependency table matches the manifests (9 crates)          [exit 0]
 $ sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1
 0.1.0                       # 这是 tag 步骤读到的版本
-$ cargo metadata --no-deps …  →  nichlink-core 0.1.1
-$ cargo package -p nichlink-core --no-verify --allow-dirty --offline
-   Packaging nichlink-core v0.1.1 (/tmp/nla3/core)
+$ cargo metadata --no-deps …  →  xirang-core 0.1.1
+$ cargo package -p xirang-core --no-verify --allow-dirty --offline
+   Packaging xirang-core v0.1.1 (/tmp/nla3/core)
 ```
 
 因此 `v0.1.0` 这个 tag 会被接受，然后上传 `core 0.1.1`；等待循环去 index 找 0.1.0，超时后整个
 工作流失败——而**已发布的版本不可撤回**。委派审计另实测了需求侧的同一种失明：把 `macro` 的
-`nichlink-core` 需求写成 `"0.2.0"`，`--check-table` 同样报绿。
+`xirang-core` 需求写成 `"0.2.0"`，`--check-table` 同样报绿。
 
 **最小修法**：`--check-table` 与 release 工作流的 tag 步骤都改为比较**每个已发布 crate 解析后的
 版本**（`cargo metadata --no-deps`）与 `$workspace_version`，并断言每处内部 `version = "…"`
 都等于它；工具的 index 等待也按各 crate 的真实版本探测。
 
-**钉子**：`tools/nichlink-publish --check-table`（本轮新增的版本检查）。**已修**：`--check-table`
+**钉子**：`tools/xirang-publish --check-table`（本轮新增的版本检查）。**已修**：`--check-table`
 现在读三处——每个已发布 crate 自己声明的版本、行内写的内部需求、以及
-`[dependencies.nichlink-x]` 表形式的需求——只要与 `$workspace_version` 不符就退出 1 并给出可操作的
-消息。实测两半：副本里把 `core` 改成 `0.1.1` → `nichlink-core declares version 0.1.1, but the
+`[dependencies.xirang-x]` 表形式的需求——只要与 `$workspace_version` 不符就退出 1 并给出可操作的
+消息。实测两半：副本里把 `core` 改成 `0.1.1` → `xirang-core declares version 0.1.1, but the
 workspace version is 0.1.0; a tag for 0.1.0 would publish 0.1.1`；把 `macro` 的需求改成 `0.2.0`
-→ `nichlink-macro asks for nichlink-core 0.2.0, but every internal requirement must be 0.1.0`。
+→ `xirang-macro asks for xirang-core 0.2.0, but every internal requirement must be 0.1.0`。
 工作流在发布前就跑 `--check-table`，因此 tag 步骤读到根版本这一点不再能造成漂移。
 
 ### 2. Every function with a lifetime parameter vanished from the source index
@@ -102,18 +102,18 @@ direct_calls("let s: &str = paint();", "current")                        = ["pai
 `Angle: surfaces`. `studio/src/studio/app/overlay/delete.rs:11` 是唯一没有用
 `with_authoring_context` 的创作调用（add/edit/graft 全都用了），而 `delete_module` 经
 `generated_paths → source_root → validation::package_root()` 解析根路径，回落顺序是
-`NICH_LINK_PACKAGE_ROOT` → 带 `Cargo.toml` 的 CWD → `env!("CARGO_MANIFEST_DIR")`。Studio 自己
+`XIRANG_PACKAGE_ROOT` → 带 `Cargo.toml` 的 CWD → `env!("CARGO_MANIFEST_DIR")`。Studio 自己
 的项目上下文对它不可见。
 
 **证据 `[实测]`（委派审计，我用代码复核 + 自己写了钉子）**：把夹具项目复制到 `/tmp/audit/A` 与
-`B`，`cd /tmp/audit/A && nichlink-studio /tmp/audit/B`，在 pty 里按 `d` `y`：状态行报
-`moved \`control\` to /tmp/audit/A/.nichlink/trash/…`——**A 的整棵 `src/control` 被搬走**，
+`B`，`cd /tmp/audit/A && xirang-studio /tmp/audit/B`，在 pty 里按 `d` `y`：状态行报
+`moved \`control\` to /tmp/audit/A/.xirang/trash/…`——**A 的整棵 `src/control` 被搬走**，
 屏幕上显示的 B 一个字节没动，然后热重载又把 B 的面显示回来，用户看不出发生过什么。
 
 **已修**：该调用现在包在 `with_authoring_context` 里。**钉子**：
 `studio/src/studio/app/tests/edit.rs::delete_moves_the_module_of_the_open_project`（临时工程，
 断言搬走的是打开项目的文件、状态行点名它；把修复撤掉就报
-`Delete failed: this module was not generated by NichLink`）。仍未做：让非上下文
+`Delete failed: this module was not generated by XiRang`）。仍未做：让非上下文
 `package_root()` 的回落在**破坏性**操作上直接报错，而不是猜一个根。
 
 ### 4. Pressing `g` on a project with no graft plans panicked the app
@@ -143,7 +143,7 @@ direct_calls("let s: &str = paint();", "current")                        = ["pai
 
 **证据 `[实测]`（委派审计）**：在示例宿主上加一个只被
 `vec![crate::control::object::dial::NODE_ID]` 引用的面 `control/object/dial/`：
-`nichlink check` → **退出 0、`check: ok`**，`source_scope.tsv` 只选了 2 个（button、slider），
+`xirang check` → **退出 0、`check: ok`**，`source_scope.tsv` 只选了 2 个（button、slider），
 `generated_lib.rs` 里没有 `dial`；随后 `cargo check` → `error[E0433]: cannot find \`dial\` in
 \`object\` --> src/lib.rs:71:34`。也就是说**构建期说没问题，编译期才炸**——这正是"错树"这一类。
 
@@ -164,7 +164,7 @@ direct_calls("let s: &str = paint();", "current")                        = ["pai
 `the_declared_slots_define_the_build_time_scope`。**端到端实测**（/tmp 重建委派审计的场景：示例宿主
 + 一个只被 `vec![crate::control::object::dial::NODE_ID]` 引用的 `dial` 面）：
 
-| | `nichlink check` | `source_scope.tsv` | 计划里的 dial | 宿主 `cargo check` |
+| | `xirang check` | `source_scope.tsv` | 计划里的 dial | 宿主 `cargo check` |
 | --- | --- | --- | --- | --- |
 | 旧规则 | ok（退出 0） | `selected 2` | **0** | `error[E0433]: cannot find \`dial\` in \`object\`` |
 | 修复后 | ok（退出 0） | **`selected 3`** | **7** | 通过 |
@@ -183,7 +183,7 @@ direct_calls("let s: &str = paint();", "current")                        = ["pai
 那份诊断丢掉。
 
 **证据 `[实测]`（委派审计）**：夹具宿主 + `static_graft_plan!(FRAMEWORK, cut);` 后
-`nichlink check --json` → **退出 101、stdout 为空**，stderr 是
+`xirang check --json` → **退出 101、stdout 为空**，stderr 是
 `panicked at build_method/src/graft_view/query.rs:106:9: invalid graft declaration in …graft cut
 expects …`。这与 C2 是同一类：签名承诺诊断，实际是 panic。
 
@@ -222,7 +222,7 @@ pub fn probe() -> String {
 }
 ```
 
-`CARGO_TARGET_DIR=/tmp/nla2-target cargo test -p nichlink-conventions --offline` →
+`CARGO_TARGET_DIR=/tmp/nla2-target cargo test -p xirang-conventions --offline` →
 **10 passed, 0 failed**。对照实验（委派审计做）：一行 `std::fs::read_to_string(...)` →
 `the_kernel_does_no_io_and_reads_no_environment` FAILED。
 
@@ -306,7 +306,7 @@ pub struct Undocumented;
 ### 7. `--publish --yes` is not idempotent and reports a correct release as failed
 ### 7. `--publish --yes` 不是幂等的，会把一次正确的发布报成失败
 
-`Angle: release/CI`. `tools/nichlink-publish:428-435` 只检查依赖是否已发布，从不检查**这个
+`Angle: release/CI`. `tools/xirang-publish:428-435` 只检查依赖是否已发布，从不检查**这个
 crate 自己**；`$failed` 是粘性的，既参与层级等待又参与 `published` 记账（`:450,463`），最后在
 `:482-484` 以 1 退出。因此在中途失败（包括 `:454-457` 自己产生的 300 秒 index 等待超时）之后
 重跑，`cargo publish` 会以 registry 的"已上传"400 失败，脚本把一次**已经正确完成的发布**报成
@@ -324,7 +324,7 @@ crate 自己**；`$failed` 是粘性的，既参与层级等待又参与 `publis
   `verified: none` / `failed:` 九个——把一次**已经全在 index 上**的发布报成全坏；
 - 修复后：退出 0，九行 `already on the index`，**零次上传尝试**，`verified:` 九个 / `failed: none`。
 
-**钉子**：`tools/nichlink-publish` 没有测试框架，因此这条的钉子就是上面那份可重跑的对照实验；
+**钉子**：`tools/xirang-publish` 没有测试框架，因此这条的钉子就是上面那份可重跑的对照实验；
 P4 是它在真实 registry 上的对应场景。
 
 **最小修法**：发布前先 `if is_published "$crate" "$workspace_version"; then published="$published $crate"; continue; fi`；
@@ -344,28 +344,28 @@ P4 是它在真实 registry 上的对应场景。
 **已修**：改为在 `mask_non_code` 后的文本上计数，且末尾未配平时返回 `None`（而不是假装单行）。
 **钉子**：`source_tests.rs::a_brace_in_a_string_does_not_close_the_function`。
 
-### 9. A graft selector of `..` writes outside `.nichlink/external-grafts/` and never loads
-### 9. 选择器 `..` 会把计划写到 `.nichlink/external-grafts/` 之外，而且永远不会被加载
+### 9. A graft selector of `..` writes outside `.xirang/external-grafts/` and never loads
+### 9. 选择器 `..` 会把计划写到 `.xirang/external-grafts/` 之外，而且永远不会被加载
 
 `Angle: surfaces`. `core/src/registry_core/plugin/graft/document.rs:202-219` 只拒绝 `/`、`\`、
 空白与 `"`，不拒绝 `.`/`..`；`run_method/.../external_graft/plan.rs:156-171` 直接
 `join(selector)` 并写入。
 
 **证据 `[实测]`（委派审计）**：`create_external_graft(&registry, target, "..", false)` 返回 Ok，
-计划落在 `<pkg>/.nichlink/graft.plan`，而 `list_external_grafts()` 不列出它（`load_graft_records`
+计划落在 `<pkg>/.xirang/graft.plan`，而 `list_external_grafts()` 不列出它（`load_graft_records`
 跳过非目录）——运行期永远不会应用这份计划，CLI/Studio 与运行期对同一个包给出不同答案。Studio
 侧可达：`validate_graft_selector` 接受 `..`。
 
 **已修**：拒绝加在**共用规则**那一层——`core::...::document::validate_graft_selector`（写入方、
-解析方与 Studio 都经它，Studio 用的是 `nichlink_run_method::validate_graft_selector` 重导出），
+解析方与 Studio 都经它，Studio 用的是 `xirang_run_method::validate_graft_selector` 重导出），
 条件是"以 `.` 开头"，因此 `.`、`..`、`.hidden` 一并被拒，而普通名字照常通过。**钉子**：
 `document.rs::selectors_that_could_leave_the_record_directory_are_refused`（core）与
 `plan_tests.rs::a_selector_that_escapes_the_record_directory_creates_nothing`（写入路径；修复前
 那条钉子的失败信息逐字复现了审计的 `selector: ".."`、root `…/external-grafts/..`）。两条都用
 "把规则去掉"的方式验证过会红。
 
-### 10. `nichlink explain` serves stale build output as `known: true`
-### 10. `nichlink explain` 把过期的构建产物当作 `known: true` 提供
+### 10. `xirang explain` serves stale build output as `known: true`
+### 10. `xirang explain` 把过期的构建产物当作 `known: true` 提供
 
 `Angle: surfaces`. `cli/src/explain.rs:93-96` → `cli/src/explain_report.rs:29-127` 直接读
 `out/source_scope.tsv` 与 `pruning_manifest.tsv`（`build_method/src/scope_view.rs:100-135`），
@@ -380,7 +380,7 @@ known:true`；然后只改 `src/lib.rs` 加上一个 `cut`，**不**重跑 check
 **已修（两半）**：①`build_method` 新增公开的 `build_output_is_current(root, out_dir)`：把
 `out/discovery.fingerprint` 与**按当前源码重算**的指纹比对（复用构建自己的
 `discovery_fingerprint`，不是第二套哈希），`explain` 与 `--overlay` 都先问它，过期就沿用既有的
-"先跑 `nichlink check`"提示报 `known:false`；②pipeline 只在**没有编译错误**时写这枚指纹，失败时
+"先跑 `xirang check`"提示报 `known:false`；②pipeline 只在**没有编译错误**时写这枚指纹，失败时
 把它删掉——因此一次**失败**的 check 不再留下任何被当作现状的产物（其余清单留在原处，没有那枚凭据
 就没有东西会把它们读作"描述了当前源码"）。**钉子**：
 `build_method::scope_view::published_output_is_current_until_the_sources_change` 与
@@ -436,7 +436,7 @@ known:true`；然后只改 `src/lib.rs` 加上一个 `cut`，**不**重跑 check
 `app/app.rs` 布局下都会被拒，而扁平模块下一个不存在的尾巴反而通过。
 
 **证据 `[实测]`（委派审计）**：`/tmp/audit/app1`（`application!(entry = crate::control)` 写在
-`src/control/control.rs`，生成的树确实声明了 `pub mod control`）：`nichlink check` → 退出 1，
+`src/control/control.rs`，生成的树确实声明了 `pub mod control`）：`xirang check` → 退出 1，
 `phase=entry source=control/control.rs:34 ... does not resolve to a source module under the
 package root`。
 
@@ -452,12 +452,12 @@ package root`。
   那颗牙咬住——那一半是好的。修法：豁免只按 `tests/` 目录或 `cfg(test)` 内容判定，并把 `build.rs`
   与 `benches` 纳入。`[实测]`（委派审计）
 - **9. 两处 crate 列表是硬编码的，新增已发布 crate 无人管** `Angle: gates` —
-  `conventions/src/lint.rs:28-39` 与 `tools/nichlink-package-audit:68-78`。`[实测]`：删掉
+  `conventions/src/lint.rs:28-39` 与 `tools/xirang-package-audit:68-78`。`[实测]`：删掉
   `conventions/src/lib.rs` 的 `#![warn(missing_docs)]` 后十项测试仍全绿；加一个第十个已发布成员
   `zznew` 后包审计仍打印 `contents checked: all nine crates` 并退出 0（`--check-table` 反而抓到了）。
   修法：两处都从工作区成员减去 `publish = false` 推导，与 `--check-table` 一致。
 - **10. `--check-table` 读不了工作区继承的依赖，且提示语在劝人关掉自己** `Angle: release/CI` —
-  `tools/nichlink-publish:339-358`。`[实测]`（委派审计）：把内部依赖改成
+  `tools/xirang-publish:339-358`。`[实测]`（委派审计）：把内部依赖改成
   `[workspace.dependencies]` + `x.workspace = true` 后 `--check-table` 退出 1，消息只报不一致、
   不给修法，而唯一按字面能让它变绿的做法是从手工表里删掉那条边——那会关掉这条门禁存在的理由。
   修法：解析 `x.workspace = true` 并在消息里说明。
@@ -478,27 +478,27 @@ package root`。
   `docs/zzsub/zz_audit.md` 或 `CHANGELOG.md` 里的坏围栏通过，同样的坏围栏放进 `README.md` 才失败。
   修法：递归遍历 `docs/`，或把排除写明白。
 - **14. 随包发布的 `core` 测试并不自足，而发布路径看不见** `Angle: release/CI` —
-  `[实测]`（委派审计）解包 `nichlink-core-0.1.0.crate` 后跑
+  `[实测]`（委派审计）解包 `xirang-core-0.1.0.crate` 后跑
   `cargo test --features syntax --test nesting_budget`：`the walk found 83 Rust files under /tmp/unpack/iso`。
   `core/tests/nesting_budget.rs:59-60` 走的是 `CARGO_MANIFEST_DIR/..`，在真实 registry 解包目录里
   那是**别人的 crate**，而 `>100` 的下限还会通过。修法：把工作区根改成经环境变量传入，或把该测试
   移到 `publish = false` 的成员里。
 - **15. `readelf` 缺失时 `.inventory` 断言被静默跳过** `Angle: release/CI` —
-  `tools/nichlink-release-audit:31-35` 把整条检查包在 `if command -v readelf …` 里；没有 binutils
+  `tools/xirang-release-audit:31-35` 把整条检查包在 `if command -v readelf …` 里；没有 binutils
   时脚本仍退出 0，而 README 与 `docs/performance-baseline.md` 把这条链接段检查当作"与机器无关"的
   发布承诺。修法：缺 `readelf` 直接报错退出。
-- **16. `tools/nichlink-visual` 用未校验的场景名写文件** `Angle: release/CI` —
-  `tools/nichlink-visual:156-157` 直接拼 `"$OUT_DIR/$name.txt"`，`$name` 来自 `$@`；`[实测]`
+- **16. `tools/xirang-visual` 用未校验的场景名写文件** `Angle: release/CI` —
+  `tools/xirang-visual:156-157` 直接拼 `"$OUT_DIR/$name.txt"`，`$name` 来自 `$@`；`[实测]`
   的算术结果是 `target/visual/../../escaped.txt`。另外 `scene_marker` 的默认值使拼错的场景名也
   能驱动首页并产出非空 capture，CI 的 `test -s` 因此抓不到。修法：只接受 `scenes()` 里的名字。
 - **17. 外部演练用 GNU 专有的 `sed -i`** `Angle: release/CI` —
-  `tools/nichlink-external-rehearsal:64`；BSD/macOS 的 sed 不接受该写法。CI 那一步只在 Linux 跑，
+  `tools/xirang-external-rehearsal:64`；BSD/macOS 的 sed 不接受该写法。CI 那一步只在 Linux 跑，
   因此 CI 安全，但工具自称维护者随处可跑。修法：`sed … > "$m.new" && mv`。
 - **18. 无 git 时脏树前置检查静默失效** `Angle: release/CI` — `[实测]`（委派审计）在只有 `sh`
   没有 `git` 的 PATH 下复现：`git: command not found` 之后脚本继续，`--publish` 会照发。
   修法：取不到 `git status` 就报错退出。
 - **19. `--verify-consumers` 把所有 `cargo add` 失败都报成"尚未发布"** `Angle: release/CI` —
-  `tools/nichlink-publish:264-282`。R1 记录的那次失败路径证据正是 `CARGO_NET_OFFLINE=true`，
+  `tools/xirang-publish:264-282`。R1 记录的那次失败路径证据正是 `CARGO_NET_OFFLINE=true`，
   也就是把联通性/离线失败报成了发布缺口。修法：先用 curl 探 index 可达性，消息里点名离线模式。
 - **20. CHANGELOG 的 LICENSE 断言与工作树不符** `Angle: release/CI` — `[实测]`（委派审计）：
   `CHANGELOG.md:34` 说每个 crate 目录都有 LICENSE 副本，而 `conventions/`（唯一没有它的成员）
@@ -506,22 +506,22 @@ package root`。
 
 - **21. `check --json` 在诊断之前的失败上违反自己的 stdout 契约** `Angle: surfaces` —
   `cli/src/commands/check.rs:40-41` 先解析包、后进 `--json` 分支。`[实测]`（委派审计）：
-  `nichlink check --json /nonexistent-xyz` → 退出 1、stdout 为空、stderr 一行
-  `nichlink: cannot resolve …`；而 `cli/README.md:40-43` 承诺失败也把同一份文档写到 stdout。
+  `xirang check --json /nonexistent-xyz` → 退出 1、stdout 为空、stderr 一行
+  `xirang: cannot resolve …`；而 `cli/README.md:40-43` 承诺失败也把同一份文档写到 stdout。
   修法：解析失败也发一份带单条诊断的文档，或收窄 README。
-  **已修（2026-09-26）:** `check --json` 现在先写出 `nichlink.build-diagnostics/1` 文档（含一条
+  **已修（2026-09-26）:** `check --json` 现在先写出 `xirang.build-diagnostics/1` 文档（含一条
   `phase=resolve` 诊断）再返回错误；`grafts --json` 与 `explain --json`/`--overlay --json` 同轮
   一并修掉。钉子在 `cli::check_json_reports_a_resolution_failure_as_json`、
   `::grafts_json_reports_a_resolution_failure_as_json`、`::explain_json_reports_a_resolution_failure_as_json`。
-- **22. `nichlink new --path <不存在>` 报成功并写出不可用的清单** `Angle: surfaces` —
+- **22. `xirang new --path <不存在>` 报成功并写出不可用的清单** `Angle: surfaces` —
   `cli/src/commands/new.rs:25-29` 把 `canonicalize` 的失败吞掉并写回原始字符串。`[实测]`：
   `--path /nonexistent-checkout broken` → 退出 0、`created binary project at …`，而清单里写着
   `path = "/nonexistent-checkout/run_method"`；`--git ""` 同样退出 0。修法：要求 `--path` 能
   canonicalize 到一个含 `core/` + `run_method/` 的目录，并要求 `--git` 非空。
-  **已修（2026-09-26）:** `new` 在写任何东西之前先解析 `--path` 并要求它是一个 NichLink 检出
+  **已修（2026-09-26）:** `new` 在写任何东西之前先解析 `--path` 并要求它是一个 XiRang 检出
   （`cli/src/commands/new.rs`，判定放在 CLI 而不是 `build_method`，因为打包后的 CLI 要对着已
   发布的核心编译）。钉子 `new_command::tests::only_a_real_checkout_is_accepted`，外加实测：
-  `--path /tmp` 报 "is not a NichLink checkout" 且不创建目录。
+  `--path /tmp` 报 "is not a XiRang checkout" 且不创建目录。
 - **23. MCP 的 JSON-RPC 收尾三处不合规** `Angle: surfaces` — `mcp/src/protocol.rs:96-116`。
   `[实测]`：`{"method":"some/notification"}`（无 id）被**回复**了；`{"id":5,"method":
   "notifications/initialized"}` 反而**没有**任何输出（客户端会一直等）；缺 `"jsonrpc"` 的请求被
@@ -589,14 +589,14 @@ face_preset_parts.rs:1-2` 已写明"No `handle:` field"是当前状态。
 ### 16. `run_method/README.md` names a `TraceMode::from_env` that does not exist
 ### 16. `run_method/README.md` 点名了并不存在的 `TraceMode::from_env`
 
-`Angle: docs`. `run_method/README.md:12`（zh:11）说 `TraceMode::from_env` 读 `NICH_LINK_TRACE`；
+`Angle: docs`. `run_method/README.md:12`（zh:11）说 `TraceMode::from_env` 读 `XIRANG_TRACE`；
 代码是自由函数 `trace_mode_from_env()`（`run_method/src/runtime/trace/call_trace.rs:30`），
 `TraceMode` 本身只有一个 `parse`（`core/.../declaration/call_evidence.rs:121,134`）。
 **修法**：文档改名，或补一个关联函数。**钉子**：无。
 - **31. 文档里过期/缺失的清单** `Angle: docs` — `run_method/README.md:56-76` 约 12 个
   file:line 锚点里 7 个已漂移（`graft_ops.rs` 146→149、186→189、54→55、294→297；
   `inspection.rs` 75→76；`connector.rs` 205→206、211→212；`transaction.rs` 83→84；
-  `reconcile.rs` 166→148/202）；`cli/README.md:13-22` 的命令表漏了 `nichlink snippets`
+  `reconcile.rs` 166→148/202）；`cli/README.md:13-22` 的命令表漏了 `xirang snippets`
   （`--help` 与 `README.md:858` 都有）；`core/README.md:9-24`、`README.md:848-850` 与
   `AGENTS.md:104-116` 的模块清单漏了 `json`（`core/src/registry_core.rs:19-20`）；
   `AGENTS.md:83` 的"树里有 29 处裸 `mod x;`"实测是 196 处（十个 `*/src` 树里），其中 155 处位于
@@ -609,7 +609,7 @@ face_preset_parts.rs:1-2` 已写明"No `handle:` field"是当前状态。
 - `conventions/src/lib.rs:106-107` 自称遍历不跟随符号链接，但 `path.is_dir()` 会跟随；委派审计
   实测把 `core/src/.../zz_audit_link` 指向 `/tmp/extdir` 就让纯净性去报了检出之外的
   `/tmp/extdir/evil.rs`（自指链接不会溢出——内核的 ELOOP 拦住 `read_dir`），属卫生问题。
-- `mounting`/`lint` 遍历整个成员目录，因此 `examples/control-button/target/nichlink/out/*.rs`
+- `mounting`/`lint` 遍历整个成员目录，因此 `examples/control-button/target/xirang/out/*.rs`
   这类构建产物也被扫描；委派审计实测在那里放一个含 `include!(…)` 的 `.rs` 会让挂载门禁失败
   （目前是潜伏的：`build_method/src/renderer/pass.rs:311` 断言渲染器不会发出 `include!`）。
 - `is_comment`（`lib.rs:156-159`）只跳过 `//` 行，因此 `/* … std::fs … */` 块注释是**误报**。
@@ -651,13 +651,13 @@ their status.**
   had done once a pin existed.
 - **Hardcoded crate lists (item 9)** — `lint::required_roots` derives the roots from
   the tree (every crate directory's library root except the example hosts, plus the
-  MCP binary root), and `tools/nichlink-package-audit` derives the shipped set and each
+  MCP binary root), and `tools/xirang-package-audit` derives the shipped set and each
   crate's internal dependencies from the manifests. Pins:
   `lint::a_new_crate_root_must_carry_the_attribute`, and a mutant workspace with a
   tenth published member, where the old tool printed "all nine crates" and never
   mentioned it while the new one audits it.
 - **`--check-table` and workspace inheritance (item 10)** — an internal requirement
-  spelled `nichlink-x.workspace = true` is read as the dependency it names, and the
+  spelled `xirang-x.workspace = true` is read as the dependency it names, and the
   root's `[workspace.dependencies]` versions are checked once. Mutant copies: the
   inherited spelling now passes (it used to exit 1 with a message that invited
   deleting the edge) and a drifted inherited version is refused by name.
@@ -694,12 +694,12 @@ is still open.
 
 | # | Finding | Fix | Pin (proven red) |
 | --- | --- | --- | --- |
-| 1 | member version invisible to the tag check and `--check-table` | `--check-table` now compares every shipped crate's declared version and every internal requirement against the workspace version (`tools/nichlink-publish`) | `--check-table` against a mutant copy: `0.1.1` member and `0.2.0` requirement both refused |
+| 1 | member version invisible to the tag check and `--check-table` | `--check-table` now compares every shipped crate's declared version and every internal requirement against the workspace version (`tools/xirang-publish`) | `--check-table` against a mutant copy: `0.1.1` member and `0.2.0` requirement both refused |
 | 2 | lifetimes hid every function from the source index | `mask_non_code` masks `'` only when a character literal closes (`core/src/registry_core/source/source.rs`) | `source_tests.rs::lifetimes_do_not_mask_the_code_that_follows_them` |
 | 3 | Studio's Delete acted on the process CWD project | the call is wrapped in `with_authoring_context` (`studio/src/studio/app/overlay/delete.rs`) | `app/tests/edit.rs::delete_moves_the_module_of_the_open_project` |
 | 4 | `g` panicked on an empty graft plan list | `checked_sub` instead of eager `then_some` (`studio/src/studio/ui/forms/graft.rs`) | `app/graft_tests.rs::the_graft_screen_renders_before_any_plan_exists` |
 | 2/3/4/5 | gate bypasses: purity, `include!`, unterminated fence, folded allow | see the gate-hardening section (`conventions/src/{purity,mounting,doc_blocks,lint}.rs`, `core/.../source/source.rs` exposes the masker) | the pins named there, each red before its fix |
-| 9/10/11/12/13 | gate scope and tool tables: hardcoded lists, `--check-table` inheritance, purity floor, nesting limits, doc-gate file list | derived sets, per-shape limits, recursive walk (`conventions/`, `core/.../syntax/nesting.rs`, `tools/{nichlink-publish,nichlink-package-audit}`) | the pins and mutant copies named there |
+| 9/10/11/12/13 | gate scope and tool tables: hardcoded lists, `--check-table` inheritance, purity floor, nesting limits, doc-gate file list | derived sets, per-shape limits, recursive walk (`conventions/`, `core/.../syntax/nesting.rs`, `tools/{xirang-publish,xirang-package-audit}`) | the pins and mutant copies named there |
 | 13 | `application!(entry = …)` refused the canonical layout | every segment is resolved against the tree, accepting `<dir>/<dir>.rs` (`build_method/src/entry_paths.rs`) | `entry_tests.rs::an_application_entry_resolves_every_segment_against_the_tree` + the end-to-end `check` before/after |
 | 11 | a passive element segment escaped both ceilings | `WasmLimits::max_element_bytes`, measured from the section headers before compilation (`plugin-host/src/wasm.rs`) | `fault_matrix.rs::a_large_passive_element_segment_is_refused_before_instantiation` + `::a_small_passive_element_segment_still_loads` |
 | 12 | `verify_signed` recorded `Signature` without a verifier | `SignatureLaneRequired` unless the source is Official (`core/.../plugin/{artifact,trust}`) | `artifact.rs::signature_assurance_is_refused_for_a_user_artifact` |
@@ -713,7 +713,7 @@ is still open.
 
 | # | 发现 | 修复 | 钉子（已验证会红） |
 | --- | --- | --- | --- |
-| 1 | 成员版本对 tag 检查与 `--check-table` 不可见 | `--check-table` 现在把每个已发布 crate 声明的版本与每处内部需求同工作区版本比对（`tools/nichlink-publish`） | 用漂移副本跑 `--check-table`：`0.1.1` 的成员与 `0.2.0` 的需求都被拒 |
+| 1 | 成员版本对 tag 检查与 `--check-table` 不可见 | `--check-table` 现在把每个已发布 crate 声明的版本与每处内部需求同工作区版本比对（`tools/xirang-publish`） | 用漂移副本跑 `--check-table`：`0.1.1` 的成员与 `0.2.0` 的需求都被拒 |
 | 2 | 生命周期让源码索引里的函数整体消失 | `mask_non_code` 只在字符字面量闭合时才把 `'` 当引号（`core/src/registry_core/source/source.rs`） | `source_tests.rs::lifetimes_do_not_mask_the_code_that_follows_them` |
 | 3 | Studio 的删除作用在进程 CWD 的项目上 | 该调用包进 `with_authoring_context`（`studio/src/studio/app/overlay/delete.rs`） | `app/tests/edit.rs::delete_moves_the_module_of_the_open_project` |
 | 4 | 空计划列表上按 `g` 会 panic | 用 `checked_sub` 取代会立即求值的 `then_some`（`studio/src/studio/ui/forms/graft.rs`） | `app/graft_tests.rs::the_graft_screen_renders_before_any_plan_exists` |
@@ -741,11 +741,11 @@ is still open.
 ## Post-release round: what the `v0.1.0` push turned up / 发布后一轮：`v0.1.0` 的推送查出了什么
 
 `v0.1.0` was pushed to `origin` at 2026-09-25T11:55:34Z, starting
-`nichlink-release` run `36132054983` and `nichlink-ci` run `36132054937`. Neither
+`xirang-release` run `36132054983` and `xirang-ci` run `36132054937`. Neither
 the Windows job that had been failing on `main` for three consecutive runs nor the
 empty publish secret was in this document's angle list, so both are recorded here.
-`v0.1.0` 于 2026-09-25T11:55:34Z 推到 `origin`，启动了 `nichlink-release` 运行
-`36132054983` 与 `nichlink-ci` 运行 `36132054937`。那个在 `main` 上连续三次失败的
+`v0.1.0` 于 2026-09-25T11:55:34Z 推到 `origin`，启动了 `xirang-release` 运行
+`36132054983` 与 `xirang-ci` 运行 `36132054937`。那个在 `main` 上连续三次失败的
 Windows 任务，以及空的发布密钥，都不在本文件的审计角度清单里，因此记在这里。
 
 ### P1. Windows CI was red on `main`, and that hid the lint, doc and package gates there
@@ -810,7 +810,7 @@ Windows 任务，以及空的发布密钥，都不在本文件的审计角度清
 **失败在 step 13 `Publish in dependency order`，但没有造成任何损害。**
 `CARGO_REGISTRY_TOKEN:` 在日志里是空值（仓库 secret 未设置），`cargo publish` 在第一次
 上传时以 `error: please provide a non-empty token` 失败，随后
-`cannot publish nichlink-macro: waiting for nichlink-core`。
+`cannot publish xirang-macro: waiting for xirang-core`。
 `[实测]`：`https://index.crates.io/ni/ch/<crate>` 与 crates.io API 对九个名字全部返回
 **404**，因此**一个 crate 都没有发出**，`0.1.0` 这个版本号没有被烧掉，也不需要改版本号。
 
@@ -828,11 +828,11 @@ Windows 任务，以及空的发布密钥，都不在本文件的审计角度清
 `Angle: release/CI`。第二次发布运行（已配置 secret、tag 已移到 `f3c2b98`）通过了全部十二个检查，
 在 `Publish in dependency order` 里发完**五个**之后撞上限速。
 
-- **已发布**（index 返回 200）：`nichlink-core`、`nichlink-macro`、`nichlink-build-method`、
-  `nichlink-mcp`、`nichlink-run-method`。`[实测]`
-  `https://crates.io/api/v1/crates/nichlink-core` 的 `versions` 为 `["0.1.0"]`。
-- **被拒**（index 404，各一次）：`nichlink-debug-method`、`nichlink-plugin-host`、
-  `nichlink-studio`、`nichlink-cli`，错误为
+- **已发布**（index 返回 200）：`xirang-core`、`xirang-macro`、`xirang-build-method`、
+  `xirang-mcp`、`xirang-run-method`。`[实测]`
+  `https://crates.io/api/v1/crates/xirang-core` 的 `versions` 为 `["0.1.0"]`。
+- **被拒**（index 404，各一次）：`xirang-debug-method`、`xirang-plugin-host`、
+  `xirang-studio`、`xirang-cli`，错误为
   `status 429 Too Many Requests: You have published too many new crates in a short period of
   time. Please try again after Fri, 25 Sep 2026 12:55:31 GMT`。
 
@@ -853,12 +853,12 @@ Windows 任务，以及空的发布密钥，都不在本文件的审计角度清
 
 `gh run rerun 36137486348 --failed` (14:14Z) published the remaining three and ran
 `--verify-consumers`: **all fifteen steps `success`**, and the crates.io API reports
-`versions = ["0.1.0"]` for all nine (`nichlink-core` through `nichlink-cli`). No
+`versions = ["0.1.0"]` for all nine (`xirang-core` through `xirang-cli`). No
 version bump was needed, because the five crates published before the rate limit are
 byte-identical to the tag: the later commits touched only `tools/` and `docs/`.
 `[实测]`：`gh run rerun 36137486348 --failed`（14:14Z）发完剩下三个并跑通
 `--verify-consumers`——**十五步全部 `success`**，crates.io API 对九个 crate 都报
-`versions = ["0.1.0"]`（`nichlink-core` 到 `nichlink-cli`）。不需要升版本号：速率限制前发布的
+`versions = ["0.1.0"]`（`xirang-core` 到 `xirang-cli`）。不需要升版本号：速率限制前发布的
 五个与 tag 逐字节相同，因为其后的提交只动了 `tools/` 与 `docs/`。
 
 ## Gate hardening landed in the post-release round / 发布后一轮落地的门禁加固
@@ -872,7 +872,7 @@ byte-identical to the tag: the later commits touched only `tools/` and `docs/`.
 - **被链接的目录不再被遍历（低严重度备注）。** `rust_sources` 与 `collect_markdown` 改用
   `symlink_metadata`，于是 `core/src/zz -> /tmp/elsewhere` 不再把检出之外的文件拉进每一个门禁。
   钉子：`conventions::tests::a_linked_directory_is_not_walked_into`（Unix）。
-- **构建产物不再被遍历。** `<member>/target/nichlink/out/*.rs` 是 `build_method` 写生成 Rust 的
+- **构建产物不再被遍历。** `<member>/target/xirang/out/*.rs` 是 `build_method` 写生成 Rust 的
   地方；过期产物不再能被读成源码声明。钉子：`conventions::tests::build_output_is_not_walked_into`。
 - **注释与字符串不再被当作代码扫描。** `purity` 改在内核的 `mask_non_code` 上运行，取代按行的
   `//` 判断，于是 `/* std::fs */` 与 `let probe = "std::fs";` 不再是违规；`is_comment` 随其唯一
@@ -892,14 +892,14 @@ byte-identical to the tag: the later commits touched only `tools/` and `docs/`.
   从未检查过的文件，把工作区称作"干净"会变成关于"它碰巧能打开哪些文件"的断言。钉子：
   `a_file_that_cannot_be_read_is_reported`（临时文件里放非法 UTF-8），修复前为红。
 - **备注 5——AGENTS 改动规则 4 现在有门禁。** `conventions/src/naming.rs` 检查 `examples/` 之外的
-  每个成员：`nichlink-<目录名，`_`→`-`>`、`nichlink_<目录名，`-`→`_`>`（没有 `[lib] name` 也
-  可以——cargo 会推导），外加 crate 表里已经记录的唯一实测例外：`core/` 的 lib 是 `nichlink`。
+  每个成员：`xirang-<目录名，`_`→`-`>`、`xirang_<目录名，`-`→`_`>`（没有 `[lib] name` 也
+  可以——cargo 会推导），外加 crate 表里已经记录的唯一实测例外：`core/` 的 lib 是 `xirang`。
   它第一次运行就抓到一个真实的 bug——**在门禁自己身上**：缺了连字符折叠时它把工作区自己的
   `plugin-host` 报了出来，这现在正是钉子
   `a_hyphenated_directory_maps_to_an_underscored_lib_name`。
 - **条目 31——重新实测而不是照抄。** `json` 缺失于四份模块清单与两份 README 的 core 行（该模块挂在
   `core/src/registry_core.rs:19-20`）；`cli/README.md` 的命令表缺
-  `nichlink snippets [path] [--editor vscode|nvim|blink|auto] [--stdout]`（`cli/src/lib.rs:46`）；
+  `xirang snippets [path] [--editor vscode|nvim|blink|auto] [--stdout]`（`cli/src/lib.rs:46`）；
   `LICENSE` 那行改为"每个**已发布**的 crate 目录"，这样它恰好为真（`conventions/` 是
   `publish = false`）；裸 `mod` 的数字则删掉了——审核声称 196，而按规则本身（前面没有 `#[path]`
   的 `mod`）实测是 31（12 处在 crate 根、19 处在 `#[path]` 载入的父文件里），且一个随每个新模块
@@ -908,13 +908,13 @@ byte-identical to the tag: the later commits touched only `tools/` and `docs/`.
 ### P5. The index probes had no retry, so one network blip read as "not published"
 ### P5. index 探针没有重试，于是一次网络抖动会被读成"未发布"
 
-`Angle: release/CI`. `tools/nichlink-publish` 与 `tools/nichlink-package-audit` 的 `is_published`
+`Angle: release/CI`. `tools/xirang-publish` 与 `tools/xirang-package-audit` 的 `is_published`
 都用单次 `curl -fsS --max-time 20` 判定某个精确版本是否已发布，失败即 `return 1`，而两个工具的
 注释都明说"网络失败按'未发布'处理"。两种后果：在 `--publish` 模式下，一次抖动让依赖看起来缺失，
 脚本就在 `error: cannot publish X: waiting for Y` 处**退出 1**，中断整次发布；在审计里，它把
 crate 报成 `skipped`，或者在探针成功、而校验构建从只传播了一半的 index 取依赖时报成 `failed`。
 
-**证据 `[实测]`**：首次发布之后，同一条 `tools/nichlink-package-audit` 在相邻两次运行里对**同一棵
+**证据 `[实测]`**：首次发布之后，同一条 `tools/xirang-package-audit` 在相邻两次运行里对**同一棵
 静止的树**给出了不同的可检查集合——一次 `verified` 了 `cli`/`debug-method`，却把一小时前就已发布的
 `run-method` 报成 `skipped`，并把 `plugin-host` 报成 `failed`；五分钟后以及随后的三次运行都是
 `verified: 九个 / skipped: none / failed: none`。树没有变，index 的可见性变了。

@@ -7,21 +7,21 @@
 macro_rules! application {
     (entry = $entry:path $(,)?) => {
         #[doc(hidden)]
-        pub const NICHLINK_APPLICATION_ENTRY: &str = stringify!($entry);
+        pub const XIRANG_APPLICATION_ENTRY: &str = stringify!($entry);
     };
 }
 
-/// Declare this crate as a NichLink host and pull in the registration plan
+/// Declare this crate as a XiRang host and pull in the registration plan
 /// captured at build time.
-/// 声明当前 crate 为 NichLink 宿主，并引入构建时捕获的注册计划。
+/// 声明当前 crate 为 XiRang 宿主，并引入构建时捕获的注册计划。
 ///
-/// `nichlink-toolchain` renders the discovered registration tree to
+/// `xirang-toolchain` renders the discovered registration tree to
 /// `OUT_DIR/generated_lib.rs`; this macro includes it at the crate root so
 /// `builtin_static_plan()` and the per-level `{name}_object!` aliases are
 /// available crate-wide. It expands to
 /// `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))` — writing that
 /// line directly is an equivalent, advanced alternative.
-/// `nichlink-toolchain` 把发现的注册树渲染到 `OUT_DIR/generated_lib.rs`；
+/// `xirang-toolchain` 把发现的注册树渲染到 `OUT_DIR/generated_lib.rs`；
 /// 此宏将其包含到 crate 根，使 `builtin_static_plan()` 与各层级的
 /// `{name}_object!` 别名在整个 crate 内可用。它展开为
 /// `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
@@ -34,19 +34,19 @@ macro_rules! application {
 /// `include!` 只接受字面量路径，因此这里无法从内核 lexicon 读取生成入口的文件名。
 /// 把两份文本钉在一起，漂移会变成编译错误，而不是去 include 一个构建步骤已不再写的
 /// 文件。
-const _: () = assert!(::nichlink_kernel::lexicon::same_text(
-    ::nichlink_kernel::lexicon::GENERATED_LIB_FILE,
+const _: () = assert!(::xirang_kernel::lexicon::same_text(
+    ::xirang_kernel::lexicon::GENERATED_LIB_FILE,
     "generated_lib.rs"
 ));
 
 /// Pull the build-time registration plan into the crate root.
 /// 把构建期捕获的注册计划引入 crate 根。
 ///
-/// Call it once per host crate whose build script has run the NichLink build
+/// Call it once per host crate whose build script has run the XiRang build
 /// step; the included file supplies `builtin_static_plan()` and the per-level
 /// object aliases. The `include!` target lives under `OUT_DIR`, so a crate that
 /// never runs that step fails to compile rather than silently missing faces.
-/// 在已由 build script 运行 NichLink 构建步骤的宿主 crate 中调用一次；被包含的文件
+/// 在已由 build script 运行 XiRang 构建步骤的宿主 crate 中调用一次；被包含的文件
 /// 提供 `builtin_static_plan()` 与各层级 object 别名。`include!` 目标位于 `OUT_DIR`，
 /// 未运行该步骤的 crate 会编译失败，而不是静默缺少注册面。
 #[macro_export]
@@ -65,7 +65,7 @@ macro_rules! host {
         /// 拼写挂载同一个面文件，在那里读到的包名是**幽灵 crate 的**，而身份是
         /// `hash(命名空间, 源码路径, 名字)`——就地读会静默重命名每一个面（审计 `M7`，P3.3）。根上这样一个
         /// 常量，正是分区时能指向宿主那个值的唯一位置。
-        pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+        pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
         include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"));
     };
 }
@@ -74,22 +74,22 @@ macro_rules! host {
 /// 在运行期拿到本 crate 自己的注册机。
 ///
 /// ```ignore
-/// nichlink_toolchain::run_method::host!();
+/// xirang_toolchain::run_method::host!();
 ///
 /// pub const FRAMEWORK: FrameworkId = FrameworkId::new("my.app");
 ///
 /// pub fn registry() -> Registry {
-///     nichlink_toolchain::host_registry!().expect("this crate's faces register")
+///     xirang_toolchain::host_registry!().expect("this crate's faces register")
 /// }
 /// ```
 ///
 /// It reads three things from the **crate root** the generated entry already populates — `FRAMEWORK`
-/// (which the host declares), `NICHLINK_NAMESPACE` (emitted by `host!()`) and `registrations()`
+/// (which the host declares), `XIRANG_NAMESPACE` (emitted by `host!()`) and `registrations()`
 /// (emitted into `generated_lib.rs`) — and hands them to
 /// [`run_method::host_registry`](crate::run_method::host_registry::host_registry), which keeps the
 /// pairing rule and the atomicity in one place. A macro rather than a function for exactly that
 /// reason: those three symbols live in the *host's* crate, not in this one.
-/// 它从生成入口已经填好的 **crate 根**读三样东西——`FRAMEWORK`（宿主声明）、`NICHLINK_NAMESPACE`
+/// 它从生成入口已经填好的 **crate 根**读三样东西——`FRAMEWORK`（宿主声明）、`XIRANG_NAMESPACE`
 /// （`host!()` 发出）与 `registrations()`（发进 `generated_lib.rs`）——并交给
 /// [`run_method::host_registry`](crate::run_method::host_registry::host_registry)，由它把配对规则与
 /// 原子性收在一处。做成宏而不是函数正是因为这个：那三个符号住在**宿主**的 crate 里，不在这个 crate 里。
@@ -107,7 +107,7 @@ macro_rules! host_registry {
     () => {
         $crate::run_method::host_registry::host_registry(
             FRAMEWORK,
-            NICHLINK_NAMESPACE,
+            XIRANG_NAMESPACE,
             &registrations(),
         )
     };
@@ -117,11 +117,11 @@ macro_rules! host_registry {
 /// runtime `GraftPlan`.
 /// 声明供构建阶段捕获的 graft selector，不构造运行时 `GraftPlan`。
 ///
-/// Put this at the host crate entry. `nichlink-toolchain` validates the grammar and
+/// Put this at the host crate entry. `xirang-toolchain` validates the grammar and
 /// stores the cuts in the generated `StaticPlan`. Use the dynamic
 /// [`runtime_graft_plan!`](crate::runtime_graft_plan) expression only when code needs to build
 /// or edit a plan at runtime.
-/// 将它放在宿主 crate 入口。`nichlink-toolchain` 校验语法并把切口写入生成的
+/// 将它放在宿主 crate 入口。`xirang-toolchain` 校验语法并把切口写入生成的
 /// `StaticPlan`；只有运行时代码确实要构造或编辑计划时才使用动态
 /// [`runtime_graft_plan!`](crate::runtime_graft_plan) 表达式（旧名 `graft_plan!` 仍接受）。
 #[macro_export]
@@ -136,9 +136,9 @@ macro_rules! static_graft_plan {
 /// 构造持久化外部 graft 覆盖计划，不移动或修改任何源码文件。
 ///
 /// ```
-/// # use nichlink_toolchain::run_method::FrameworkId;
-/// # use nichlink_toolchain::runtime_graft_plan;
-/// # use nichlink_toolchain::graft_plan;
+/// # use xirang_toolchain::run_method::FrameworkId;
+/// # use xirang_toolchain::runtime_graft_plan;
+/// # use xirang_toolchain::graft_plan;
 /// # let framework = FrameworkId::new("example");
 /// let plan = runtime_graft_plan!(framework,
 ///     cut ["root/a1/b2"] graft "canvas_fast",

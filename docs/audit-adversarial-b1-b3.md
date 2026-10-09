@@ -1,9 +1,9 @@
 # Adversarial audit — B1 (bug fixes) / B2 (dedup) / B3a (API deletions)
 
 Scope: falsify the three batches' success claims against `docs/roadmap-1.0.md`.
-Read-only. No git, no `.rs` edit. Test runs: `cargo test -p nichlink-core`,
-`-p nichlink-run-method` (also `--features authoring`), `-p nichlink-example-control-button`,
-`-p nichlink-debug-method`, `-p nichlink-plugin-host`, `-p nichlink-studio` — all
+Read-only. No git, no `.rs` edit. Test runs: `cargo test -p xirang-core`,
+`-p xirang-run-method` (also `--features authoring`), `-p xirang-example-control-button`,
+`-p xirang-debug-method`, `-p xirang-plugin-host`, `-p xirang-studio` — all
 green during the audit (one concurrent editor was active in `core/run_method/build_method`;
 no recurring failure was observed).
 所有测试命令在审计期间一次通过，无稳定失败。
@@ -67,7 +67,7 @@ this arm. The literal is embedded in the compiled example:
 ```
 $ grep -a -o '.\{0,10\}\$crate :: NoPreset.\{0,40\}' target/debug/libcontrol_button.rlib
 Control$crate :: NoPreset$crate :: NoPartscontrol_button::control
-$ grep -a -o '\$crate :: NoPreset' target/debug/nichlink-example-control-button | head -1
+$ grep -a -o '\$crate :: NoPreset' target/debug/xirang-example-control-button | head -1
 Control$crate :: NoPreset
 ```
 
@@ -213,7 +213,7 @@ tell the two apart.
 `NoPreset`/`NoParts`, a written one is forwarded verbatim"). That is true only for the
 arm at 239, whose matcher has no `handle` slot.
 
-Probed shapes (generated alias / `__nichlink_object!` path always injects `collector`
+Probed shapes (generated alias / `__xirang_object!` path always injects `collector`
 first):
 
 | shape | arm that matches | result |
@@ -243,7 +243,7 @@ For the arm it annotates, `preset: $preset:ty`, `parts: $parts:ty` and
 (The comment at `:343-349`, "the previous arm makes every field after `kind` optional, so
 `{ collector, kind }` already matches there and a later smallest-face arm can never
 fire", is **true**; the catch-all comment at `:351-357` also holds for the supported
-entry points because both `__nichlink_object!` arms inject `collector:` first. The caveat
+entry points because both `__xirang_object!` arms inject `collector:` first. The caveat
 is only a direct `__control_object! { kind: …, collector: … }`, which no author-facing
 macro produces.)
 
@@ -447,7 +447,7 @@ All are proposals, as text only (no file was created).
 
 mod with_handle {
     // No `preset:` / `parts:`: arm 175 (custom handle, default preset/parts).
-    nichlink_run_method::__control_object! {
+    xirang_run_method::__control_object! {
         collector: development,
         kind: DefaultsWithHandle,
         handle: DefaultsWithHandle,
@@ -456,7 +456,7 @@ mod with_handle {
 
 mod without_handle {
     // Same omission, but arm 239 (no handle).
-    nichlink_run_method::__control_object! {
+    xirang_run_method::__control_object! {
         collector: development,
         kind: DefaultsWithoutHandle,
     }
@@ -474,7 +474,7 @@ fn omitted_preset_and_parts_record_the_same_defaults_in_both_arms() {
 // F4: `preset`-only and `parts`-only with a `handle` currently fail to compile.
 // Uncomment one at a time; each should compile after the ladder is fixed.
 // mod preset_only_with_handle {
-//     nichlink_run_method::__control_object! {
+//     xirang_run_method::__control_object! {
 //         collector: development,
 //         kind: PresetOnly,
 //         preset: super::ProbePreset,

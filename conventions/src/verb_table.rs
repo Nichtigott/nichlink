@@ -142,7 +142,7 @@ fn declarations(source: &str) -> Vec<(usize, String, bool, String)> {
     // 用本工作区**唯一**的词法规则来扫描，而不是原文：恰好拼出 `fn main` 的字符串字面量是数据、不是声明
     // ——生成的 `build.rs` 正是从这样的字面量里写出来的（审计 `M7`，P3.2），一刀切地匹配它，等于禁止一个
     // 生成器发射它存在就是为了发射的那份文件。
-    let source = &nichlink_kernel::source::mask_non_code(source);
+    let source = &xirang_kernel::source::mask_non_code(source);
     // `impl Trait for Type` methods are named by the trait, not by us: a `write` that implements
     // `std::io::Write` cannot be renamed, so it is not a naming decision this gate can make.
     // `impl Trait for Type` 里的方法名由 trait 决定，不是我们起的：实现 `std::io::Write` 的

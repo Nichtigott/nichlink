@@ -38,10 +38,10 @@ pub(super) use super::SearchState;
 ///
 /// The fixture is a nested package, and cargo does not put a nested package into a
 /// published `.crate`: a consumer who runs `cargo test --all-features` on the
-/// published `nichlink-toolchain` has no fixture to index. The contract
+/// published `xirang-toolchain` has no fixture to index. The contract
 /// `prototype-fixtures` names is a *checkout* contract, so the tests that need it
 /// skip when it is absent instead of panicking. It is always present here.
-/// 该夹具是嵌套包，而 cargo 不会把嵌套包放进发布的 `.crate`：在已发布 `nichlink-toolchain` 上跑
+/// 该夹具是嵌套包，而 cargo 不会把嵌套包放进发布的 `.crate`：在已发布 `xirang-toolchain` 上跑
 /// `cargo test --all-features` 的消费者没有夹具可索引。`prototype-fixtures` 命名的契约是**检出**
 /// 契约，因此需要它的测试在夹具缺席时跳过而不是 panic；本检出里它始终存在。
 /// The node-editor fixture loaded as a session: the one body every test that needs a
@@ -54,7 +54,7 @@ pub(super) fn fixture_project() -> Option<std::path::PathBuf> {
     select_project(
         fixture.clone(),
         fixture.join("Cargo.toml"),
-        "nichlink.fixture.node-editor",
+        "xirang.fixture.node-editor",
     );
     Some(fixture)
 }
@@ -172,8 +172,8 @@ mod mir_target;
 #[path = "tests/navigation.rs"]
 mod navigation;
 // The partition screen's pins: what it opens on, and the three actions it shares with
-// `nichlink crates` (audit `M7`, P3.6).
-// 分区屏的钉子：它打开时看到什么，以及它与 `nichlink crates` 共用的三个动作（审计 `M7`，P3.6）。
+// `xirang crates` (audit `M7`, P3.6).
+// 分区屏的钉子：它打开时看到什么，以及它与 `xirang crates` 共用的三个动作（审计 `M7`，P3.6）。
 #[path = "tests/partition.rs"]
 mod partition;
 // The old `tests/project.rs` held four subjects; it is now three files, each named
@@ -188,8 +188,8 @@ mod project_root;
 #[path = "tests/source.rs"]
 mod source;
 // Trace ingest builds its own temp host project, so it carries no fixture gate:
-// the default `cargo test -p nichlink-toolchain` exercises the loader too.
+// the default `cargo test -p xirang-toolchain` exercises the loader too.
 // trace ingest 自建临时宿主工程，因此不门控在夹具上：默认的
-// `cargo test -p nichlink-toolchain` 也会跑这套加载方测试。
+// `cargo test -p xirang-toolchain` 也会跑这套加载方测试。
 #[path = "tests/trace_ingest.rs"]
 mod trace_ingest;

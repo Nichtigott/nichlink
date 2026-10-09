@@ -16,8 +16,8 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::NodeId;
 use serde_json::json;
+use xirang_kernel::NodeId;
 
 use super::{Scope, scope};
 
@@ -65,7 +65,7 @@ fn workspace(label: &str) -> Workspace {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-workspace-{label}-{}-{sequence}",
+        "xirang-mcp-workspace-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -118,10 +118,10 @@ fn write(path: &Path, text: &str) {
     std::fs::write(path, text).expect("fixture file");
 }
 
-/// The first nail: `nichlink.registry` on a virtual root names every member with its
+/// The first nail: `xirang.registry` on a virtual root names every member with its
 /// status, and the host member's faces are really in the answer, under the namespace its
 /// own `CARGO_PKG_NAME` compiled with.
-/// 第一枚钉子：虚拟根上的 `nichlink.registry` 点名每个成员及其状态，而宿主成员的面真的在答案里，
+/// 第一枚钉子：虚拟根上的 `xirang.registry` 点名每个成员及其状态，而宿主成员的面真的在答案里，
 /// 就在它自己 `CARGO_PKG_NAME` 编译所用的命名空间之下。
 /// A member root is told which workspace it belongs to, so an answer can say who is invisible:
 /// the scenario round measured two functions reported as orphans at a member root whose callers
@@ -130,7 +130,7 @@ fn write(path: &Path, text: &str) {
 /// 成员里，却在成员根上被报成孤儿。
 #[test]
 fn a_member_root_knows_the_workspace_above_it() {
-    let base = std::env::temp_dir().join(format!("nichlink-member-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("xirang-member-{}", std::process::id()));
     let member = base.join("core");
     std::fs::create_dir_all(member.join("src")).expect("the fixture directory");
     std::fs::write(
@@ -310,10 +310,10 @@ fn the_registry_tool_answers_a_virtual_root_with_every_member() {
     );
 }
 
-/// The second nail: `nichlink.search` on a virtual root states the census, groups each
+/// The second nail: `xirang.search` on a virtual root states the census, groups each
 /// member's face hits under it, and names the degradations instead of hiding them behind
 /// a longer list of file hits.
-/// 第二枚钉子：虚拟根上的 `nichlink.search` 说出普查，把每个成员的面命中分组在其下，并点名降级，
+/// 第二枚钉子：虚拟根上的 `xirang.search` 说出普查，把每个成员的面命中分组在其下，并点名降级，
 /// 而不是把它们藏在一份更长的文件命中之后。
 #[test]
 fn a_workspace_search_states_every_member_and_its_degradation() {
@@ -436,7 +436,7 @@ fn a_root_cargo_cannot_resolve_says_why_in_the_body() {
     // 夹具包的形状（它自己的 `[workspace]` 加上已不存在的路径依赖）。包内缺失的路径、且没有
     // `[workspace]` 时，会被静默推迟。
     let base = std::env::temp_dir().join(format!(
-        "nichlink-mcp-unresolvable-{}-{sequence}",
+        "xirang-mcp-unresolvable-{}-{sequence}",
         std::process::id()
     ));
     let root = base.join("pkg");
@@ -455,7 +455,7 @@ fn a_root_cargo_cannot_resolve_says_why_in_the_body() {
         reply.contains("failed to load manifest for dependency"),
         "the reason Cargo gave must be the reason reported: {reply}"
     );
-    assert!(reply.contains("NICH_LINK_NAMESPACE"), "{reply}");
+    assert!(reply.contains("XIRANG_NAMESPACE"), "{reply}");
 
     let search = crate::mcp::search::search(&root, &json!({"query": "widget"}))
         .expect("the source half still answers");
@@ -525,32 +525,32 @@ fn a_tree_that_is_its_own_workspace_has_no_enclosing_one() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// A tree hosts nichlink only when a `build.rs` **and** the dependency are both there.
-/// 一棵树只有在 `build.rs` **与**那条依赖同时存在时才算宿主 nichlink。
+/// A tree hosts xirang only when a `build.rs` **and** the dependency are both there.
+/// 一棵树只有在 `build.rs` **与**那条依赖同时存在时才算宿主 xirang。
 ///
 /// The round measured the corpus: the trees under test have neither, so on them `0 faces` is the
 /// answer rather than a defect — which is why `registry` says so before its per-member rows.
 /// 那一轮量遍了语料：被测的树两者都没有，因此在它们身上 `0 faces` 是答案而不是缺陷 —— 这也是
 /// `registry` 在逐成员行**之前**先说明这一点的原因。
 #[test]
-fn hosts_nichlink_reads_the_manifest_and_the_build_script_together() {
+fn hosts_xirang_reads_the_manifest_and_the_build_script_together() {
     let base = std::env::temp_dir().join(format!("ws-host-{}", std::process::id()));
     let crate_dir = base.join("crates").join("app");
     std::fs::create_dir_all(&crate_dir).expect("tree");
     // Neither half: not a host.
     // 两半都没有：不是宿主。
-    assert!(!super::hosts_nichlink(&base));
+    assert!(!super::hosts_xirang(&base));
     // Only the manifest half: still not a host.
     // 只有清单那一半：仍不是宿主。
     std::fs::write(
         crate_dir.join("Cargo.toml"),
-        "[package]\nname = \"app\"\n\n[dependencies]\nnichlink-toolchain = \"0.2.0\"\n",
+        "[package]\nname = \"app\"\n\n[dependencies]\nxirang-toolchain = \"0.2.0\"\n",
     )
     .expect("manifest");
-    assert!(!super::hosts_nichlink(&base));
+    assert!(!super::hosts_xirang(&base));
     // Both halves: a host, found two levels down from the root.
     // 两半都有：是宿主，且从根往下两层就能找到。
     std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").expect("build script");
-    assert!(super::hosts_nichlink(&base));
+    assert!(super::hosts_xirang(&base));
     let _ = std::fs::remove_dir_all(&base);
 }

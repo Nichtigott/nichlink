@@ -9,7 +9,7 @@ fn synthetic(members: &[(&str, &str)]) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root =
-        std::env::temp_dir().join(format!("nichlink-naming-{}-{sequence}", std::process::id()));
+        std::env::temp_dir().join(format!("xirang-naming-{}-{sequence}", std::process::id()));
     for (directory, manifest) in members {
         let base = root.join(directory);
         fs::create_dir_all(base.join("src")).expect("fixture src");
@@ -26,11 +26,11 @@ fn synthetic(members: &[(&str, &str)]) -> std::path::PathBuf {
 fn a_package_name_that_disagrees_with_the_directory_is_reported() {
     let root = synthetic(&[(
         "thing",
-        "[package]\nname = \"nichlink-other\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+        "[package]\nname = \"xirang-other\"\n\n[lib]\nname = \"xirang_thing\"\n",
     )]);
     let found = findings(&root);
     assert_eq!(found.len(), 1, "{found:#?}");
-    assert!(found[0].reason.contains("nichlink-other"), "{found:#?}");
+    assert!(found[0].reason.contains("xirang-other"), "{found:#?}");
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -41,7 +41,7 @@ fn a_package_name_that_disagrees_with_the_directory_is_reported() {
 fn a_lib_name_that_disagrees_is_reported() {
     let root = synthetic(&[(
         "thing",
-        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"thing\"\n",
+        "[package]\nname = \"xirang-thing\"\n\n[lib]\nname = \"thing\"\n",
     )]);
     let found = findings(&root);
     assert_eq!(found.len(), 1, "{found:#?}");
@@ -58,22 +58,22 @@ fn a_lib_name_that_disagrees_is_reported() {
 fn a_hyphenated_directory_maps_to_an_underscored_lib_name() {
     let root = synthetic(&[(
         "plugin-host",
-        "[package]\nname = \"nichlink-plugin-host\"\n\n[lib]\nname = \"nichlink_plugin_host\"\n",
+        "[package]\nname = \"xirang-plugin-host\"\n\n[lib]\nname = \"xirang_plugin_host\"\n",
     )]);
     assert_eq!(findings(&root), Vec::new());
     let _ = fs::remove_dir_all(&root);
 }
 
-/// The kernel needs no lib-name carve-out: `kernel/` + `nichlink-kernel` +
-/// `nichlink_kernel` is the rule itself, so the exception table is empty and the
+/// The kernel needs no lib-name carve-out: `kernel/` + `xirang-kernel` +
+/// `xirang_kernel` is the rule itself, so the exception table is empty and the
 /// kernel is checked like every other crate (batch 1 of the publish-surface merge).
-/// 内核不需要 lib 名特例：`kernel/` + `nichlink-kernel` + `nichlink_kernel` 就是规则本身，
+/// 内核不需要 lib 名特例：`kernel/` + `xirang-kernel` + `xirang_kernel` 就是规则本身，
 /// 因此例外表为空，内核与其它 crate 一样受检（发布面合并的批次 1）。
 #[test]
 fn the_kernel_needs_no_lib_name_carve_out() {
     let root = synthetic(&[(
         "kernel",
-        "[package]\nname = \"nichlink-kernel\"\n\n[lib]\nname = \"nichlink_kernel\"\n",
+        "[package]\nname = \"xirang-kernel\"\n\n[lib]\nname = \"xirang_kernel\"\n",
     )]);
     assert_eq!(findings(&root), Vec::new());
     let _ = fs::remove_dir_all(&root);
@@ -84,7 +84,7 @@ fn the_kernel_needs_no_lib_name_carve_out() {
 /// 没有 `[lib] name` 的成员没问题：cargo 从包名推导它，而包名已经被绑到目录名。
 #[test]
 fn a_derived_lib_name_is_accepted() {
-    let root = synthetic(&[("thing", "[package]\nname = \"nichlink-thing\"\n")]);
+    let root = synthetic(&[("thing", "[package]\nname = \"xirang-thing\"\n")]);
     assert_eq!(findings(&root), Vec::new());
     let _ = fs::remove_dir_all(&root);
 }
@@ -95,7 +95,7 @@ fn a_derived_lib_name_is_accepted() {
 fn an_example_host_is_outside_the_rule() {
     let root = synthetic(&[(
         "examples/control-button",
-        "[package]\nname = \"nichlink-example-control-button\"\n\n[lib]\nname = \"control_button\"\n",
+        "[package]\nname = \"xirang-example-control-button\"\n\n[lib]\nname = \"control_button\"\n",
     )]);
     assert_eq!(findings(&root), Vec::new());
     let _ = fs::remove_dir_all(&root);
@@ -108,18 +108,18 @@ fn an_example_host_is_outside_the_rule() {
 fn a_reference_to_a_package_that_does_not_exist_is_reported() {
     let root = synthetic(&[(
         "thing",
-        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+        "[package]\nname = \"xirang-thing\"\n\n[lib]\nname = \"xirang_thing\"\n",
     )]);
     fs::create_dir_all(root.join("toolchain/src/build_method/src/scaffold")).expect("scaffold dir");
     fs::write(
             root.join("toolchain/src/build_method/src/scaffold/probe.rs"),
-            "let requirement = \"nichlink-missing = { path = \\\"../missing\\\", version = \\\"0.1.0\\\" }\";\n",
+            "let requirement = \"xirang-missing = { path = \\\"../missing\\\", version = \\\"0.1.0\\\" }\";\n",
         )
         .expect("template file");
     fs::create_dir_all(root.join(".github/workflows")).expect("workflow dir");
     fs::write(
         root.join(".github/workflows/ci.yml"),
-        "run: cargo test -p nichlink-gone --offline\n# prose about `-p nichlink-thing`\n",
+        "run: cargo test -p xirang-gone --offline\n# prose about `-p xirang-thing`\n",
     )
     .expect("workflow file");
 
@@ -128,39 +128,39 @@ fn a_reference_to_a_package_that_does_not_exist_is_reported() {
     assert!(
         found
             .iter()
-            .any(|finding| finding.reason.contains("nichlink-missing")),
+            .any(|finding| finding.reason.contains("xirang-missing")),
         "{found:#?}"
     );
     assert!(
         found
             .iter()
-            .any(|finding| finding.reason.contains("nichlink-gone")),
+            .any(|finding| finding.reason.contains("xirang-gone")),
         "{found:#?}"
     );
     let _ = fs::remove_dir_all(&root);
 }
 
 /// Two more spellings of the same argument, and one more workflow extension.
-/// `--package=nichlink-typo` and `-p a,nichlink-typo` name packages exactly as
-/// `-p nichlink-typo` does, and a `.yaml` workflow is a workflow to GitHub.
-/// 同一个实参的另外两种拼写，外加一个工作流扩展名。`--package=nichlink-typo` 与
-/// `-p a,nichlink-typo` 命名包的方式与 `-p nichlink-typo` 完全相同，而 `.yaml` 工作流对 GitHub
+/// `--package=xirang-typo` and `-p a,xirang-typo` name packages exactly as
+/// `-p xirang-typo` does, and a `.yaml` workflow is a workflow to GitHub.
+/// 同一个实参的另外两种拼写，外加一个工作流扩展名。`--package=xirang-typo` 与
+/// `-p a,xirang-typo` 命名包的方式与 `-p xirang-typo` 完全相同，而 `.yaml` 工作流对 GitHub
 /// 也是工作流。
 #[test]
 fn the_other_package_spellings_and_yaml_workflows_are_read() {
     let root = synthetic(&[(
         "thing",
-        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+        "[package]\nname = \"xirang-thing\"\n\n[lib]\nname = \"xirang_thing\"\n",
     )]);
     fs::create_dir_all(root.join(".github/workflows")).expect("workflow dir");
     fs::write(
         root.join(".github/workflows/release.yaml"),
-        "run: cargo publish --package=nichlink-typo\n",
+        "run: cargo publish --package=xirang-typo\n",
     )
     .expect("yaml workflow");
     fs::write(
         root.join(".github/workflows/ci.yml"),
-        "run: cargo test -p nichlink-thing,nichlink-second\n",
+        "run: cargo test -p xirang-thing,xirang-second\n",
     )
     .expect("yml workflow");
 
@@ -168,13 +168,13 @@ fn the_other_package_spellings_and_yaml_workflows_are_read() {
     assert!(
         found
             .iter()
-            .any(|finding| finding.reason.contains("nichlink-typo")),
+            .any(|finding| finding.reason.contains("xirang-typo")),
         "`--package=` names a package too: {found:#?}"
     );
     assert!(
         found
             .iter()
-            .any(|finding| finding.reason.contains("nichlink-second")),
+            .any(|finding| finding.reason.contains("xirang-second")),
         "a comma-separated list names several: {found:#?}"
     );
     let _ = fs::remove_dir_all(&root);
@@ -186,33 +186,33 @@ fn the_other_package_spellings_and_yaml_workflows_are_read() {
 #[test]
 fn only_requirement_positions_are_read() {
     let names = requirement_names(
-        "nichlink-a = { version = \"0.1\" }\nnichlink-b={ version = \"0.1\" }\n\
-             let id = format!(\"nichlink-{label}-1\");\nprose about nichlink-c in a sentence\n\
-             [dependencies]\nnichlink-d = { package = \"nichlink-e\", path = \"../d\" }\n",
+        "xirang-a = { version = \"0.1\" }\nxirang-b={ version = \"0.1\" }\n\
+             let id = format!(\"xirang-{label}-1\");\nprose about xirang-c in a sentence\n\
+             [dependencies]\nxirang-d = { package = \"xirang-e\", path = \"../d\" }\n",
     );
     assert_eq!(
         names,
         vec![
-            "nichlink-a".to_owned(),
-            "nichlink-b".to_owned(),
-            "nichlink-d".to_owned(),
-            "nichlink-e".to_owned(),
+            "xirang-a".to_owned(),
+            "xirang-b".to_owned(),
+            "xirang-d".to_owned(),
+            "xirang-e".to_owned(),
         ],
         "{names:#?}"
     );
     assert_eq!(
-        package_arguments("cargo test -p nichlink-x --offline\nrun-a-pipeline\n"),
-        vec!["nichlink-x".to_owned()]
+        package_arguments("cargo test -p xirang-x --offline\nrun-a-pipeline\n"),
+        vec!["xirang-x".to_owned()]
     );
 }
 
 /// A comment is not a requirement position. The boundary this gate states is "only positions
-/// where a name is a *requirement*", and a `# … nichlink-old` note in a workflow or a
-/// `// … nichlink-old = { … }` note in a template is a record of what was once run, not a
+/// where a name is a *requirement*", and a `# … xirang-old` note in a workflow or a
+/// `// … xirang-old = { … }` note in a template is a record of what was once run, not a
 /// requirement — reporting it asks the author to rewrite history to satisfy a gate. The
 /// string literal beside it is still read: templates write the requirement *inside* one.
 /// 注释不是要求位置。本门禁声明的边界是"只读名字处于**要求**位置的地方"，而工作流里一句
-/// `# … nichlink-old` 或模板里一句 `// … nichlink-old = { … }` 是"曾经这么跑过"的记录而不是要求，
+/// `# … xirang-old` 或模板里一句 `// … xirang-old = { … }` 是"曾经这么跑过"的记录而不是要求，
 /// 报出来等于要求作者为了满足门禁去改写记录。它旁边那句字符串字面量仍会被读：模板正是把要求写在
 /// 字面量**里面**的。
 ///
@@ -222,19 +222,19 @@ fn only_requirement_positions_are_read() {
 fn a_name_in_a_comment_is_not_a_requirement() {
     let root = synthetic(&[(
         "thing",
-        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+        "[package]\nname = \"xirang-thing\"\n\n[lib]\nname = \"xirang_thing\"\n",
     )]);
     fs::create_dir_all(root.join("toolchain/src/build_method/src/scaffold")).expect("scaffold dir");
     fs::write(
         root.join("toolchain/src/build_method/src/scaffold/probe.rs"),
-        "// old invocation kept for reference: nichlink-old = { path = \"..\" }\n\
-         let requirement = \"nichlink-gone = { path = \\\"../gone\\\" }\";\n",
+        "// old invocation kept for reference: xirang-old = { path = \"..\" }\n\
+         let requirement = \"xirang-gone = { path = \\\"../gone\\\" }\";\n",
     )
     .expect("template file");
     fs::create_dir_all(root.join(".github/workflows")).expect("workflow dir");
     fs::write(
         root.join(".github/workflows/ci.yml"),
-        "run: cargo test -p nichlink-thing --offline\n# old: cargo test -p nichlink-old\n",
+        "run: cargo test -p xirang-thing --offline\n# old: cargo test -p xirang-old\n",
     )
     .expect("workflow file");
 
@@ -245,7 +245,7 @@ fn a_name_in_a_comment_is_not_a_requirement() {
         "only the live requirement is a requirement position: {found:#?}"
     );
     assert!(
-        found[0].reason.contains("nichlink-gone"),
+        found[0].reason.contains("xirang-gone"),
         "the requirement inside the template's string is still read: {found:#?}"
     );
     let _ = fs::remove_dir_all(&root);
@@ -266,13 +266,13 @@ fn the_shipped_crates_follow_the_rule() {
 /// `package = "…"` 那半边必须读得出模板真正书写的拼法。
 ///
 /// A template is Rust source, so its manifest line sits inside a string literal and its quotes
-/// are escaped: `package = \"nichlink-x\"`. Reading only the unescaped needle kept the loss
+/// are escaped: `package = \"xirang-x\"`. Reading only the unescaped needle kept the loss
 /// invisible while a dependency key and its package name agreed — the key half found the name
 /// anyway. A *renamed* dependency has only the field, so the template below names a package
 /// that does not exist and nothing was reported (audit `G-07`, finding `F-3`). The pin lives here
 /// rather than in `naming.rs` because a test-only file is exempt from the ceiling the size gate
 /// enforces.
-/// 模板是 Rust 源码，因此它的清单行写在字符串字面量里、引号是转义的：`package = \"nichlink-x\"`。
+/// 模板是 Rust 源码，因此它的清单行写在字符串字面量里、引号是转义的：`package = \"xirang-x\"`。
 /// 只认未转义的针时，只要依赖键与包名一致，这个损失就不可见——键那半边反正能找到那个名字。
 /// **被重命名**的依赖只有这个字段，因此下面这条模板点名了一个不存在的包，却什么也没报出来
 /// （审计 `G-07`，发现 `F-3`）。钉子放在这里而不是 `naming.rs`：仅测试文件不受尺寸门禁的上限
@@ -281,12 +281,12 @@ fn the_shipped_crates_follow_the_rule() {
 fn a_renamed_dependency_is_named_through_its_escaped_package_field() {
     let root = synthetic(&[(
         "thing",
-        "[package]\nname = \"nichlink-thing\"\n\n[lib]\nname = \"nichlink_thing\"\n",
+        "[package]\nname = \"xirang-thing\"\n\n[lib]\nname = \"xirang_thing\"\n",
     )]);
     fs::create_dir_all(root.join("toolchain/src/build_method/src/scaffold")).expect("scaffold dir");
     fs::write(
         root.join("toolchain/src/build_method/src/scaffold/probe.rs"),
-        "let r = \"runtime = { package = \\\"nichlink-missing\\\", path = \\\"..\\\" }\";\n",
+        "let r = \"runtime = { package = \\\"xirang-missing\\\", path = \\\"..\\\" }\";\n",
     )
     .expect("template");
     let found = findings(&root);
@@ -295,7 +295,7 @@ fn a_renamed_dependency_is_named_through_its_escaped_package_field() {
         1,
         "only the escaped package field names it: {found:#?}"
     );
-    assert!(found[0].reason.contains("nichlink-missing"), "{found:#?}");
+    assert!(found[0].reason.contains("xirang-missing"), "{found:#?}");
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -304,11 +304,11 @@ fn a_renamed_dependency_is_named_through_its_escaped_package_field() {
 #[test]
 fn the_plain_spelling_still_reads_and_a_command_flag_is_not_a_field() {
     assert_eq!(
-        requirement_names("kind = { package = \"nichlink-missing\", path = \"..\" }\n"),
-        vec!["nichlink-missing".to_owned()]
+        requirement_names("kind = { package = \"xirang-missing\", path = \"..\" }\n"),
+        vec!["xirang-missing".to_owned()]
     );
     assert_eq!(
-        requirement_names("run: cargo build --package=\"nichlink-missing\"\n"),
+        requirement_names("run: cargo build --package=\"xirang-missing\"\n"),
         Vec::<String>::new()
     );
 }

@@ -56,7 +56,7 @@ W8/round7/round6 审计；③ `docs/audit-2026-09-29/` 的"没做的"段；④ `
 | T-14 | 宿主可声明的组织规范，`check` 强制 | 未做 |
 | T-15 | 零件层挂 graft 槽位 | 未做 |
 | T-16 | 用修好的 h4 重建题树 | 未做（W8 的 D4 要靠它收） |
-| T-17 | `tools/nichlink-realbug` 反向注入生成器 | 未做（配方已验证） |
+| T-17 | `tools/xirang-realbug` 反向注入生成器 | 未做（配方已验证） |
 | T-18 | 四栏 + 三轴自动出数 | 未做（`tokens` 子命令是它的一半） |
 | **T-19** | 快照与题树落持久位置 | **已完成 `091c342`** |
 | T-20 | 场景测试夹具（35 条含反义对） | 未做 |
@@ -75,7 +75,7 @@ W8/round7/round6 审计；③ `docs/audit-2026-09-29/` 的"没做的"段；④ `
 | D5 中 | h2 真值锚点落在 `parent:` 行而非空缺声明处 | **已修 `db9d5a4`** |
 | D6 中 | 题面泄漏 2 处（h1 类描述含 `world`、h3 含 `cut`） | **未收**：已登记规则"类描述句进题面 ⇒ 机制词要选它不含的词" |
 | D7 中 | `cp -a` 的对照副本 `Cargo.toml` 仍指向原件的 graft ⇒ 跨树耦合 | **未收**（graft 逐字节相同，结论未受影响） |
-| D8 低 | 题树里留有构建期自证的 `target/nichlink/out/check-default.log` | **未收**；冻结前要加非源码产物检查单 |
+| D8 低 | 题树里留有构建期自证的 `target/xirang/out/check-default.log` | **未收**；冻结前要加非源码产物检查单 |
 | D9 中 | "预先登记"只对题树成立（配方与判分器收尾期各改一轮） | **已修 `db9d5a4`**（三处哈希） |
 
 ### C W8 裁决的四个开口
@@ -125,10 +125,10 @@ W8/round7/round6 审计；③ `docs/audit-2026-09-29/` 的"没做的"段；④ `
 
 ### I `design-mcp-test-faces` §B —— **已实现，此条过时（2026-10-03 更正）**
 
-**更正**：**`nichlink.check` 在 2026-09-29 就与候选 A 同批落地了** —— `docs/design-mcp-test-faces.md`
+**更正**：**`xirang.check` 在 2026-09-29 就与候选 A 同批落地了** —— `docs/design-mcp-test-faces.md`
 §5 写着"候选 A 与 B 都已实现"，工具在目录里（`--list` 可见，`keys: census, face*, root, timeout_ms`），
 真树上实测可用（`verdict  passed (cargo exit 0)` / `face  default` / `log …/check-default.log`）。
-本清单此前把它记成"待拍板"，因此维护者 2026-10-03 问「**`nichlink.check` 的"取值"是指什么**」
+本清单此前把它记成"待拍板"，因此维护者 2026-10-03 问「**`xirang.check` 的"取值"是指什么**」
 —— 那是我把"（名字待定）· 值得单独一次拍板"转述成的错词 ✗。
 **它当初要解决的问题（保留，供后人读）**：第 1 轮第 11 轮的缺陷**在默认面隐形**（`cargo test
 --workspace --offline` 全绿，红只在 `--all-features`；`studio` 不在默认特性里，默认面根本不编译
@@ -146,7 +146,7 @@ after <d>)` **而非 pass** · 证据戳＝命令/退出码/起止时间/日志�
 
 ### K 长期挂起
 
-- **发布 0.2.0**：冷却点已过、**未执行**（`tools/nichlink-publish` 无 `--verify-publish`；真实开关
+- **发布 0.2.0**：冷却点已过、**未执行**（`tools/xirang-publish` 无 `--verify-publish`；真实开关
   `--help/--publish/--yes/--allow-dirty/--check-table/--verify-consumers`；当前状态与 yank 历史见 ops 记忆）。
 - **C++/多语言方向**：**未定**（边界与 Step 0 已写清，未开工）。
 
@@ -154,7 +154,7 @@ after <d>)` **而非 pass** · 证据戳＝命令/退出码/起止时间/日志�
 
 **方法与覆盖**：`docs/audit-2026-09-2*` 共 **67 份**；机械扫描六个负面状态标记（未修/未处置/留置/只记不修/
 未闭合/不修），再对每条查"后续文档是否认领"，最后对两条**真跑一遍**（读 `doc_blocks.rs` 的现行规则、
-真跑 `tools/nichlink-package-audit`）。
+真跑 `tools/xirang-package-audit`）。
 
 **结论：没有"没人再提也没人修"的大开口。** 逐条判定：
 
@@ -162,14 +162,14 @@ after <d>)` **而非 pass** · 证据戳＝命令/退出码/起止时间/日志�
 | --- | --- | --- |
 | `G-03`（`doc_blocks` 的 markdown 半边不按 CommonMark 配对围栏字符/长度） | **已修** | `conventions/src/doc_blocks.rs:253-256`、`371-374`：只有**同字符且不短于开围栏**才闭合；文件头留有历史注释（`~~~rust` 块曾被块内 ```` ``` ```` 截短） |
 | 记录目录豁免（`docs/audit-…/lane-kernel.md` 这类**目录内非 `audit-` 前缀**的文件被当活文档两向扫描） | **已修** | 现在按**记录目录**豁免，且有两条钉子：`doc_blocks_tests.rs:77 a_report_inside_a_record_directory_is_exempt` 与 `:94 the_exemption_does_not_swallow_living_documents`；且 09-28 目录内现在 **0** 个非 `audit-` 前缀文件（当年那些已改名） |
-| 包内容半段红（`F-13-1`） | **实测绿** | `tools/nichlink-package-audit`：`contents failed: none` · `failed: none` |
+| 包内容半段红（`F-13-1`） | **实测绿** | `tools/xirang-package-audit`：`contents failed: none` · `failed: none` |
 | 尺寸棘轮作用域（09-25 说它是"唯一仍开放的门禁发现"：**按文件名**豁免测试文件） | **已修** | 现在按 `#[cfg(test)]`（直接挂或经祖先）或 `tests/` 目录判定 —— 判据从名字改成属性；配套的"清单/数字要么删要么派生"也已落（文档不再复述会漂移的计数） |
 | `LGC-LG-40` / `X-1`（official 十字段空来源读取语义） | **已闭环** —— **且我曾引旧记录说它未修，是错的** ✗ | `audit-merge-landing.md:130-134` 自己更正过："`LGC-LG-40` 那一族**不是未修**"（第二批 t7 已改读取语义、t11 §4 独立证实）；`audit-verify-fix-b1.md:108` 那句"至今未修"是**更早**的记录。教训已入库（台账状态是验证链末端，要读到最后一处判定） |
 | `render_requirements` 剩余半（`FG-1`） | **非开口**：已裁定为"已发布的兼容约束 + 文档 + 严格兄弟" | `audit-report.md` §14.3/§14.4 |
 | **`N-6`**（作者钉子四条是文本断言） | **部分收口 + 上限已实测写明**（`25e1023`）：行为那半本来就在；**树那一支的拒绝无法行为化**（守卫后只有 `hop_call_tree`，无调用图即早退 ⇒ 我写的第一版行为钉子在 `unwrap_or(TreeStep::Right)` 变异下照样通过，**已删除**）；结构那半改为**词法单元级**（`flattened`）并拒绝三种默认写法，**变异实证**：该变异现在让它红 | `audit-report.md:2127` |
 | **`N-7`**（studio 的「渲染出 12 行」行为钉子） | **早已关闭**（钉子 `the_inspector_draws_every_row_it_lists` 就在仓里：把 `draw_details` 渲染进 `TestBackend`、逐个找标签。本轮补**变异实证**：渲染器只画 10 行 ⇒ 它红、而「计数」那条照样绿） | `audit-report.md:2128` · 实证 `25e1023` |
-| **`09-21.md:713`**（宿主 crate 在 `--cfg rust_analyzer` 下编译不过） | **仍开着，但范围已收窄并测准**（本轮实测） | **① 出厂示例今天在 RA 下干净**：`RUSTFLAGS="--cfg rust_analyzer" cargo build -p nichlink-example-control-button` ⇒ **exit 0**、无诊断；**② 构建自己发的是绝对路径**（`toolchain/src/build_time/src/renderer/pass.rs:69` 的 `{parent}::REGISTRATION.registry_rule`），因此审计那条 `super::registry_rule::REGISTRATION_RULE` 来自**手写的相对引用**，不是生成物；**③ 限制本身仍在，且是构造性的**：影子挂在 **crate 根**（生成文件里 `#[path = "…/control.rs"] mod __nichlink_ra_control;`），而真实声明挂在**内联模块**里 （`pub mod control { #[path] mod control; }`）⇒ 一个用了 `super::…` 的嵌套面文件在 RA 眼里 `super` = crate 根 ✗。**修法的形状已定**：影子必须挂在**镜像深度**上；而 RA 忽略内联模块里的 `#[path]`（这正是当初把它提到根的原因）⇒ 只能为 RA **生成一套按文件挂载的 shim 树**（`cfg(rust_analyzer)` 下整棵树走文件挂载、`cfg(not(...))` 下保持今天的内联树）。这是一次渲染器结构改动，需要单独一轮 | `docs/audit-2026-09-21.md:713` |
-| `N-8`（单包假绿） | **已收口**（`96517a1`）：`tools/nichlink-test` 现在**任何 `passed == 0` 的面都点名**并让退出码非零，结论行带 `N face(s) ran nothing`；两向验证：真表十面最低 155 条 ⇒ 不误报，合成表 ⇒ 当场点名。**副产物**：这次顺带发现 T-09 打破了 `--list \| head -4` 那条门控在 mcp 特性后的测试（default 面到不了它）⇒ 落地门禁的完整集合是那十面 | `AGENTS.md` 明写"`0 passed` 读作什么都没跑"；工作区运行覆盖得到它，但单包验证仍会假绿 |
+| **`09-21.md:713`**（宿主 crate 在 `--cfg rust_analyzer` 下编译不过） | **仍开着，但范围已收窄并测准**（本轮实测） | **① 出厂示例今天在 RA 下干净**：`RUSTFLAGS="--cfg rust_analyzer" cargo build -p xirang-example-control-button` ⇒ **exit 0**、无诊断；**② 构建自己发的是绝对路径**（`toolchain/src/build_time/src/renderer/pass.rs:69` 的 `{parent}::REGISTRATION.registry_rule`），因此审计那条 `super::registry_rule::REGISTRATION_RULE` 来自**手写的相对引用**，不是生成物；**③ 限制本身仍在，且是构造性的**：影子挂在 **crate 根**（生成文件里 `#[path = "…/control.rs"] mod __xirang_ra_control;`），而真实声明挂在**内联模块**里 （`pub mod control { #[path] mod control; }`）⇒ 一个用了 `super::…` 的嵌套面文件在 RA 眼里 `super` = crate 根 ✗。**修法的形状已定**：影子必须挂在**镜像深度**上；而 RA 忽略内联模块里的 `#[path]`（这正是当初把它提到根的原因）⇒ 只能为 RA **生成一套按文件挂载的 shim 树**（`cfg(rust_analyzer)` 下整棵树走文件挂载、`cfg(not(...))` 下保持今天的内联树）。这是一次渲染器结构改动，需要单独一轮 | `docs/audit-2026-09-21.md:713` |
+| `N-8`（单包假绿） | **已收口**（`96517a1`）：`tools/xirang-test` 现在**任何 `passed == 0` 的面都点名**并让退出码非零，结论行带 `N face(s) ran nothing`；两向验证：真表十面最低 155 条 ⇒ 不误报，合成表 ⇒ 当场点名。**副产物**：这次顺带发现 T-09 打破了 `--list \| head -4` 那条门控在 mcp 特性后的测试（default 面到不了它）⇒ 落地门禁的完整集合是那十面 | `AGENTS.md` 明写"`0 passed` 读作什么都没跑"；工作区运行覆盖得到它，但单包验证仍会假绿 |
 
 **⇒ X-1 的净结果：新增 3 条小开口（`N-6` · `N-7` · `09-21:713`）+ 1 条"已文档化但无守卫"（`N-8`）。
 没有发现被遗忘的中大型开口。** 这四条进 §2 的 N 组，写进 §5 的执行次序。
@@ -218,7 +218,7 @@ after <d>)` **而非 pass** · 证据戳＝命令/退出码/起止时间/日志�
 8. **T-21** 唯一一次大测试。
 9. **N 组四条**（X-1 捞出来的，都很小）：`N-7` 补一条"渲染出 12 行"的行为钉子 · `N-6` 把 studio 的
    `include_str!` 文本断言换成行为断言 · `09-21:713` 的 `rust_analyzer` cfg 宿主编译 · `N-8` 给"单包假绿"
-   补一条守卫（或在 `tools/nichlink-test` 里点名它）。
+   补一条守卫（或在 `tools/xirang-test` 里点名它）。
 10. **拍板项**：K（**0.2.0 发布** · ~~C++ 方向~~）—— **C++ 已答"先不做"**（维护者 2026-10-03：
-    「入c++现在风险比较大，他们的群体也不是很友好」）；**~~I（`nichlink.check`）~~ 已从拍板项移除** ——
+    「入c++现在风险比较大，他们的群体也不是很友好」）；**~~I（`xirang.check`）~~ 已从拍板项移除** ——
     它在 2026-09-29 就与候选 A 同批实现了（见上面 §I 的更正）。⇒ **现在只剩"0.2.0 发布"一件等维护者一句话** ✓。

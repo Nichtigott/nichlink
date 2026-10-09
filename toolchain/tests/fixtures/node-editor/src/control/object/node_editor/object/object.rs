@@ -3,7 +3,7 @@
 //! canvas-width clamp and the accept entry point.
 
 use crate::control::object::node_editor::{NodeEditorFrame, NodeEditorHandle};
-use nichlink_run_method::{ContractId, FlowContract};
+use xirang_run_method::{ContractId, FlowContract};
 
 /// 画布允许的最小宽度。
 /// The canvas's minimum allowed width.

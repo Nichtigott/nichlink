@@ -1,5 +1,5 @@
-//! `nichlink.why`: one call that gathers the upstream facts a symptom at a line depends on.
-//! `nichlink.why`：一次调用，把一个位置的症状所依赖的上游事实收齐。
+//! `xirang.why`: one call that gathers the upstream facts a symptom at a line depends on.
+//! `xirang.why`：一次调用，把一个位置的症状所依赖的上游事实收齐。
 //!
 //! The measured failure: a symptom in file Z sent agents hopping — `callgraph` for the callers, then
 //! a `read` for the contract, then the registry or the plan for whether the face ships. The seventh
@@ -84,7 +84,7 @@ fn gate(source: &str, definition: usize) -> Option<(usize, String)> {
 /// 一个声明里"是这棵树**已经知道**的事实——内核解析器带着宏的整个区间——所以那次答案是扣下了自己手里的
 /// 信息，这正是维护者点名的那种浪费。
 fn declaration_at(source: &str, line: usize) -> Option<(String, usize, usize)> {
-    let faces = nichlink_kernel::syntax::parse_faces(source).ok()?;
+    let faces = xirang_kernel::syntax::parse_faces(source).ok()?;
     faces
         .into_iter()
         .find(|face| face.location.line <= line && line <= face.end.line)
@@ -426,7 +426,7 @@ pub(crate) fn why(root: &Path, arguments: &Value) -> Result<String, String> {
                 .collect();
             if naming.is_empty() {
                 lines.push(if entries.is_empty() {
-                    "  adoption   no ledger at .nichlink/adopted/entries in this root".to_owned()
+                    "  adoption   no ledger at .xirang/adopted/entries in this root".to_owned()
                 } else {
                     format!(
                         "  adoption   {} entry(ies) in the ledger, none naming this file",

@@ -11,7 +11,7 @@
    ⇒ 对 `s5`–`s8`，**仪器调用不是"发现"缺陷的那一步**，而是把已有先验变成可引用证据的那一步。下文"决定性的一步"按此口径写：指**哪一次仪器返回让结论在证据上成立、或让两种读法被区分开**。
 2. **cg 的三栏在本题上是 0**。cg 把一题的若干 `codegraph` 调用塞进同一条 bash 批处理，逐题日志 5–7 条，但"步/输出/推理/上下文"记在共享步上，故 brief 头部是 `步 0 · 输出 0 tok · 推理 0 字符 · 累计上下文 0`（`brief/cg/s5.md` 头部）。它配到的"当时推理"是收尾写 SETUP.md 那段（`brief/cg/s6.md ①2`：`All checks pass:`），**不是**促成该调用的推理；促成它的推理在会话 `seq 203/217`，见下。
 3. **这四题里两侧各自出现的"行"长什么样**（后面逐题只引其中与结论有关的那几行）：
-   - 我们桥：信封行 `matches 1`、`evidence nichlink.callgraph {"function":"render"} → exit 0`（`brief/ours/s8.md ①2`），内容行 `  callers (2): …`、`  callees: from, push_str, write_count -> crates/report/src/render.rs:18`、`  also here: write_count -> crates/report/src/render.rs:18`、`  tests: crates/report/tests/report.rs`；`check` 侧另有 `failed …` / `why    …` / `next   …` / `census:` / `  not covered: …`。
+   - 我们桥：信封行 `matches 1`、`evidence xirang.callgraph {"function":"render"} → exit 0`（`brief/ours/s8.md ①2`），内容行 `  callers (2): …`、`  callees: from, push_str, write_count -> crates/report/src/render.rs:18`、`  also here: write_count -> crates/report/src/render.rs:18`、`  tests: crates/report/tests/report.rs`；`check` 侧另有 `failed …` / `why    …` / `next   …` / `census:` / `  not covered: …`。
    - codegraph：`**crates/report/src/render.rs** — 21 lines, 2 symbols · used by 1 file: …` 后接**带行号源码**（`node …`），边查询则是 `Callers of "write_count" (1):` / `function    render` / `  crates/report/src/render.rs:7`；另有 `files` 的树状清单。
 
 ---

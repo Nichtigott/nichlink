@@ -10,11 +10,11 @@
 //! 文件预算。
 
 use super::{run, run_to, split_build_args};
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::plugin::graft_document::GraftPlanDocument;
 
 /// Drive the CLI against an in-memory sink so a test can read the exact
 /// stdout document a machine would parse. `run` is the same dispatch with
@@ -116,11 +116,11 @@ fn check_json_emits_one_document_and_still_fails() {
         ],
     );
     let path = root.display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "check", "--json", &path]);
+    let (result, stdout) = run_capture(&["xirang", "check", "--json", &path]);
     assert!(result.is_err(), "a duplicate stable_name must fail");
     assert_eq!(stdout.lines().count(), 1, "exactly one document: {stdout}");
     let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
-    assert_eq!(document["schema"], "nichlink.build-diagnostics/1");
+    assert_eq!(document["schema"], "xirang.build-diagnostics/1");
     assert!(document["count"].as_u64().expect("count") >= 1);
     assert!(
         document["diagnostics"]
@@ -137,9 +137,9 @@ fn check_json_emits_one_document_and_still_fails() {
 }
 
 /// Without `--json` the human output **opens** with the historical
-/// `nichlink check: ok (<package>)` line, byte for byte, and then carries the index line the run
+/// `xirang check: ok (<package>)` line, byte for byte, and then carries the index line the run
 /// published (audit `M7`, P2.2).
-/// 不带 `--json` 时人类输出**以**历史的 `nichlink check: ok (<package>)` 行开头、逐字节一致，随后携带
+/// 不带 `--json` 时人类输出**以**历史的 `xirang check: ok (<package>)` 行开头、逐字节一致，随后携带
 /// 这次运行发布的索引那一行（审计 `M7`，P2.2）。
 ///
 /// The first line's bytes are a contract and stay one; the second line was **added** deliberately,
@@ -152,10 +152,10 @@ fn check_json_emits_one_document_and_still_fails() {
 fn check_without_json_keeps_the_human_line() {
     let root = fixture_host("cli-check-human", "// host\n", &[]);
     let path = root.display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "check", &path]);
+    let (result, stdout) = run_capture(&["xirang", "check", &path]);
     assert!(result.is_ok(), "{result:?}");
     let mut lines = stdout.lines();
-    assert_eq!(lines.next(), Some("nichlink check: ok (cli-check-human)"));
+    assert_eq!(lines.next(), Some("xirang check: ok (cli-check-human)"));
     let index = lines.next().expect("the index line follows the verdict");
     assert!(
         index.starts_with("graph updated: generation 1, "),
@@ -163,7 +163,7 @@ fn check_without_json_keeps_the_human_line() {
     );
     assert_eq!(lines.next(), None, "and there is nothing else: {stdout}");
     assert!(
-        run(["nichlink".to_owned(), "check".to_owned(), path]).is_ok(),
+        run(["xirang".to_owned(), "check".to_owned(), path]).is_ok(),
         "the public `run` entry point accepts check"
     );
     std::fs::remove_dir_all(root).expect("cleanup");
@@ -177,10 +177,10 @@ fn check_without_json_keeps_the_human_line() {
 fn explain_json_reports_identity_scope_and_declared_grafts() {
     let root = fixture_host("cli-explain", DECLARED_BUTTON, &control_tree());
     let path = root.display().to_string();
-    let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);
+    let (checked, check_stdout) = run_capture(&["xirang", "check", &path]);
     assert!(checked.is_ok(), "{checked:?} {check_stdout}");
     let (result, stdout) = run_capture(&[
-        "nichlink",
+        "xirang",
         "explain",
         "--json",
         "--path",
@@ -206,7 +206,7 @@ fn explain_json_reports_identity_scope_and_declared_grafts() {
     );
 
     let id = document["node"]["id"].as_str().expect("node id").to_owned();
-    let (result, stdout) = run_capture(&["nichlink", "explain", "--json", "--path", &path, &id]);
+    let (result, stdout) = run_capture(&["xirang", "explain", "--json", "--path", &path, &id]);
     assert!(result.is_ok(), "{result:?} {stdout}");
     let by_id: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
     assert_eq!(by_id["node"]["path"], "root/control/object/button");
@@ -229,11 +229,11 @@ fn explain_json_reports_identity_scope_and_declared_grafts() {
 fn explain_reports_an_unknown_scope_when_the_build_output_is_stale() {
     let root = fixture_host("cli-explain-stale", DECLARED_BUTTON, &control_tree());
     let path = root.display().to_string();
-    let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);
+    let (checked, check_stdout) = run_capture(&["xirang", "check", &path]);
     assert!(checked.is_ok(), "{checked:?} {check_stdout}");
 
     let query = [
-        "nichlink",
+        "xirang",
         "explain",
         "--json",
         "--path",
@@ -265,7 +265,7 @@ fn explain_reports_an_unknown_scope_when_the_build_output_is_stale() {
 
     // Re-publishing restores the answer, so the command is not simply pessimistic.
     // 重新发布即可恢复答案，因此本命令并非一律悲观。
-    let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);
+    let (checked, check_stdout) = run_capture(&["xirang", "check", &path]);
     assert!(checked.is_ok(), "{checked:?} {check_stdout}");
     let (_, stdout) = run_capture(&query);
     let current: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
@@ -284,14 +284,8 @@ fn explain_reports_why_a_node_cannot_be_resolved() {
         &[("one/one.rs", "crate::root_object! {\n    kind: One,\n}\n")],
     );
     let path = root.display().to_string();
-    let (result, stdout) = run_capture(&[
-        "nichlink",
-        "explain",
-        "--json",
-        "--path",
-        &path,
-        "root/nope",
-    ]);
+    let (result, stdout) =
+        run_capture(&["xirang", "explain", "--json", "--path", &path, "root/nope"]);
     assert!(result.is_err());
     let document: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
     assert_eq!(document["resolved"], false);
@@ -333,7 +327,7 @@ fn explain_json_reports_an_unreadable_source_tree_as_json() {
     .expect("manifest");
     let path = root.display().to_string();
     let (result, stdout) = run_capture(&[
-        "nichlink",
+        "xirang",
         "explain",
         "--json",
         "--path",
@@ -360,19 +354,13 @@ fn explain_json_reports_an_unreadable_source_tree_as_json() {
 #[test]
 fn explain_overlay_json_reports_an_unreadable_plans_directory_as_json() {
     let root = fixture_host("cli-overlay-badplans", "// host\n", &control_tree());
-    fs::create_dir_all(root.join(".nichlink")).expect(".nichlink directory");
+    fs::create_dir_all(root.join(".xirang")).expect(".xirang directory");
     // `graft_plan_rows` refuses a plans path that is not a directory.
     // `graft_plan_rows` 会拒绝一个不是目录的计划路径。
-    fs::write(root.join(".nichlink/external-grafts"), "not a directory\n").expect("plain file");
+    fs::write(root.join(".xirang/external-grafts"), "not a directory\n").expect("plain file");
     let path = root.display().to_string();
-    let (result, stdout) = run_capture(&[
-        "nichlink",
-        "explain",
-        "--json",
-        "--overlay",
-        "--path",
-        &path,
-    ]);
+    let (result, stdout) =
+        run_capture(&["xirang", "explain", "--json", "--overlay", "--path", &path]);
     assert!(result.is_err(), "the command still fails: {result:?}");
     assert!(
         !stdout.trim().is_empty(),
@@ -424,7 +412,7 @@ fn build_with_a_manifest_path_validates_that_project() {
         ],
     );
     let manifest = broken.join("Cargo.toml").display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "build", "--manifest-path", &manifest]);
+    let (result, stdout) = run_capture(&["xirang", "build", "--manifest-path", &manifest]);
     assert!(
         result.is_err(),
         "a broken named project must fail the command: {result:?} {stdout}"
@@ -482,7 +470,7 @@ fn explain_json_reports_a_resolution_failure_as_json() {
     let missing = temporary_root("cli-explain-unresolvable").join("no-such-project");
     let path = missing.display().to_string();
     let (result, stdout) = run_capture(&[
-        "nichlink",
+        "xirang",
         "explain",
         "--json",
         "--path",
@@ -491,7 +479,7 @@ fn explain_json_reports_a_resolution_failure_as_json() {
     ]);
     assert!(result.is_err(), "an unresolvable package must fail");
     let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
-    assert_eq!(document["schema"], "nichlink.explain/1");
+    assert_eq!(document["schema"], "xirang.explain/1");
     assert_eq!(document["resolved"], false, "{document}");
     assert!(
         document["reason"]
@@ -501,7 +489,7 @@ fn explain_json_reports_a_resolution_failure_as_json() {
         "{document}"
     );
 
-    let (result, stdout) = run_capture(&["nichlink", "explain", "--path", &path, "root/anything"]);
+    let (result, stdout) = run_capture(&["xirang", "explain", "--path", &path, "root/anything"]);
     assert!(result.is_err());
     assert!(
         stdout.is_empty(),
@@ -516,17 +504,11 @@ fn explain_json_reports_a_resolution_failure_as_json() {
 fn explain_overlay_json_reports_a_resolution_failure_as_json() {
     let missing = temporary_root("cli-overlay-unresolvable").join("no-such-project");
     let path = missing.display().to_string();
-    let (result, stdout) = run_capture(&[
-        "nichlink",
-        "explain",
-        "--overlay",
-        "--json",
-        "--path",
-        &path,
-    ]);
+    let (result, stdout) =
+        run_capture(&["xirang", "explain", "--overlay", "--json", "--path", &path]);
     assert!(result.is_err(), "an unresolvable package must fail");
     let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
-    assert_eq!(document["schema"], "nichlink.explain-overlay/1");
+    assert_eq!(document["schema"], "xirang.explain-overlay/1");
     assert_eq!(document["kind"], "static-projection");
     assert!(
         document["error"]
@@ -545,7 +527,7 @@ fn explain_overlay_json_reports_a_resolution_failure_as_json() {
 #[test]
 fn grafts_json_lists_plans_and_declared_state() {
     let root = fixture_host("cli-grafts", DECLARED_BUTTON, &control_tree());
-    let plan_dir = root.join(".nichlink/external-grafts/button_fast");
+    let plan_dir = root.join(".xirang/external-grafts/button_fast");
     fs::create_dir_all(&plan_dir).expect("plan directory");
     let target =
         NodeId::from_namespaced_path("cli-grafts", "control/object/button/button.rs", "Button");
@@ -556,15 +538,15 @@ fn grafts_json_lists_plans_and_declared_state() {
         document.render_graft_plan_document(),
     )
     .expect("plan file");
-    let broken = root.join(".nichlink/external-grafts/broken_graft");
+    let broken = root.join(".xirang/external-grafts/broken_graft");
     fs::create_dir_all(&broken).expect("broken directory");
     fs::write(broken.join("graft.plan"), "version=9\n").expect("broken plan");
 
     let path = root.display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "grafts", "--json", &path]);
+    let (result, stdout) = run_capture(&["xirang", "grafts", "--json", &path]);
     assert!(result.is_ok(), "{result:?} {stdout}");
     let report: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
-    assert_eq!(report["schema"], "nichlink.grafts/1");
+    assert_eq!(report["schema"], "xirang.grafts/1");
     let plans = report["plans"].as_array().expect("plans");
     assert_eq!(plans.len(), 2);
     let button = plans
@@ -596,11 +578,11 @@ fn grafts_reports_an_unreadable_plans_directory() {
     // A file where the plans directory belongs, so the path exists and this is
     // not the ordinary "no plans yet" case.
     // 计划目录的位置放一个文件：路径存在，因此这不是普通的"还没有计划"。
-    fs::create_dir_all(root.join(".nichlink")).expect("nichlink directory");
-    fs::write(root.join(".nichlink/external-grafts"), "not a directory").expect("blocking file");
+    fs::create_dir_all(root.join(".xirang")).expect("xirang directory");
+    fs::write(root.join(".xirang/external-grafts"), "not a directory").expect("blocking file");
 
     let path = root.display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "grafts", "--json", &path]);
+    let (result, stdout) = run_capture(&["xirang", "grafts", "--json", &path]);
     let error = result.expect_err("an unreadable plans directory must fail");
     assert!(error.contains("external-grafts"), "{error}");
     let report: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
@@ -616,11 +598,11 @@ fn grafts_reports_an_unreadable_plans_directory() {
 fn grafts_reports_a_host_whose_sources_cannot_be_read() {
     let root = temporary_root("cli-grafts-no-src");
     // Cargo needs a target, and this package has one that is not a library
-    // target: NichLink's source root follows the **library** target, so a
+    // target: XiRang's source root follows the **library** target, so a
     // bin-only package without `src/` keeps the conventional root and `grafts`
     // reports that it is absent. (A `[lib] path` outside `src/` used to stand in
     // for this, until the build learned to read that layout.)
-    // Cargo 需要一个 target，而这个包的 target 不是库目标：NichLink 的源码根跟随**库**目标，
+    // Cargo 需要一个 target，而这个包的 target 不是库目标：XiRang 的源码根跟随**库**目标，
     // 因此没有 `src/` 的纯二进制包沿用约定根，`grafts` 报告它不存在。（过去用 `src/` 之外的
     // `[lib] path` 来代替这一情形，直到构建学会读那种布局。）
     fs::create_dir_all(root.join("app")).expect("binary directory");
@@ -632,7 +614,7 @@ fn grafts_reports_a_host_whose_sources_cannot_be_read() {
     .expect("manifest");
 
     let path = root.display().to_string();
-    let (result, _stdout) = run_capture(&["nichlink", "grafts", &path]);
+    let (result, _stdout) = run_capture(&["xirang", "grafts", &path]);
     let error = result.expect_err("a host without sources cannot be answered about");
     assert!(error.contains("source tree"), "{error}");
 
@@ -645,7 +627,7 @@ fn grafts_reports_a_host_whose_sources_cannot_be_read() {
 #[test]
 fn explain_overlay_renders_the_static_projection() {
     let root = fixture_host("cli-overlay", DECLARED_BUTTON, &control_tree());
-    let plan_dir = root.join(".nichlink/external-grafts/button_fast");
+    let plan_dir = root.join(".xirang/external-grafts/button_fast");
     fs::create_dir_all(&plan_dir).expect("plan directory");
     let target =
         NodeId::from_namespaced_path("cli-overlay", "control/object/button/button.rs", "Button");
@@ -658,19 +640,13 @@ fn explain_overlay_renders_the_static_projection() {
     .expect("plan file");
 
     let path = root.display().to_string();
-    let (checked, check_stdout) = run_capture(&["nichlink", "check", &path]);
+    let (checked, check_stdout) = run_capture(&["xirang", "check", &path]);
     assert!(checked.is_ok(), "{checked:?} {check_stdout}");
-    let (result, stdout) = run_capture(&[
-        "nichlink",
-        "explain",
-        "--overlay",
-        "--json",
-        "--path",
-        &path,
-    ]);
+    let (result, stdout) =
+        run_capture(&["xirang", "explain", "--overlay", "--json", "--path", &path]);
     assert!(result.is_ok(), "{result:?} {stdout}");
     let report: Value = serde_json::from_str(stdout.trim()).expect("JSON report");
-    assert_eq!(report["schema"], "nichlink.explain-overlay/1");
+    assert_eq!(report["schema"], "xirang.explain-overlay/1");
     assert_eq!(report["kind"], "static-projection");
     let button = report["slots"]
         .as_array()
@@ -703,31 +679,31 @@ fn explain_overlay_renders_the_static_projection() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-/// `nichlink studio` honours its path argument, so the path Studio's own error
+/// `xirang studio` honours its path argument, so the path Studio's own error
 /// text tells the reader to pass actually reaches project resolution. Before
 /// this, the subcommand dropped the argument and opened whatever directory the
 /// process happened to be in.
-/// `nichlink studio` 采纳它的路径参数，因此 Studio 自己的错误文本让读者传的路径确实
+/// `xirang studio` 采纳它的路径参数，因此 Studio 自己的错误文本让读者传的路径确实
 /// 到达项目解析。此前该子命令丢弃参数，打开的是进程恰好所在的那个目录。
 #[test]
 fn studio_honours_its_path_argument() {
     let missing = temporary_root("cli-studio-arg").join("no-such-project");
     let path = missing.display().to_string();
-    let (result, _stdout) = run_capture(&["nichlink", "studio", &path]);
+    let (result, _stdout) = run_capture(&["xirang", "studio", &path]);
     let error = result.expect_err("an unusable path argument must be refused");
     assert!(
         error.contains("no-such-project"),
         "the refusal must name the path argument: {error}"
     );
 
-    let (result, _stdout) = run_capture(&["nichlink", "studio", "one", "two"]);
+    let (result, _stdout) = run_capture(&["xirang", "studio", "one", "two"]);
     let error = result.expect_err("two paths must be refused");
     assert!(error.contains("at most one"), "{error}");
 
-    let (result, stdout) = run_capture(&["nichlink", "studio", "--help"]);
+    let (result, stdout) = run_capture(&["xirang", "studio", "--help"]);
     assert!(result.is_ok(), "{result:?}");
     assert!(
-        stdout.contains("nichlink studio [path]"),
+        stdout.contains("xirang studio [path]"),
         "help and dispatch must agree on the argument: {stdout}"
     );
 }
@@ -739,10 +715,10 @@ fn studio_honours_its_path_argument() {
 fn check_json_reports_a_resolution_failure_as_json() {
     let missing = temporary_root("cli-check-unresolvable").join("no-such-project");
     let path = missing.display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "check", "--json", &path]);
+    let (result, stdout) = run_capture(&["xirang", "check", "--json", &path]);
     assert!(result.is_err(), "an unresolvable package must fail");
     let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
-    assert_eq!(document["schema"], "nichlink.build-diagnostics/1");
+    assert_eq!(document["schema"], "xirang.build-diagnostics/1");
     assert_eq!(document["count"], 1, "{document}");
     assert!(
         document["diagnostics"][0]["message"]
@@ -755,7 +731,7 @@ fn check_json_reports_a_resolution_failure_as_json() {
     // Without `--json`, stdout stays reserved for the human line it has always
     // been; the error still names the failure on stderr.
     // 不带 `--json` 时 stdout 仍是它一直以来的那条人类可读行；错误仍在 stderr 上点名失败。
-    let (result, stdout) = run_capture(&["nichlink", "check", &path]);
+    let (result, stdout) = run_capture(&["xirang", "check", &path]);
     assert!(result.is_err());
     assert!(stdout.is_empty(), "{stdout}");
 }
@@ -788,7 +764,7 @@ fn check_reports_a_library_target_that_is_missing_as_a_diagnostic() {
     .expect("manifest");
     let path = root.display().to_string();
 
-    let (result, stdout) = run_capture(&["nichlink", "check", "--json", &path]);
+    let (result, stdout) = run_capture(&["xirang", "check", "--json", &path]);
     assert!(result.is_err(), "a package without src/ must fail");
     let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
     assert_eq!(document["count"], 1, "{document}");
@@ -807,7 +783,7 @@ fn check_reports_a_library_target_that_is_missing_as_a_diagnostic() {
     // The human run keeps its shape: the failure is the returned error, and
     // stdout stays reserved for the document `--json` would have written.
     // 人类可读运行保持原样：失败由返回的错误给出，stdout 仍留给 `--json` 本会写出的文档。
-    let (result, stdout) = run_capture(&["nichlink", "check", &path]);
+    let (result, stdout) = run_capture(&["xirang", "check", &path]);
     assert!(result.is_err());
     assert!(stdout.is_empty(), "{stdout}");
 
@@ -849,11 +825,11 @@ fn check_accepts_a_library_target_outside_src() {
     .expect("manifest");
     let path = root.display().to_string();
 
-    let (checked, stdout) = run_capture(&["nichlink", "check", &path]);
+    let (checked, stdout) = run_capture(&["xirang", "check", &path]);
     assert!(checked.is_ok(), "{checked:?} {stdout}");
 
     let (explained, stdout) = run_capture(&[
-        "nichlink",
+        "xirang",
         "explain",
         "--json",
         "--path",
@@ -878,10 +854,10 @@ fn check_accepts_a_library_target_outside_src() {
 fn grafts_json_reports_a_resolution_failure_as_json() {
     let missing = temporary_root("cli-grafts-unresolvable").join("no-such-project");
     let path = missing.display().to_string();
-    let (result, stdout) = run_capture(&["nichlink", "grafts", "--json", &path]);
+    let (result, stdout) = run_capture(&["xirang", "grafts", "--json", &path]);
     assert!(result.is_err(), "an unresolvable package must fail");
     let document: Value = serde_json::from_str(stdout.trim()).expect("one JSON document");
-    assert_eq!(document["schema"], "nichlink.grafts/1");
+    assert_eq!(document["schema"], "xirang.grafts/1");
     assert_eq!(
         document["plans"].as_array().map(Vec::len),
         Some(0),
@@ -900,15 +876,15 @@ fn grafts_json_reports_a_resolution_failure_as_json() {
 /// `--help` 是帮助、应当成功；裸调不是成功。
 ///
 /// The bare case used to print the usage and return `Ok`, so a shell pipeline read
-/// `nichlink` with no arguments as having done something. The usage still goes out —
+/// `xirang` with no arguments as having done something. The usage still goes out —
 /// a caller who typed nothing needs to see it — and the status now says the command
 /// did not run (audit `LGC-LG-44`).
-/// 裸调过去打印用法并返回 `Ok`，于是 shell 管线把不带参数的 `nichlink` 读成做了事。用法照常输出
+/// 裸调过去打印用法并返回 `Ok`，于是 shell 管线把不带参数的 `xirang` 读成做了事。用法照常输出
 /// ——什么都没敲的调用方需要看到它——而状态现在说明命令没有运行（审计 `LGC-LG-44`）。
 #[test]
 fn help_succeeds_and_a_missing_command_does_not() {
-    assert!(run(["nichlink".to_owned(), "--help".to_owned()]).is_ok());
-    let error = run(["nichlink".to_owned()]).expect_err("a bare invocation is not a success");
+    assert!(run(["xirang".to_owned(), "--help".to_owned()]).is_ok());
+    let error = run(["xirang".to_owned()]).expect_err("a bare invocation is not a success");
     assert!(error.contains("no command given"), "{error}");
 }
 
@@ -927,13 +903,13 @@ fn every_subcommand_answers_help_with_the_usage() {
         "new", "check", "build", "snippets", "explain", "grafts", "studio",
     ] {
         for flag in ["-h", "--help"] {
-            let (result, stdout) = run_capture(&["nichlink", command, flag]);
+            let (result, stdout) = run_capture(&["xirang", command, flag]);
             assert!(
                 result.is_ok(),
                 "{command} {flag} must be help, not an error: {result:?}"
             );
             assert!(
-                stdout.contains("USAGE:") && stdout.contains(&format!("nichlink {command}")),
+                stdout.contains("USAGE:") && stdout.contains(&format!("xirang {command}")),
                 "{command} {flag} must print the usage banner: {stdout}"
             );
         }
@@ -942,23 +918,23 @@ fn every_subcommand_answers_help_with_the_usage() {
 
 #[test]
 fn unknown_command_is_an_error() {
-    let result = run(["nichlink".to_owned(), "bogus".to_owned()]);
+    let result = run(["xirang".to_owned(), "bogus".to_owned()]);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("unknown command 'bogus'"));
 }
 
 #[test]
 fn new_requires_a_package_name() {
-    let result = run(["nichlink".to_owned(), "new".to_owned()]);
+    let result = run(["xirang".to_owned(), "new".to_owned()]);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("package name"));
 }
 
 /// An option-shaped token is not a package name. This subcommand has no `--help` branch, so
-/// `nichlink new --help` used to take `--help` as the name and scaffold `./--help` — it was
+/// `xirang new --help` used to take `--help` as the name and scaffold `./--help` — it was
 /// the only subcommand that did not refuse the input, and the mistake wrote into whatever
 /// directory the shell was in.
-/// 以选项形状出现的 token 不是包名。本子命令没有 `--help` 分支，因此 `nichlink new --help`
+/// 以选项形状出现的 token 不是包名。本子命令没有 `--help` 分支，因此 `xirang new --help`
 /// 过去把 `--help` 当名字并在 `./--help` 里搭起脚手架——它是唯一不拒绝这种输入的子命令，而这个
 /// 错误会写进 shell 当时所在的目录。
 #[test]
@@ -968,7 +944,7 @@ fn an_option_shaped_name_is_refused() {
     // `--help` 从这份清单里移除了——它现在是帮助：该旗标以用法横幅作答，只有非帮助的选项才是
     // "长得像选项的名字"（审计 `LGC-LG-44`）。
     for option in ["--json", "-x"] {
-        let error = run(["nichlink".to_owned(), "new".to_owned(), option.to_owned()])
+        let error = run(["xirang".to_owned(), "new".to_owned(), option.to_owned()])
             .expect_err("an option is not a name");
         assert!(
             error.contains(option) && error.contains("usage"),
@@ -1002,7 +978,7 @@ fn build_args_split_leading_path_from_cargo_options() {
 #[test]
 fn snippets_refuses_an_unknown_editor_and_a_stray_path() {
     let unknown = run([
-        "nichlink".to_owned(),
+        "xirang".to_owned(),
         "snippets".to_owned(),
         "--editor".to_owned(),
         "emacs".to_owned(),
@@ -1012,7 +988,7 @@ fn snippets_refuses_an_unknown_editor_and_a_stray_path() {
     assert!(unknown.contains("vscode, nvim, blink"), "{unknown}");
 
     let stray = run([
-        "nichlink".to_owned(),
+        "xirang".to_owned(),
         "snippets".to_owned(),
         "--editor".to_owned(),
         "nvim".to_owned(),
@@ -1028,7 +1004,7 @@ fn snippets_refuses_an_unknown_editor_and_a_stray_path() {
 #[test]
 fn snippets_injects_the_editor_file() {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-snippets-{}-{}",
+        "xirang-toolchain-snippets-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1037,7 +1013,7 @@ fn snippets_injects_the_editor_file() {
     ));
     std::fs::create_dir_all(&root).expect("temporary directory");
     run([
-        "nichlink".to_owned(),
+        "xirang".to_owned(),
         "snippets".to_owned(),
         root.display().to_string(),
     ])
@@ -1049,7 +1025,7 @@ fn snippets_injects_the_editor_file() {
     let snippets = parsed.as_object().expect("an object of snippets");
     assert_eq!(
         snippets.len(),
-        nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER.len()
+        xirang_kernel::registry_core::declaration::FACE_FIELD_ORDER.len()
     );
     let kind = snippets.get("kind: ").expect("the kind snippet");
     assert_eq!(kind["prefix"][0], "kind: ");
@@ -1058,7 +1034,7 @@ fn snippets_injects_the_editor_file() {
 
     assert!(
         run([
-            "nichlink".to_owned(),
+            "xirang".to_owned(),
             "snippets".to_owned(),
             "--bogus".to_owned()
         ])
@@ -1066,7 +1042,7 @@ fn snippets_injects_the_editor_file() {
     );
     assert!(
         run([
-            "nichlink".to_owned(),
+            "xirang".to_owned(),
             "snippets".to_owned(),
             "a".to_owned(),
             "b".to_owned()
@@ -1078,7 +1054,7 @@ fn snippets_injects_the_editor_file() {
 
 fn temporary_root(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-{label}-{}-{}",
+        "xirang-{label}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1098,16 +1074,16 @@ fn a_non_utf8_argument_is_refused_by_name() {
     use std::os::unix::ffi::OsStringExt;
 
     let bad = OsString::from_vec(b"/tmp/proj\xff".to_vec());
-    let error = super::argv_strings([OsString::from("nichlink"), bad]).expect_err("refused");
+    let error = super::argv_strings([OsString::from("xirang"), bad]).expect_err("refused");
     assert!(
         error.contains("is not valid UTF-8"),
         "the refusal names the reason: {error}"
     );
     // A valid argv still converts, so the check refuses bytes rather than the feature.
     // 合法 argv 照常转换，因此这道检查拒绝的是字节而不是功能。
-    let argv = super::argv_strings([OsString::from("nichlink"), OsString::from("check")])
+    let argv = super::argv_strings([OsString::from("xirang"), OsString::from("check")])
         .expect("valid arguments");
-    assert_eq!(argv, ["nichlink", "check"]);
+    assert_eq!(argv, ["xirang", "check"]);
 }
 
 /// Two dependency sources at once is refused, exactly as `build` refuses a target
@@ -1124,7 +1100,7 @@ fn a_non_utf8_argument_is_refused_by_name() {
 #[test]
 fn two_dependency_sources_are_refused() {
     let error = run([
-        "nichlink".to_owned(),
+        "xirang".to_owned(),
         "new".to_owned(),
         "app".to_owned(),
         "--path".to_owned(),

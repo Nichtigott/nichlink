@@ -1,5 +1,5 @@
-//! Pins for `nichlink.locate`: it ranks text, it says so, and its empty answer is actionable.
-//! `nichlink.locate` 的钉子：它排的是文本、它说了这一点、空答案可执行。
+//! Pins for `xirang.locate`: it ranks text, it says so, and its empty answer is actionable.
+//! `xirang.locate` 的钉子：它排的是文本、它说了这一点、空答案可执行。
 //!
 //! The failure these exist against is the axis the seventh round measured: an agent with a symptom
 //! and no way to spend words for places sends one or two extra calls (`search {literal}` after a

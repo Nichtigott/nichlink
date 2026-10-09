@@ -296,12 +296,12 @@ fn requirement_findings(
         }
         // The package the requirement is really on: the key itself, or the name in a
         // `package = "…"` field when the dependency is renamed. Reading only keys that
-        // start with `nichlink-` let `kernel = { package = "nichlink-kernel", version =
+        // start with `xirang-` let `kernel = { package = "xirang-kernel", version =
         // "0.0.9" }` name an internal dependency with a version nobody checked.
         // 这条要求真正指向的包：键本身，或依赖被重命名时 `package = "…"` 里的名字。只读以
-        // `nichlink-` 开头的键，会让 `kernel = { package = "nichlink-kernel", version = "0.0.9" }`
+        // `xirang-` 开头的键，会让 `kernel = { package = "xirang-kernel", version = "0.0.9" }`
         // 以没人检查过的版本点名一个内部依赖。
-        let target = if name.starts_with("nichlink-") {
+        let target = if name.starts_with("xirang-") {
             name.to_owned()
         } else {
             match package_field(value.trim()) {
@@ -331,7 +331,7 @@ fn package_field(value: &str) -> Option<String> {
     let rest = rest.strip_prefix('"')?;
     let end = rest.find('"')?;
     let package = &rest[..end];
-    package.starts_with("nichlink-").then(|| package.to_owned())
+    package.starts_with("xirang-").then(|| package.to_owned())
 }
 
 /// Add a finding when a requirement's version is missing or wrong.
@@ -430,7 +430,7 @@ fn workspace_dependency_names(root: &Path, name: &str) -> bool {
             continue;
         };
         let key = key.trim();
-        let named = if key.starts_with("nichlink-") {
+        let named = if key.starts_with("xirang-") {
             Some(key.to_owned())
         } else {
             package_field(value.trim())
@@ -458,7 +458,7 @@ fn quoted(text: &str) -> Option<String> {
 /// 点表段落头命名的依赖（若是内部依赖）。
 fn dotted_requirement(header: &str) -> Option<String> {
     let tail = header.rsplit('.').next()?;
-    if header.contains("dependencies") && tail.starts_with("nichlink-") {
+    if header.contains("dependencies") && tail.starts_with("xirang-") {
         Some(tail.to_owned())
     } else {
         None

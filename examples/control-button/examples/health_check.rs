@@ -1,7 +1,7 @@
-//! 运行 `cargo run -p nichlink-example-control-button --example health_check`
+//! 运行 `cargo run -p xirang-example-control-button --example health_check`
 //! 在真实宿主面上演示 `Registry::health_check`：Button 面声明了
 //! `runtime_checks: [NON_EMPTY_TEXT]`，因此空标签必须被拒绝。
-//! Run `cargo run -p nichlink-example-control-button --example health_check` to
+//! Run `cargo run -p xirang-example-control-button --example health_check` to
 //! exercise `Registry::health_check` on a real host face: the Button face
 //! declares `runtime_checks: [NON_EMPTY_TEXT]`, so a blank label must be
 //! rejected.
@@ -16,7 +16,7 @@
 //! `RuntimeValue`、用空调用路径（本示例不接 trace）交给 `health_check`、渲染聚合错误。
 //! 没有声明检查的面会对一切取值通过，什么都证明不了——所以 Button 面确实声明了一条。
 
-use nichlink_toolchain::run_method::{Provenance, RuntimeValue};
+use xirang_toolchain::run_method::{Provenance, RuntimeValue};
 
 fn main() {
     let registry = control_button::base_registry();

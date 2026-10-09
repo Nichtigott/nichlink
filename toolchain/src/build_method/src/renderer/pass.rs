@@ -204,8 +204,8 @@ mod tests {
     use crate::build_method::diagnostics::BuildDiagnostics;
     use crate::build_method::registry_syntax::GraftSyntax;
     use crate::build_method::renderer::test_support::{temporary_directory, write_registry};
-    use nichlink_kernel::registry_core::syntax::SyntaxLocation;
     use std::fs;
+    use xirang_kernel::registry_core::syntax::SyntaxLocation;
 
     #[test]
     fn generated_static_plan_owns_build_method_graft_selectors() {
@@ -249,7 +249,7 @@ mod tests {
     fn a_path_containing_the_range_word_is_rendered_as_one_cut() {
         let root = temporary_directory("string-cut-to-word");
         let entries = crate::build_method::registry_syntax::graft_entries(
-            r#"nichlink_kernel::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#,
+            r#"xirang_kernel::static_graft_plan!(FRAMEWORK, cut "root/a to b" graft "g");"#,
         )
         .expect("declaration parses");
         let output = render_lib(
@@ -360,8 +360,8 @@ mod tests {
     fn every_baked_face_identity_is_asserted_against_the_face_itself() {
         let root = temporary_directory("static-identity");
         let records = [crate::build_method::static_plan::StaticFaceRecord {
-            id: nichlink_kernel::registry_core::identity::NodeId::from_bytes(b"face"),
-            parent: nichlink_kernel::registry_core::identity::NodeId::from_bytes(b"parent"),
+            id: xirang_kernel::registry_core::identity::NodeId::from_bytes(b"face"),
+            parent: xirang_kernel::registry_core::identity::NodeId::from_bytes(b"parent"),
             owns_registry: false,
             source: "control/object/button/button.rs".to_owned(),
             module: "control::object::button".to_owned(),
@@ -434,8 +434,8 @@ mod tests {
             ShapeRender::whole(),
         );
 
-        let control_path = nichlink_kernel::declaration::portable_path(&control.to_string_lossy());
-        let button_path = nichlink_kernel::declaration::portable_path(&button.to_string_lossy());
+        let control_path = xirang_kernel::declaration::portable_path(&control.to_string_lossy());
+        let button_path = xirang_kernel::declaration::portable_path(&button.to_string_lossy());
         assert!(
             output.contains(&format!("#[path = {control_path:?}]")),
             "folder face must load its real file: {output}"
@@ -475,22 +475,22 @@ mod tests {
         );
         assert!(
             output.contains(&format!(
-                "#[cfg(rust_analyzer)]\n#[doc(hidden)]\n#[path = {button_path:?}]\npub mod __nichlink_ra_control_object_button;"
+                "#[cfg(rust_analyzer)]\n#[doc(hidden)]\n#[path = {button_path:?}]\npub mod __xirang_ra_control_object_button;"
             )),
             "leaf face needs a crate-root shadow declaration: {output}"
         );
         assert!(
-            output.contains("pub use crate::__nichlink_ra_control_object_button as button;"),
+            output.contains("pub use crate::__xirang_ra_control_object_button as button;"),
             "the shadow must rebuild the face's public module path: {output}"
         );
         assert!(
             output.contains(&format!(
-                "#[cfg(rust_analyzer)]\n#[doc(hidden)]\n#[path = {control_path:?}]\nmod __nichlink_ra_control;"
+                "#[cfg(rust_analyzer)]\n#[doc(hidden)]\n#[path = {control_path:?}]\nmod __xirang_ra_control;"
             )),
             "container face needs the same IDE view at the top level: {output}"
         );
         assert!(
-            output.contains("pub(crate) use crate::__nichlink_ra_control as control;"),
+            output.contains("pub(crate) use crate::__xirang_ra_control as control;"),
             "the container shadow must rebuild its module path: {output}"
         );
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
@@ -530,7 +530,7 @@ mod tests {
             "top-level leaf face keeps its declaration: {output}"
         );
         assert!(
-            !output.contains("__nichlink_ra_"),
+            !output.contains("__xirang_ra_"),
             "a face the IDE already sees needs no shadow: {output}"
         );
         fs::remove_dir_all(root).expect("temporary fixture cleanup");
@@ -568,7 +568,7 @@ mod tests {
             ShapeRender::whole(),
         );
 
-        let folded = nichlink_kernel::declaration::portable_path(&face.to_string_lossy());
+        let folded = xirang_kernel::declaration::portable_path(&face.to_string_lossy());
         assert!(
             folded.ends_with("control/control.rs"),
             "the fixture has to exercise a fold: {folded}"
@@ -760,7 +760,7 @@ mod tests {
         );
         assert!(
             output.contains(
-                "pub const NODE_ID: ::nichlink_toolchain::run_method::registry_core::NodeId"
+                "pub const NODE_ID: ::xirang_toolchain::run_method::registry_core::NodeId"
             ) && output.contains(&format!("from_raw({:?})", [7u8; 16])),
             "the shell carries the ancestor's identity: {output}"
         );

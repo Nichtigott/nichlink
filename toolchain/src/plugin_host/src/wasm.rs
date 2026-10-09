@@ -134,10 +134,10 @@ impl WasmBackend {
     }
 
     /// Compile and instantiate the artifact, checking the limits, the host ABI version
-    /// *when the plugin exports one* (a missing `nichlink_abi_version` is a legacy
-    /// plugin, as `README.md` says), and the `nichlink_health` export.
+    /// *when the plugin exports one* (a missing `xirang_abi_version` is a legacy
+    /// plugin, as `README.md` says), and the `xirang_health` export.
     /// 编译并实例化工件，检查各项上限、宿主 ABI 版本（**当插件导出它时**；缺少
-    /// `nichlink_abi_version` 的是旧插件，见 `README.md`）以及 `nichlink_health` 导出。
+    /// `xirang_abi_version` 的是旧插件，见 `README.md`）以及 `xirang_health` 导出。
     ///
     /// This performs **no slot policy**: channel, framework, mode and flow are checked by
     /// [`WasmPluginTable::install`](crate::plugin_host::WasmPluginTable::install) and
@@ -207,7 +207,7 @@ impl WasmBackend {
         let instance = linker
             .instantiate_and_start(&mut store, &module)
             .map_err(|error| HostError::InvalidArtifact(error.to_string()))?;
-        if let Ok(abi) = instance.get_typed_func::<(), i32>(&store, "nichlink_abi_version") {
+        if let Ok(abi) = instance.get_typed_func::<(), i32>(&store, "xirang_abi_version") {
             let version = abi
                 .call(&mut store, ())
                 .map_err(|error| HostError::Abi(error.to_string()))?;
@@ -222,8 +222,8 @@ impl WasmBackend {
             .get_memory(&store, "memory")
             .ok_or_else(|| HostError::Abi("missing exported memory `memory`".to_owned()))?;
         instance
-            .get_typed_func::<(i32, i32), i64>(&store, "nichlink_health")
-            .map_err(|_| HostError::Abi("missing `nichlink_health(i32, i32) -> i64`".to_owned()))?;
+            .get_typed_func::<(i32, i32), i64>(&store, "xirang_health")
+            .map_err(|_| HostError::Abi("missing `xirang_health(i32, i32) -> i64`".to_owned()))?;
 
         Ok(WasmInstance {
             state: Mutex::new(WasmState {
@@ -400,7 +400,7 @@ fn operation_export(operation: &str) -> Result<String, HostError> {
     if crate::run_method::validate_operation_name(operation).is_err() {
         return Err(HostError::InvalidOperation(operation.to_owned()));
     }
-    Ok(format!("nichlink_{operation}"))
+    Ok(format!("xirang_{operation}"))
 }
 
 #[cfg(test)]

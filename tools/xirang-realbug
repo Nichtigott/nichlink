@@ -14,9 +14,9 @@ The recipe, and why each step is where it is (all three were measured the hard w
   4. self-prove: the resolved target is red with the source reverted and green with it restored.
 
 Usage:
-  nichlink-realbug plan                      the selection rule, verbatim
-  nichlink-realbug find <repo-dir>           candidate commits, with their shapes
-  nichlink-realbug build <repo-dir> <commit> <out-dir>   inject, resolve, self-prove, write truth
+  xirang-realbug plan                      the selection rule, verbatim
+  xirang-realbug find <repo-dir>           candidate commits, with their shapes
+  xirang-realbug build <repo-dir> <commit> <out-dir>   inject, resolve, self-prove, write truth
 
 The output directory should be durable (`<checkout>/target/hardbug-runs/realbug/…`): a run that lives
 in `/tmp` is a run a cleanup can delete, which has cost this project a whole round's evidence already.
@@ -34,9 +34,9 @@ from pathlib import Path
 TOOL = Path(__file__).resolve()
 CHECKOUT = TOOL.parent.parent
 
-USAGE = """nichlink-realbug plan                              the selection rule, verbatim
-nichlink-realbug find <repo-dir>                   candidate commits with their shapes
-nichlink-realbug build <repo-dir> <commit> <out>   inject, resolve the target, self-prove, write truth
+USAGE = """xirang-realbug plan                              the selection rule, verbatim
+xirang-realbug find <repo-dir>                   candidate commits with their shapes
+xirang-realbug build <repo-dir> <commit> <out>   inject, resolve the target, self-prove, write truth
 """
 
 RULE = """A candidate commit qualifies when all three hold:
@@ -61,7 +61,7 @@ def run(*argv, **kwargs):
 def cargo_env():
     """A writable CARGO_HOME: the sandbox's `~/.cargo` is not writable, and cargo fails to unpack.
     A 可写的 CARGO_HOME：沙箱里的 `~/.cargo` 不可写，cargo 会在解包时失败。"""
-    home = Path(os.environ.get("NICH_LINK_REALBUG_CARGO_HOME", "/tmp/nichlink-realbug-cargo"))
+    home = Path(os.environ.get("XIRANG_REALBUG_CARGO_HOME", "/tmp/xirang-realbug-cargo"))
     home.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ)
     environment["CARGO_HOME"] = str(home)

@@ -1,5 +1,5 @@
-//! `nichlink check`: run the registration discovery and validation pass.
-//! `nichlink check`：运行注册发现与校验。
+//! `xirang check`: run the registration discovery and validation pass.
+//! `xirang check`：运行注册发现与校验。
 //!
 //! Split out of `lib.rs`: this command owns the `--json` document contract and
 //! the human line, while the shared `resolve_package`/`build_out_dir` helpers it
@@ -33,13 +33,13 @@ fn refuse_duplicated_own_crates(manifest: &std::path::Path) -> Result<(), String
 /// A ghost is an **independent package** — the host's `[patch.crates-io]` (or its path dependency) does not
 /// reach it — so it can carry this workspace's own crates twice while the host carries them once. Measured on a
 /// partitioned tree: the host's own `check` was green while `cargo metadata --manifest-path
-/// crates/dash-dash-board/Cargo.toml` reported `{'nichlink-kernel': 2, 'nichlink-macro': 2,
-/// 'nichlink-toolchain': 2}` and the build died with `error[E0308]: mismatched types … expected `NodeId`,
+/// crates/dash-dash-board/Cargo.toml` reported `{'xirang-kernel': 2, 'xirang-macro': 2,
+/// 'xirang-toolchain': 2}` and the build died with `error[E0308]: mismatched types … expected `NodeId`,
 /// found a different `NodeId`` inside **that package's** `generated_lib.rs` (audit `M7`, §M7.66).
 /// 幽灵是一个**独立的包**——宿主的 `[patch.crates-io]`（或它的 path 依赖）到不了它——因此宿主只有一份时，它
 /// 可能带着本工作区自己的 crate 两份。在一个分区树上实测：宿主自己的 `check` 是绿的，而
 /// `cargo metadata --manifest-path crates/dash-dash-board/Cargo.toml` 报
-/// `{'nichlink-kernel': 2, 'nichlink-macro': 2, 'nichlink-toolchain': 2}`，构建死在**那个包**的
+/// `{'xirang-kernel': 2, 'xirang-macro': 2, 'xirang-toolchain': 2}`，构建死在**那个包**的
 /// `generated_lib.rs` 里的 `error[E0308]: mismatched types … expected `NodeId`, found a different
 /// `NodeId``（审计 `M7`，§M7.66）。
 ///
@@ -52,7 +52,7 @@ pub(crate) fn own_crate_manifests(manifest: &std::path::Path) -> Vec<std::path::
         return manifests;
     };
     let (partition_root, _) = crate::build_method::partition_roots(host);
-    let Ok(entries) = std::fs::read_dir(partition_root.join(nichlink_kernel::lexicon::CRATES_DIR))
+    let Ok(entries) = std::fs::read_dir(partition_root.join(xirang_kernel::lexicon::CRATES_DIR))
     else {
         // No generated packages is the ordinary answer, not a failure to read: a tree that was never split
         // has no such directory.
@@ -153,8 +153,8 @@ pub(crate) fn check(
             // `--json` 契约是"stdout 是一个 JSON 文档"；解析失败此前在写出任何东西之前
             // 就返回，机器读者拿到的是空流，而不是点名失败的文档。该文档保持成功时的形状。
             if json_output {
-                let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
-                diagnostics.push(nichlink_kernel::BuildDiagnostic::new(
+                let mut diagnostics = xirang_kernel::BuildDiagnostics::default();
+                diagnostics.push(xirang_kernel::BuildDiagnostic::new(
                     "resolve",
                     error.clone(),
                 ));
@@ -177,7 +177,7 @@ pub(crate) fn check(
                 writeln!(
                     out,
                     "{}",
-                    nichlink_kernel::BuildDiagnostics::default().to_json()
+                    xirang_kernel::BuildDiagnostics::default().to_json()
                 )
                 .map_err(|error| format!("cannot write output: {error}"))?;
                 Ok(())
@@ -193,7 +193,7 @@ pub(crate) fn check(
         };
     }
     crate::build_method::run_for(&manifest, &out_dir, &package)?;
-    writeln!(out, "nichlink check: ok ({package})")
+    writeln!(out, "xirang check: ok ({package})")
         .map_err(|error| format!("cannot write output: {error}"))?;
     // The line the maintainer asked for: "see the terminal say the index is ready before you read
     // from it" (audit `M7`, P2.2). The historical line above is untouched — it stays the first line

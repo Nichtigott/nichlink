@@ -37,7 +37,7 @@ fn successful_build_is_silent_unless_verbose_output_is_requested() {
     assert_eq!(cache_status_line("hit", "abc", false), None);
     assert_eq!(
         cache_status_line("hit", "abc", true).as_deref(),
-        Some("nichlink discovery cache hit (abc)")
+        Some("xirang discovery cache hit (abc)")
     );
 }
 
@@ -52,14 +52,14 @@ fn successful_build_is_silent_unless_verbose_output_is_requested() {
 fn a_build_script_without_a_source_tree_fails_with_the_layout_diagnostic() {
     let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-pipeline-missing-src-{}-{sequence}",
+            "xirang-pipeline-missing-src-{}-{sequence}",
             std::process::id()
         ));
     std::fs::create_dir_all(&root).expect("fixture root");
-    let input = super::BuildInput::new(root.clone(), root.join("target/nichlink/out"), true);
+    let input = super::BuildInput::new(root.clone(), root.join("target/xirang/out"), true);
     let _ = super::run(&input);
 }
 
@@ -80,9 +80,9 @@ fn an_unrepresentable_directory_cannot_veto_the_build() {
     let mut outcomes = Vec::new();
     for (tag, dir) in [("valid", "hidden"), ("invalid", "bad-name")] {
         let root = std::env::temp_dir()
-            .join("nichlink-scratch")
+            .join("xirang-scratch")
             .join(module_path!().replace("::", "-"))
-            .join(format!("nichlink-hidden-{tag}-{suffix}-{sequence}"));
+            .join(format!("xirang-hidden-{tag}-{suffix}-{sequence}"));
         let manifest = root.join("host");
         let folder = manifest.join("src").join(dir);
         std::fs::create_dir_all(&folder).expect("face folder");
@@ -106,9 +106,9 @@ fn run_for_validates_outside_cargo_and_reports_diagnostics() {
         .as_nanos();
     let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
-        .join(format!("nichlink-run-for-{suffix}-{sequence}"));
+        .join(format!("xirang-run-for-{suffix}-{sequence}"));
     let manifest = root.join("host");
     std::fs::create_dir_all(manifest.join("src")).expect("src");
     let out = root.join("out");
@@ -146,9 +146,9 @@ fn host_root(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
         .as_nanos();
     let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
-        .join(format!("nichlink-{tag}-{suffix}-{sequence}"));
+        .join(format!("xirang-{tag}-{suffix}-{sequence}"));
     let manifest = root.join("host");
     std::fs::create_dir_all(manifest.join("src")).expect("src");
     (root, manifest)
@@ -327,10 +327,10 @@ fn fixture(label: &str, entry: &str) -> (PathBuf, PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-cuts-{label}-{}-{sequence}",
+            "xirang-cuts-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
@@ -343,7 +343,7 @@ fn fixture(label: &str, entry: &str) -> (PathBuf, PathBuf) {
     std::fs::write(root.join("src/lib.rs"), entry).expect("entry");
     std::fs::write(
         root.join("src/button/button.rs"),
-        "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+        "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),\n}\n",
     )
     .expect("face");
     let out = root.join("out");
@@ -431,7 +431,7 @@ fn a_hand_written_entry_still_answers_for_itself() {
     let (root, out) = fixture(
         "entry",
         "pub const FRAMEWORK: FrameworkId = FrameworkId::new(\"cuts.fixture\");\n\
-         nichlink_toolchain::run_method::static_graft_plan!(\n\
+         xirang_toolchain::run_method::static_graft_plan!(\n\
          \x20   FRAMEWORK,\n\
          \x20   cut(crate::button::NODE_ID) graft(fast_button::fast::NODE_ID),\n\
          );\n",

@@ -1,5 +1,5 @@
 [package]
-name = "nichlink-example-partitioned-button-graft"
+name = "xirang-example-partitioned-button-graft"
 version = "0.2.1"
 edition = "2024"
 publish = false
@@ -10,7 +10,7 @@ name = "control_button_graft"
 path = "src/lib.rs"
 
 [dependencies]
-nichlink-toolchain = { path = "../../../toolchain", features = ["run", "authoring"] }
+xirang-toolchain = { path = "../../../toolchain", features = ["run", "authoring"] }
 
 # Our macros emit a `#[cfg(rust_analyzer)]` mirror so an editor completes the fields inside a face
 # declaration; Rust 2024's check-cfg calls that an unexpected cfg unless the crate says otherwise.

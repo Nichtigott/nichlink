@@ -91,15 +91,15 @@
 - 现象：schema 校验写在“处理一条记录”的分支里：
 
   ```text
-  if let Some(value) = line.strip_prefix("# nichlink-schema=") { schema = Some(value.trim()); continue; }
+  if let Some(value) = line.strip_prefix("# xirang-schema=") { schema = Some(value.trim()); continue; }
   if line.starts_with('#') { continue; }
   if let Some(version) = schema && !schema_matches(version) { return Err(...); }
   ```
 
-  因此：①只有注释与表头、没有任何记录的锁 → 循环体永不走到校验 → `Ok`（空目录），与函数文档“refusing unknown schemas”（`:120`）不符；②表头写在记录**之后**时，前面的记录在 `schema == None` 下解析 → 旧/新 schema 的记录被当作本版本可读；③同一文件里第二行 `# nichlink-schema=` 会静默覆盖第一行（此处没有重复键拒绝，而同一模块的 `PluginRecord` 与 `graft.plan` 都拒绝重复）。
+  因此：①只有注释与表头、没有任何记录的锁 → 循环体永不走到校验 → `Ok`（空目录），与函数文档“refusing unknown schemas”（`:120`）不符；②表头写在记录**之后**时，前面的记录在 `schema == None` 下解析 → 旧/新 schema 的记录被当作本版本可读；③同一文件里第二行 `# xirang-schema=` 会静默覆盖第一行（此处没有重复键拒绝，而同一模块的 `PluginRecord` 与 `graft.plan` 都拒绝重复）。
 - 判据：schema 是身份/命名空间的版本闸门，它的全部意义是“读不懂就拒绝”（`catalog.rs:103-114` 注释）。按行序生效意味着一个乱序或被裁剪过的锁文件能绕过它，且方向是**放行**（读到本不兼容的语义），不是拒绝。
 - 最小修复方向：把 schema 校验移到循环之后（`if let Some(version) = schema && !schema_matches(version) { return Err(...) }`），并拒绝重复的 schema 表头（第二行出现即 `Err`）；记录出现在表头之前也应报错。
-- 复核手段：单测探针：`PluginCatalog::parse("# nichlink-schema=v4\n")` 期望 `Err`，当前 `Ok(空)`；`PluginCatalog::parse("user|fw|p|1|c|sha256:b|extension\n# nichlink-schema=v4\n")` 期望 `Err`，当前 `Ok(1 条记录)`。
+- 复核手段：单测探针：`PluginCatalog::parse("# xirang-schema=v4\n")` 期望 `Err`，当前 `Ok(空)`；`PluginCatalog::parse("user|fw|p|1|c|sha256:b|extension\n# xirang-schema=v4\n")` 期望 `Err`，当前 `Ok(1 条记录)`。
 
 ### K-08 MAJOR — D 大逻辑（`graft_entries` 跳过**所有**带 `cfg` 的模块，被开启的特性也照跳）
 
@@ -116,7 +116,7 @@
   判定是“有任意 `cfg` 属性就整棵模块不进入”，理由是注释写的“A module the compiler may drop cannot contribute to the plan”。但条目级的 `cfg` 是**保留**的（同文件 `:121-132` 收集 `cfg`，测试 `graft_parser_ignores_declarations_that_are_not_items` 钉住 `#[cfg(feature = "optional-graft")]` 的条目仍被收集）。于是同一个 `#[cfg(feature = "fast")]`：写在条目上会进入计划，写在 `mod` 上则整模块的 `static_graft_plan!` 被悄悄丢掉——包括 `#[cfg(not(test))]` 这种必然生效的门控。
 - 判据：构建捕获的静态 graft 表是宿主启用 overlay 的唯一来源（`tree/graft_ops/overlay.rs:111-121`、`release.rs:196-217`）。少一条切口 = 该槽位静默地跑基座实现，而源码里明明写着要嫁接；没有任何诊断报出这件事。跳过 `#[cfg(test)] mod tests` 是合理目标，但用“任意 cfg”近似它，代价是把真实门控一起丢掉。
 - 最小修复方向：把跳过条件收窄为“编译器可能丢弃”的判定，即只跳 `#[cfg(test)]`（以及 `#[cfg(not(...))]`/特性未开启的情况交给既有的 cfg 求值路径），或在跳过时记录一条报告（该模块里有 N 条切口未被纳入）。
-- 复核手段：单测探针：`graft_entries("#[cfg(feature = \"on\")] mod g { nichlink::static_graft_plan!(FRAMEWORK, cut \"root/a\" graft \"x\"); }")` 期望收集到 1 条，当前得到 0 条。
+- 复核手段：单测探针：`graft_entries("#[cfg(feature = \"on\")] mod g { xirang::static_graft_plan!(FRAMEWORK, cut \"root/a\" graft \"x\"); }")` 期望收集到 1 条，当前得到 0 条。
 
 ### K-09 MAJOR — D 大逻辑（trait 标签派生遇到带逗号的泛型实参就失败，构建期会误报“缺 trait”）
 
@@ -260,7 +260,7 @@
 ### K-23 MINOR — D 大逻辑（任何以 `_object` 结尾的用户宏都被当作注册面，非注册宏会得到错误的构建诊断）
 
 - 位置：`core/src/registry_core/syntax/face.rs:250-258`（`is_face_macro = … || macro_name.ends_with("_object")`）
-- 现象：`widget_object! { name: "x", size: 3 }` 这类与 NichLink 无关的宏，只要 token 形状是 `ident: value`，`parse_faces` 就会把它当作注册面（`name` 是词表字段，`size` 不是词表字段但 `parse_fields` 不校验字段名，只要求 `ident :`）。下游 `build_method/src/validation.rs:52-70` 把 `*_object` 面按父级宏处理，要求显式 `parent:`，于是会为这个无关宏报 `parent-macro` 构建错误。
+- 现象：`widget_object! { name: "x", size: 3 }` 这类与 XiRang 无关的宏，只要 token 形状是 `ident: value`，`parse_faces` 就会把它当作注册面（`name` 是词表字段，`size` 不是词表字段但 `parse_fields` 不校验字段名，只要求 `ident :`）。下游 `build_method/src/validation.rs:52-70` 把 `*_object` 面按父级宏处理，要求显式 `parent:`，于是会为这个无关宏报 `parent-macro` 构建错误。
 - 判据：`_object` 后缀规则是有意的（`core/src/registry_core/syntax/face.rs:254-255` 与生成别名有关），但没有任何一处把“宏名是否属于本次构建的注册机制”作为准入条件；代价是误报构建错误与误收注册面（`FaceSyntax` 会被当作面数据使用，`run_method/src/authoring/manifest/parse/parse.rs:39` 直接读 `macro_name`）。
 - 最小修复方向：要求宏路径的段数与来源符合注册机制（例如末段必须是 `control_object`/`external_object`/`<crate>_object` 且该 crate 等于本次构建的宿主 crate），或在 `parse_fields` 拒绝不在 `FACE_FIELD_ORDER` 中的字段名。
 - 复核手段：单测探针：`parse_face("fn f() { widget_object! { name: \"x\", size: 3 } }")` 期望 `Ok(None)`，当前 `Ok(Some(…))`。
@@ -372,7 +372,7 @@
 - 覆盖：`find core -name '*.rs'` 的**全部 93 个文件、21787 行**都逐文件读过（`read` 工具，全文件而非片段）；`core/src/test/registry_rule/` 是空目录，无内容可读。
 - 五条深读块（identity 974 + declaration 2468 + tree 4746 + syntax 2575 + authoring 1836 ≈ 10.6k 行）逐文件过；覆盖块（plugin 3557 + mir 1855 + source 1275 + diagnostic 940 ≈ 7.6k 行）逐文件过并额外追了调用方；全读块（lexicon 479、release 409、requirements 255、json 98）逐行过。
 - 深度的诚实说明：生产文件是逐行读并逐条对照调用方；**内联测试与独立测试页（约 2.1k 行：`face_tests`、`source_location_tests`、`runtime_checks_tests`、`call_tree_tests`、`source_tests`、`artifact_tests`、`ports_tests`、`record_tests`、`fixtures`、`flow_tests`、`deep_input_tests`、`nesting_budget`、`ungated_authoring_data`）我读的是“它钉住了什么行为”**，用于反向验证我的发现是否已被既有测试覆盖，而不是逐行审查测试质量。K-04、K-07、K-18 正是这样确认“现有测试没覆盖”的。
-- 运行过的东西：`cargo test -p nichlink-conventions --offline documented_rust_blocks_parse`（报告改名与围栏改 `text` 后 1 passed）与 `cargo test -p nichlink-core --offline --lib`（基线，结果见交付消息）。本轮**没有**新增测试或探针文件（写权限只覆盖本报告），因此 K 系列的复核手段都以“探针命令”形式给出，未逐条实跑；每条探针都写明了期望值与当前值。
+- 运行过的东西：`cargo test -p xirang-conventions --offline documented_rust_blocks_parse`（报告改名与围栏改 `text` 后 1 passed）与 `cargo test -p xirang-core --offline --lib`（基线，结果见交付消息）。本轮**没有**新增测试或探针文件（写权限只覆盖本报告），因此 K 系列的复核手段都以“探针命令”形式给出，未逐条实跑；每条探针都写明了期望值与当前值。
 - 未发现问题的轴：**F 铁律干净**——`grep -rn "std::fs\|std::env\|process::Command\|SystemTime\|Instant::now\|std::io" core/src/` 无命中；唯一带 I/O 的 `core/tests/nesting_budget.rs` 在 `core/tests/`（`core/src` 之外，且该测试自己的注释说明它为何必须在那里）。`core/src` 里没有 `mod.rs`，没有第二个 `include!`（`include!` 仅出现在 `host!()` 的 `OUT_DIR/generated_lib.rs`，由约定门禁把守）。
 - 干净的实现（我逐个对照了注释与代码，确认自述成立）：`identity/node_id.rs` 与 `identity/sha256.rs`（含 0..=200 全长度差分测试与 `sha2` 预言机、双片段/分隔符按值钉住、`from_str` 的 32 位限制）；`identity/path_text.rs`（`strip_path_prefix` 的组件边界与 separator 折叠）；`lexicon/lexicon.rs`（`path_is_under`/`path_is_strictly_under` 两种含义并存且各有钉子，文本契约 17 条全被 `lexicon_tests.rs:13-31` 钉住，`resolve_package_root` 的三步规则有边界测试）；`json/json.rs`（RFC 8259 转义集完整，控制字符走 `\u00XX`，是工作区唯一编码器并在 `mir/render.rs:6` 与 `diagnostic/build.rs:7` 被复用）；`syntax/nesting.rs`（三种溢出形状 + 加权限深 + 箭头/比较的边界，`deep_input_tests.rs` 与 `nesting_budget.rs` 两侧夹住）；`syntax/face.rs` 的 `parse_faces`/`source_references`（词法扫描器共用一份掩码、KN6 的路径段边界已修）；`source/*` 的掩码与调用扫描（生命周期/字符字面量/raw string/嵌套块注释/多行字面量/非 ASCII 标识符全有钉子，且 `body_calls` 与 `direct_calls` 的一致性有对照测试）；`mir/merge.rs`（`same_symbol` 的 `::` 边界 + live 优先 + 未观测候选保留为 `Mir`）；`mir/call_tree.rs`（布局不变量：列顺序、每列车道唯一、共享被调用者单节点、环终止、两种不完整都有报告）；`plugin/artifact/artifact.rs`（`VerifiedPluginArtifact` 字段私有、`Signature` 只有一个构造入口、撤销先于签名）；`plugin/contracts/signing/signing.rs`（长度前缀编码、29 个字段逐一覆盖、签名自身排除）；`plugin/graft/document.rs`（重复键/未知键/未知版本/`.` 与 `..` 选择器全拒，写读共用一条选择器规则）；`tree/entry_pages`（页级 COW 与 `len` 维护）；`tree/graft_ops/reconcile.rs` 的四种身份/路径组合（干净/漂移/矛盾/未保留）；`tree/transaction::plan_batch` 的环检测与稳定名查重；`requirements::missing_capabilities` 的环安全；`release::assert_static_registration` 与运行期 `validate_registration_requirements` 的五项检查逐项同序（我对着两处各数了一遍）。
 - 明确没查的：`core` 之外的 crate 只按“为了判断 core 结论”的范围读（`run_method` 的创作读写路径、`build_method` 的合同检查与面发现、`mcp` 的一处消费），未做片区级审计；`docs/` 里的历史审计文档只在需要对照时扫过标题与结论段，未逐行复核。

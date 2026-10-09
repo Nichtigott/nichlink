@@ -1,5 +1,5 @@
-//! `nichlink snippets`: inject face-field editor snippets.
-//! `nichlink snippets`：注入注册面字段的编辑器 snippet。
+//! `xirang snippets`: inject face-field editor snippets.
+//! `xirang snippets`：注入注册面字段的编辑器 snippet。
 //!
 //! Split out of `lib.rs`: this is the largest per-editor execution surface, and
 //! its rules (VS Code project file, Neovim/Blink user config, `auto` scanning)
@@ -74,7 +74,7 @@ pub(crate) fn snippets(
         let report = scaffold::install_everywhere()?;
         for install in &report.installs {
             println!(
-                "nichlink snippets: {} {} ({})",
+                "xirang snippets: {} {} ({})",
                 if install.written { "wrote" } else { "kept" },
                 install.target.path.display(),
                 install.target.editor.name()
@@ -82,7 +82,7 @@ pub(crate) fn snippets(
         }
         if report.nvim_skipped {
             println!(
-                "nichlink snippets: skipped Neovim — its snippet engines match fuzzily, so these \
+                "xirang snippets: skipped Neovim — its snippet engines match fuzzily, so these \
                  triggers would also appear at value positions; run `--editor blink` or \
                  `--editor nvim` if you want them anyway"
             );
@@ -117,7 +117,7 @@ pub(crate) fn snippets(
     };
     let written = scaffold::write_snippets_file(&path, &scaffold::editor_snippets(editor))?;
     println!(
-        "nichlink snippets: {} {}",
+        "xirang snippets: {} {}",
         if written { "wrote" } else { "kept" },
         path.display()
     );

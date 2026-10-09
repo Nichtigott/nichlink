@@ -34,8 +34,8 @@ impl Registry {
     /// 创建唯一的顶层注册机。
     pub fn root() -> Self {
         Self::new(
-            FrameworkId::new("nichlink.default"),
-            "nichlink.default".to_owned(),
+            FrameworkId::new("xirang.default"),
+            "xirang.default".to_owned(),
             "root",
             ROOT_NODE_ID,
             RegistrationRule::ANY.into_owned(),

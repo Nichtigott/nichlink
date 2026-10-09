@@ -1,5 +1,5 @@
-//! NichLink command-line interface.
-//! NichLink 命令行界面。
+//! XiRang command-line interface.
+//! XiRang 命令行界面。
 
 // The published surface must be readable on docs.rs without leaving the page,
 // so the lint is on for the whole crate; `clippy -D warnings` makes a new
@@ -41,21 +41,21 @@ mod studio_command;
 // `lib_tests.rs`，使本页保持为一张分发表，而不是 900 行的文件。
 
 const USAGE: &str = "\
-nichlink — NichLink command-line interface
+xirang — XiRang command-line interface
 
 USAGE:
-    nichlink new <name> [--lib] [--path <workspace> | --git <url>]
-    nichlink check [path] [--json]
-    nichlink build [path] [cargo options]
-    nichlink snippets [path] [--editor vscode|nvim|blink|auto] [--stdout]
-    nichlink explain <node-id|logical/path> [--path <dir>] [--json]
-    nichlink explain --overlay [--path <dir>] [--json]
-    nichlink grafts [path] [--json]
-    nichlink studio [path]
-    nichlink mcp
+    xirang new <name> [--lib] [--path <workspace> | --git <url>]
+    xirang check [path] [--json]
+    xirang build [path] [cargo options]
+    xirang snippets [path] [--editor vscode|nvim|blink|auto] [--stdout]
+    xirang explain <node-id|logical/path> [--path <dir>] [--json]
+    xirang explain --overlay [--path <dir>] [--json]
+    xirang grafts [path] [--json]
+    xirang studio [path]
+    xirang mcp
 
 COMMANDS:
-    new       Create a NichLink host project in ./<name>
+    new       Create a XiRang host project in ./<name>
     check     Run the registration discovery and validation pass without compiling
     crates    Plan the crate split a host declared (`--write` creates it;
               `--release` makes the packages publishable instead; `--revert`
@@ -68,7 +68,7 @@ COMMANDS:
     explain   Resolve a node id or logical path and report its identity, build
               scope, pruning, and the declared graft cuts that name it; with
               --overlay, render the static overlay projection of every slot
-    grafts    List every .nichlink/external-grafts/*/graft.plan, with its
+    grafts    List every .xirang/external-grafts/*/graft.plan, with its
               selector, target path, graft, full flag, and whether the host
               entry declares that slot (read-only)
     studio    Launch the Studio TUI for the current project, or for `path`
@@ -77,9 +77,9 @@ COMMANDS:
 
 OPTIONS:
     --lib             Create a library project instead of a binary
-    --path <dir>      Source nichlink-kernel/build from a local checkout; for
+    --path <dir>      Source xirang-kernel/build from a local checkout; for
                       explain, the host project to inspect (default: .)
-    --git <url>       Source nichlink-kernel/build from a Git repository
+    --git <url>       Source xirang-kernel/build from a Git repository
     --json            Emit one JSON document on stdout instead of human text
                       (check, explain, grafts); check still exits non-zero on a
                       failed validation
@@ -92,8 +92,8 @@ OPTIONS:
     --stdout          Print the snippets instead of writing them (any editor)
 ";
 
-/// Entry point for the `nichlink` binary: dispatch this process's own argv.
-/// `nichlink` 二进制的入口：分发本进程自己的 argv。
+/// Entry point for the `xirang` binary: dispatch this process's own argv.
+/// `xirang` 二进制的入口：分发本进程自己的 argv。
 ///
 /// Reads the real process arguments, writes the command's report to stdout, and
 /// returns a failure as `Err` so the binary decides the exit code.
@@ -106,10 +106,10 @@ pub fn main_entry() -> Result<(), String> {
 /// 把进程参数转成文本，并点名第一个不是 UTF-8 的参数。
 ///
 /// An argument on Linux may be any byte string, and `std::env::args()` *unwraps* the
-/// conversion: `nichlink check "/tmp/proj\xff"` died with a Rust backtrace instead of
+/// conversion: `xirang check "/tmp/proj\xff"` died with a Rust backtrace instead of
 /// printing a usage error, which is not what a command-line tool owes a caller.
 /// Linux 上的参数可以是任意字节串，而 `std::env::args()` 会对转换 **unwrap**：
-/// `nichlink check "/tmp/proj\xff"` 会带着 Rust backtrace 死掉，而不是打印一条用法错误——
+/// `xirang check "/tmp/proj\xff"` 会带着 Rust backtrace 死掉，而不是打印一条用法错误——
 /// 这不是命令行工具该给调用方的答复。
 pub fn argv_strings(
     argv: impl IntoIterator<Item = std::ffi::OsString>,
@@ -130,10 +130,10 @@ pub(crate) fn usage(out: &mut dyn Write) -> Result<(), String> {
 }
 
 /// Dispatch one command from an argv-style iterator (the program name is
-/// consumed and ignored). Shared by the `nichlink` and `cargo-nichlink`
+/// consumed and ignored). Shared by the `xirang` and `cargo-xirang`
 /// binaries, and writes its reports to process stdout.
-/// 从 argv 风格的迭代器分发一条命令（程序名会被消耗忽略）。`nichlink` 与
-/// `cargo-nichlink` 两个二进制共用，报告写到进程 stdout。
+/// 从 argv 风格的迭代器分发一条命令（程序名会被消耗忽略）。`xirang` 与
+/// `cargo-xirang` 两个二进制共用，报告写到进程 stdout。
 pub fn run(argv: impl IntoIterator<Item = String>) -> Result<(), String> {
     run_to(argv, &mut std::io::stdout())
 }
@@ -153,9 +153,9 @@ pub fn run_to(argv: impl IntoIterator<Item = String>, out: &mut dyn Write) -> Re
         // A bare invocation is not a success: the usage still goes out, because a
         // caller who typed nothing needs to see it, and the exit status says the
         // command did not run. It used to print the usage and return `Ok`, so a shell
-        // pipeline read bare `nichlink` as having succeeded (audit `LGC-LG-44`).
+        // pipeline read bare `xirang` as having succeeded (audit `LGC-LG-44`).
         // 裸调不是成功：用法照常输出（什么都没敲的调用方需要看到它），而退出状态说明命令没有运行。
-        // 它过去打印用法并返回 `Ok`，于是 shell 管线把裸 `nichlink` 读成成功（审计 `LGC-LG-44`）。
+        // 它过去打印用法并返回 `Ok`，于是 shell 管线把裸 `xirang` 读成成功（审计 `LGC-LG-44`）。
         None => {
             usage(out)?;
             Err("no command given".to_owned())
@@ -187,13 +187,13 @@ fn split_build_args(args: &[String]) -> (Option<String>, Vec<String>) {
 /// The directory `--manifest-path` names in a passed-through cargo argument list.
 /// 透传给 cargo 的参数列表里，`--manifest-path` 点名的那个目录。
 ///
-/// Cargo accepts both `--manifest-path <p>` and `--manifest-path=<p>`, and `nichlink build` hands the
+/// Cargo accepts both `--manifest-path <p>` and `--manifest-path=<p>`, and `xirang build` hands the
 /// rest of its arguments to cargo verbatim. Reading only a leading *positional* path meant the two
 /// halves of the command could describe different projects: the registration check ran on the
 /// current directory while cargo built the named one, and the command printed
 /// `registration ok (<cwd package>)` with cargo's exit code — so the named project's red verdict
 /// was never seen and the current project's green one was reported as its conclusion (audit `S11`).
-/// cargo 同时接受 `--manifest-path <p>` 与 `--manifest-path=<p>`，而 `nichlink build` 把其余参数原样
+/// cargo 同时接受 `--manifest-path <p>` 与 `--manifest-path=<p>`，而 `xirang build` 把其余参数原样
 /// 交给 cargo。只读开头的**位臵**参数意味着本命令的两半可以描述不同的项目：注册校验跑在当前目录上，
 /// 而 cargo 构建被点名的那个，命令还打印 `registration ok (<cwd package>)` 并只取 cargo 的退出码——
 /// 被点名项目的红色判断从未被看到，当前项目的绿色判断却被当成它的结论（审计 `S11`）。
@@ -264,14 +264,14 @@ pub(crate) fn build_target(
 /// 命令彼此不会分歧。
 ///
 /// It is **not** one story across all surfaces, and the difference is stated rather than implied:
-/// `NICH_LINK_NAMESPACE` is honored by the MCP bridge and by Studio, and read by no build-side code
+/// `XIRANG_NAMESPACE` is honored by the MCP bridge and by Studio, and read by no build-side code
 /// (the declaration macros bake in `env!("CARGO_PKG_NAME")` at compile time), while nothing in
 /// `cli/` reads it. With that variable set, those two report a different namespace — and therefore
 /// different `NodeId`s — than this command does. Making the surfaces agree is the maintainer's
 /// decision; the variable's documented purpose is a *reader's* override for trace artifacts
 /// (`run_method/src/runtime/trace/snapshot/io.rs`), and until that decision is taken a reader who
 /// sets it must know which side they are on (audit `S12`).
-/// 但在所有执行面上**并非**同一个说法，这里把差异说出来而不是暗示：`NICH_LINK_NAMESPACE` 被 MCP 桥与
+/// 但在所有执行面上**并非**同一个说法，这里把差异说出来而不是暗示：`XIRANG_NAMESPACE` 被 MCP 桥与
 /// Studio 尊重、而没有任何构建侧代码读它（声明宏在编译期把 `env!("CARGO_PKG_NAME")` 烤进去），同时
 /// `cli/` 里没有任何地方读它。一旦设置该变量，那两个执行面报告的命名空间——以及由此而来的
 /// `NodeId`——就与本命令不同。让各执行面一致是维护者的决定；该变量文档化的用途是 trace artifact 的

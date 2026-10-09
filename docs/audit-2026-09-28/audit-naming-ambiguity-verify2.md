@@ -25,8 +25,8 @@
 ```text
 [R-4a]
   顶层目录: ['run_method', 'debug_method', 'build_method']
-  包名: ['nichlink-run-method', 'nichlink-build-method', 'nichlink-debug-method']
-  lib名: ['nichlink_run_method', 'nichlink_build_method', 'nichlink_debug_method']
+  包名: ['xirang-run-method', 'xirang-build-method', 'xirang-debug-method']
+  lib名: ['xirang_run_method', 'xirang_build_method', 'xirang_debug_method']
   模块名: ['data', 'face_helpers', 'misc', 'support', 'test_support']
       data: [('studio/src/studio/ui/graph.rs', 20, 'graph')]
       face_helpers: [('run_method/src/macros/face.rs', 7, 'face')]

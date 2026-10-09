@@ -18,7 +18,7 @@
 
 **未在本轮复跑（沿用 t18→t29 的结论）**：非命名/歧义条目的出处核验与独立严重度重取（162 条时已做）、§8.2 与 `batch` 的逐行比对、严重度不变量的"修前为红"实验、语言比例与目录前缀（本轮顺带复查，见 §6）。
 
-**明确不在签字范围内**：任何技术结论（AMB 各条的命名建议是否恰当、合并方案的取舍、`nichlink-toolchain` 保留/改名的裁定）；`meta.unresolved_quoted_anchors`（63）与 `meta.nam_pattern_tokens`（17）声明 token 的**内容**；`/tmp` 探针与工具产物；`docs/audit-2026-09-28/` 之外的文件。
+**明确不在签字范围内**：任何技术结论（AMB 各条的命名建议是否恰当、合并方案的取舍、`xirang-toolchain` 保留/改名的裁定）；`meta.unresolved_quoted_anchors`（63）与 `meta.nam_pattern_tokens`（17）声明 token 的**内容**；`/tmp` 探针与工具产物；`docs/audit-2026-09-28/` 之外的文件。
 
 ---
 
@@ -44,13 +44,13 @@
 - **`call_evidence` 与 mcp 侧 `build_evidence.rs` 不混用**：报告 `:1345`/`:1351`/`:1406`/`:1468` 与方案 `:569` 都写明 `debug_method` 的模块名 = `call_evidence`（feature 仍叫 `evidence`），而 `build_evidence` 只指 `mcp/src/build_evidence.rs`（NAM-05 的修法）✓。
 - **同步抽查（≥3 处）**：
   1. `§2.1 :196` 与 `§2.2` 的"消失/仍存在"表（`:209-211`、`:215`、`:218`）：E0428 记为**已消失**（模块名不再是 `run`），而**三个 `run` 函数仍在**（`build_time::run()` / `mcp::run()` / `cli::run(argv)`）——与改名后的事实自洽 ✓；
-  2. `:178` 起的撞名表 + `:267-270` 的依赖替换表：根 glob 改为 `runtime`、其余按模块路径寻址（`nichlink_toolchain::build_time::` 等）✓；
-  3. feature/bin/`required-features` 与安装命令：`:137-139` 的 feature⇄模块对照表（13 个 feature 名**全部保留**，另给 README 的四行对照表 `build`→`build_time`、`run`→`runtime`、`plugins`→`plugin_host`、`evidence`→`call_evidence`），`:149/151/153` 三条 `cargo install nichlink-toolchain --features cli|studio,node-graph|mcp`，`:162/164/166` 的 `autobins=false` 与 `default=[]` 说明 ✓。
-- **旧名残留计数**（在方案里）：`pub use run::*` **0**、`pub use build::*` **0**、`src/run/` **0**、`src/build/` **0**、`src/plugins/` **0**、「模块名 `build`/`run`/`plugins`」**0**、`nichlink_toolchain::run` **0**、`toolchain/src/run/` **0**（我最初 grep 到的 4 处是 `toolchain/src/runtime…` 的前缀误命中，逐条看过：`:242` 同名嵌套记账、`:359-360` 的 `git mv` 目标、`:583` 的 `git mv` 示例）。唯一保留的旧形态是 `:196`/`:209` 的 E0428 **对照引用**（明写"已消失"）✓。
+  2. `:178` 起的撞名表 + `:267-270` 的依赖替换表：根 glob 改为 `runtime`、其余按模块路径寻址（`xirang_toolchain::build_time::` 等）✓；
+  3. feature/bin/`required-features` 与安装命令：`:137-139` 的 feature⇄模块对照表（13 个 feature 名**全部保留**，另给 README 的四行对照表 `build`→`build_time`、`run`→`runtime`、`plugins`→`plugin_host`、`evidence`→`call_evidence`），`:149/151/153` 三条 `cargo install xirang-toolchain --features cli|studio,node-graph|mcp`，`:162/164/166` 的 `autobins=false` 与 `default=[]` 说明 ✓。
+- **旧名残留计数**（在方案里）：`pub use run::*` **0**、`pub use build::*` **0**、`src/run/` **0**、`src/build/` **0**、`src/plugins/` **0**、「模块名 `build`/`run`/`plugins`」**0**、`xirang_toolchain::run` **0**、`toolchain/src/run/` **0**（我最初 grep 到的 4 处是 `toolchain/src/runtime…` 的前缀误命中，逐条看过：`:242` 同名嵌套记账、`:359-360` 的 `git mv` 目标、`:583` 的 `git mv` 示例）。唯一保留的旧形态是 `:196`/`:209` 的 E0428 **对照引用**（明写"已消失"）✓。
 
 ## 4. K-NAM1 —— **已关闭**
 
-- 报告 `:1421` 现写 `` 类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:48-54`，宏调用在 `:48`、两个 `cut(...)` 实参在 `:50`/`:52`） ``；我自己读了该文件 **46-56 行**：`nichlink_run_method::static_graft_plan!(` 正在 **48 行**，`cut(crate::control::object::button::NODE_ID)` 在 50、`cut(...slider...)` 在 52 —— 配对 token 落在所引区间内 ✓；旧的 `:50`/`:52` 单点配对写法全文 **0 处**。
+- 报告 `:1421` 现写 `` 类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:48-54`，宏调用在 `:48`、两个 `cut(...)` 实参在 `:50`/`:52`） ``；我自己读了该文件 **46-56 行**：`xirang_run_method::static_graft_plan!(` 正在 **48 行**，`cut(crate::control::object::button::NODE_ID)` 在 50、`cut(...slider...)` 在 52 —— 配对 token 落在所引区间内 ✓；旧的 `:50`/`:52` 单点配对写法全文 **0 处**。
 
 ## 5. 两条非阻塞 —— **都已修**
 
@@ -65,7 +65,7 @@
 - **模板残留 0**（排除 ``` 与行内代码后的 `{…}` 形状里无 `(`/`[`、无纯标识符形状）。
 - **正文全量锚点**：我扫出 **555 条**（源文件口径，见开头说明）：文件不存在 **0**、行号越界 **0**、**配对 token 不符 0**；唯二被标 `AMBIGUOUS` 的是同一个已声明排除项① 里的探针包路径（`control/control.rs` +43，两处出现；两个工作树候选 39/32 行不含第 43 行的结论沿用 t24）→ 门禁规则（多候选→跳过）下 **0 violation**，且排除项与 §1.5 的三类声明逐条对应、未掩盖缺陷。
 - **HTML**：`https?://` **0**、无外部 `<script src>`/`<link>`；新增第 6 页签 **`amb`（20 条）** 的 id 集合与 severity 与 JSON **逐条一致**；`nam`(30) 与 JSON 一致；12 个 crate × `files/lines/fn/pubfn` 与 `audit-inventory.json` **0 mismatch**；`nam_d3_note` 仍在。
-- **随机 10 条 `file`/`line`**（seed=20260928）：`NAM-19`→`studio/src/studio/app/tests/project.rs:1`、`GTE-G-09`→`tools/nichlink-publish:101`、`KRN-C-10`→`core/src/registry_core/mir/model.rs:28`、`NAM-20`→`mcp/src/index.rs:1`、`AMB-13`→`core/src/registry_core/release/release.rs:9`、`AMB-05`→`core/src/registry_core/tree/registry.rs:18`、`LGC-LG-09`→`build_method/src/pipeline.rs:155`、`KRN-K-15`→`core/src/registry_core/mir/jsonl.rs:111`、`LGC-LG-25`→`conventions/src/release_workflow.rs:96`、`STU-C-02`→`studio/src/studio/app/writers.rs:1`：**10/10 命中且行号在界内**。
+- **随机 10 条 `file`/`line`**（seed=20260928）：`NAM-19`→`studio/src/studio/app/tests/project.rs:1`、`GTE-G-09`→`tools/xirang-publish:101`、`KRN-C-10`→`core/src/registry_core/mir/model.rs:28`、`NAM-20`→`mcp/src/index.rs:1`、`AMB-13`→`core/src/registry_core/release/release.rs:9`、`AMB-05`→`core/src/registry_core/tree/registry.rs:18`、`LGC-LG-09`→`build_method/src/pipeline.rs:155`、`KRN-K-15`→`core/src/registry_core/mir/jsonl.rs:111`、`LGC-LG-25`→`conventions/src/release_workflow.rs:96`、`STU-C-02`→`studio/src/studio/app/writers.rs:1`：**10/10 命中且行号在界内**。
 - **作者闸门**：`check_report.py` 在真实产物上 **exit 0**（`claims checked: 43`、`recomputed: 212 {3,66,143} {164,31,17}`、`OK`）。
 - 顺带：`docs/audit-2026-09-28/` 无非法前缀文件；中文比 0.34（与前几轮同口径）。
 

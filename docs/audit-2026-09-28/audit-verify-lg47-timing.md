@@ -42,7 +42,7 @@ t79: load held 400ms; install took 400.157971ms; queue lock free while loading: 
 
 ## 4. 回归面与门禁（同一批 hash）
 
-- **回归**：t62 的 `a_generation_queued_during_a_load_stays_pending` 在整轮默认测试里仍绿；`cargo test -p nichlink-plugin-host --offline` **0**（6 passed）；`--features process-tools` **0**（6 个 ok 块，含 `fault_matrix` 的 LG-32 两条）。
+- **回归**：t62 的 `a_generation_queued_during_a_load_stays_pending` 在整轮默认测试里仍绿；`cargo test -p xirang-plugin-host --offline` **0**（6 passed）；`--features process-tools` **0**（6 个 ok 块，含 `fault_matrix` 的 LG-32 两条）。
 - `cargo test --workspace --offline` **0**（58 个 ok 块、0 FAILED）；`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**；`cargo fmt --all -- --check` **0**（0 行）。
 - 真实树只新增本报告；未改源码、未改他人产物、未 commit、未做 git 恢复类操作。
 

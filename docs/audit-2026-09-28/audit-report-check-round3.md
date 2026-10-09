@@ -10,8 +10,8 @@
 ## 0. 我跑的命令
 
 ```sh
-python3 /tmp/nichlink-audit-logs/check_report.py                       # 真实产物：exit 0
-python3 /tmp/nichlink-audit-logs/check_report.py /tmp/vs-round3/violating-findings.json   # 我造的违规副本：exit 1
+python3 /tmp/xirang-audit-logs/check_report.py                       # 真实产物：exit 0
+python3 /tmp/xirang-audit-logs/check_report.py /tmp/vs-round3/violating-findings.json   # 我造的违规副本：exit 1
 python3 /tmp/vs-round3/my_sev_check.py                                 # 我自己的严重度重取（全 162 条）
 python3 <<'PY'  # 六组计数重算 / §2↔JSON id 集合 / §3.2 覆盖 / meta.note 取值集 / 全文 163 扫描
 PY
@@ -54,7 +54,7 @@ PY
 
 ## 2. 机械不变量「修前为红」（我没重跑队长的实验，另造了一份违规副本）
 
-- 真实产物：`python3 /tmp/nichlink-audit-logs/check_report.py` → **exit 0**，输出 `rows with no severity source in the reports: 0 []`、`recomputed: 162 {CRITICAL:3, MAJOR:56, MINOR:103}…`、`claims checked: 37`、`OK: all counts and report claims agree`。
+- 真实产物：`python3 /tmp/xirang-audit-logs/check_report.py` → **exit 0**，输出 `rows with no severity source in the reports: 0 []`、`recomputed: 162 {CRITICAL:3, MAJOR:56, MINOR:103}…`、`claims checked: 37`、`OK: all counts and report claims agree`。
 - 我的违规副本（`/tmp/vs-round3/violating-findings.json`，把 `KRN-C-01` 由 MAJOR 改成 MINOR 并清掉 `severity_note`）→ **exit 1，11 条失败**，其中不变量那一条逐字点名：
   ```text
   severity below every source it comes from: KRN-C-01 is MINOR but audit-lane-kernel.md:280 (KRN)
@@ -106,7 +106,7 @@ PY
 
 - **六组聚合**（我从逐条字段重算 vs `counts`）：`total` 162 ✓、`by_severity` 3/56/103 ✓、`by_verify_status` 131/21/10 ✓、`by_batch` 3/23/14/50/21/51 ✓、`by_evidence_kind` 41/18/93/10 ✓、`by_severity_source` 44/110/5/3 ✓；`mechanism_falsified.ids` = 逐条 3 条 ✓；`unverified_ids` = 逐条 10 条 ✓；`major_by_status` = 48/8 ✓。
 - **§2 ↔ JSON id 集合**：三类双向相等、无重复（见 §1 K1）。
-- **随机 10 条 `file`/`line`**（seed=20260928）：`GTE-G-09`→`tools/nichlink-publish:101`、`KRN-C-10`→`core/src/registry_core/mir/model.rs:28`、`LGC-LG-09`→`build_method/src/pipeline.rs:155`、`KRN-K-15`→`core/src/registry_core/mir/jsonl.rs:111`、`LGC-LG-25`→`conventions/src/release_workflow.rs:96`、`STU-C-02`→`studio/src/studio/app/writers.rs:1`、`STU-S-06`→`studio/src/studio/app/search_queries.rs:74`、`GTE-N-1`→`.github/workflows/release.yml:66`、`LGC-LG-52`→`plugin-host/src/process.rs:392`、`SUR-C9`→`build_method/src/pipeline.rs:105`：**10/10 命中且行号在界内**。
+- **随机 10 条 `file`/`line`**（seed=20260928）：`GTE-G-09`→`tools/xirang-publish:101`、`KRN-C-10`→`core/src/registry_core/mir/model.rs:28`、`LGC-LG-09`→`build_method/src/pipeline.rs:155`、`KRN-K-15`→`core/src/registry_core/mir/jsonl.rs:111`、`LGC-LG-25`→`conventions/src/release_workflow.rs:96`、`STU-C-02`→`studio/src/studio/app/writers.rs:1`、`STU-S-06`→`studio/src/studio/app/search_queries.rs:74`、`GTE-N-1`→`.github/workflows/release.yml:66`、`LGC-LG-52`→`plugin-host/src/process.rs:392`、`SUR-C9`→`build_method/src/pipeline.rs:105`：**10/10 命中且行号在界内**。
 - **正文锚点全量**（不止随机 10 条）：444 条 `.rs:<line>` 我全扫了一遍——文件不存在 0、行号越界 0；**但配对 token 规则下有 1 处不符、另有 1 处同名歧义**，见 §5 K5 与 §6 N1。
 - **HTML**：`https?://` 计数 **0**（无外链、无外部 `<script src>`/`<link>`）；内嵌 12 个 crate 的 `files/lines/fn/pubfn` 与 `audit-inventory.json` **0 mismatch**。
 - **目录命名**：`docs/audit-2026-09-28/` 内全部 `audit-` 前缀（含本文件），无残留。

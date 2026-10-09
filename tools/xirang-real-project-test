@@ -10,10 +10,10 @@
 # 切口留在宿主自己编译的面上。这里没有手写夹具——面都是从一个能跑的面克隆来的。
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-real-project.XXXXXX")
-CARGO_FLAGS="${NICHLINK_REAL_PROJECT_CARGO_FLAGS---offline}"
-NICHLINK="$ROOT/target/debug/nichlink"
-LEAVES="${NICHLINK_REAL_PROJECT_LEAVES:-12}"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/xirang-real-project.XXXXXX")
+CARGO_FLAGS="${XIRANG_REAL_PROJECT_CARGO_FLAGS---offline}"
+XIRANG="$ROOT/target/debug/xirang"
+LEAVES="${XIRANG_REAL_PROJECT_LEAVES:-12}"
 fail() { printf 'real-project FAILED: %s\n' "$1" >&2; exit 1; }
 step() { printf '== %s\n' "$1"; }
 build() { command cargo build $CARGO_FLAGS "$@"; }
@@ -21,8 +21,8 @@ now() { date +%s.%N; }
 since() { awk -v a="$1" -v b="$(now)" 'BEGIN { printf "%.2f", b - a }'; }
 
 step "building the CLI"
-build -p nichlink-toolchain --features cli --bin nichlink >/dev/null 2>&1 ||
-  fail "cannot build $NICHLINK"
+build -p xirang-toolchain --features cli --bin xirang >/dev/null 2>&1 ||
+  fail "cannot build $XIRANG"
 
 step "growing the host: two containers, $LEAVES leaves each"
 mkdir -p "$WORK"
@@ -112,16 +112,16 @@ printf '   %s face files under control/\n' "$faces"
 rm -f "$WORK/host/add_crates.rs"
 
 step "unpartitioned: check, then build (wall time)"
-t0=$(now); (cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the grown host does not check"
+t0=$(now); (cd "$WORK/host" && "$XIRANG" check . >/dev/null 2>&1) || fail "the grown host does not check"
 printf '   check           %ss\n' "$(since "$t0")"
-(cd "$WORK/host" && "$NICHLINK" build . $CARGO_FLAGS >/dev/null 2>&1) || fail "the grown host does not build"
-printf '   nichlink build  %ss\n' "$(since "$t0")"
-cuts=$(ls -t $(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
+(cd "$WORK/host" && "$XIRANG" build . $CARGO_FLAGS >/dev/null 2>&1) || fail "the grown host does not build"
+printf '   xirang build  %ss\n' "$(since "$t0")"
+cuts=$(ls -t $(find "$WORK/target" -path "*xirang-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
 [ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] || fail "the host does not emit its two cuts"
 
 step "partitioned: two containers handed to crates of their own"
 cat >"$WORK/host/add_crates.rs" <<'RS'
-use nichlink_toolchain::run_method::{Crate, Shape};
+use xirang_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape::of(
@@ -134,16 +134,16 @@ pub fn add_crates() -> Shape {
 }
 RS
 t1=$(now)
-(cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the partitioned host does not check"
+(cd "$WORK/host" && "$XIRANG" check . >/dev/null 2>&1) || fail "the partitioned host does not check"
 printf '   check           %ss\n' "$(since "$t1")"
-(cd "$WORK/host" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
+(cd "$WORK/host" && "$XIRANG" crates --write . >/dev/null 2>&1) || fail "the split is not written"
 printf '   write           %ss\n' "$(since "$t1")"
-(cd "$WORK/host" && "$NICHLINK" build . $CARGO_FLAGS --workspace >/dev/null 2>&1) || fail "the partitioned workspace does not build"
-printf '   nichlink build  %ss\n' "$(since "$t1")"
+(cd "$WORK/host" && "$XIRANG" build . $CARGO_FLAGS --workspace >/dev/null 2>&1) || fail "the partitioned workspace does not build"
+printf '   xirang build  %ss\n' "$(since "$t1")"
 for pkg in split-left split-right split-facade; do
   [ -d "$WORK/crates/$pkg" ] || fail "the split did not produce $pkg"
 done
-host_cuts=$(ls -t $(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
+host_cuts=$(ls -t $(find "$WORK/target" -path "*xirang-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
 [ "$(grep -c 'StaticGraftCut::from_ids' "$host_cuts")" = "2" ] ||
   fail "the host stopped emitting the cuts on faces it still compiles"
 facade=$(ls -t $(find "$WORK/target" -path "*split-facade-*/out/generated_lib.rs") 2>/dev/null | head -1)
@@ -161,21 +161,21 @@ step "whole-container: both cuts move into a crate of their own"
 # 先把上一腿的包收回去。留在磁盘上的生成包会按**当前**声明重建它的树，因此声明一改，它就引用到不再
 # 位于自己依赖表里的属主——实测：过期的 facade 报 `E0433: cannot find module or crate`。这与
 # `crates --check` 尚未比对形状指纹是同一族。
-(cd "$WORK/host" && "$NICHLINK" crates --revert . >/dev/null 2>&1) || fail "the previous split does not revert"
+(cd "$WORK/host" && "$XIRANG" crates --revert . >/dev/null 2>&1) || fail "the previous split does not revert"
 cat >"$WORK/host/add_crates.rs" <<'RS'
-use nichlink_toolchain::run_method::{Crate, Shape};
+use xirang_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape::of("whole", &[Crate::named("control").at(&[crate::control::SUBTREE])])
 }
 RS
 t2=$(now)
-(cd "$WORK/host" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the whole-container host does not check"
-(cd "$WORK/host" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the whole-container split is not written"
+(cd "$WORK/host" && "$XIRANG" check . >/dev/null 2>&1) || fail "the whole-container host does not check"
+(cd "$WORK/host" && "$XIRANG" crates --write . >/dev/null 2>&1) || fail "the whole-container split is not written"
 printf '   check+write     %ss\n' "$(since "$t2")"
-(cd "$WORK/host" && "$NICHLINK" build . $CARGO_FLAGS --workspace >/dev/null 2>&1) || fail "the whole-container workspace does not build"
-printf '   nichlink build  %ss\n' "$(since "$t2")"
-host_now=$(ls -t $(find "$WORK/target" -path "*nichlink-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
+(cd "$WORK/host" && "$XIRANG" build . $CARGO_FLAGS --workspace >/dev/null 2>&1) || fail "the whole-container workspace does not build"
+printf '   xirang build  %ss\n' "$(since "$t2")"
+host_now=$(ls -t $(find "$WORK/target" -path "*xirang-example-partitioned-button-*/out/generated_lib.rs") 2>/dev/null | head -1)
 [ "$(grep -c 'StaticGraftCut::from_ids' "$host_now")" = "0" ] ||
   fail "the host still emits cuts for faces it handed away"
 ghost=$(ls -t $(find "$WORK/target" -path "*whole-control-*/out/generated_lib.rs") 2>/dev/null | head -1)

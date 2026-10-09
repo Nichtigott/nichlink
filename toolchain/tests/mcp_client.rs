@@ -17,7 +17,7 @@ use std::process::Command;
 /// The binary cargo built for this test.
 /// 本测试对应的、由 cargo 构建出来的二进制。
 fn binary() -> &'static str {
-    env!("CARGO_BIN_EXE_nichlink-mcp")
+    env!("CARGO_BIN_EXE_xirang-mcp")
 }
 
 /// One tool, one command, no session: the answer arrives and the exit code is 0.
@@ -25,7 +25,7 @@ fn binary() -> &'static str {
 #[test]
 fn one_call_is_one_command() {
     let output = Command::new(binary())
-        .args(["--call", "nichlink.status", "--root", "."])
+        .args(["--call", "xirang.status", "--root", "."])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("the client runs");
@@ -60,5 +60,5 @@ fn a_closed_pipe_is_not_a_failure() {
         "a closed pipe must not panic: {stderr}"
     );
     assert_eq!(output.status.code(), Some(0), "{output:?} {stderr}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("nichlink."));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("xirang."));
 }

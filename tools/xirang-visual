@@ -4,12 +4,12 @@
 # Studio 的视觉检查：在固定尺寸的 tmux 面板里运行真实二进制，用按键驱动它，并把终端
 # 实际显示的内容存下来。
 #
-#   tools/nichlink-visual                 # every scene
-#   tools/nichlink-visual tree add-form   # named scenes only
-#   tools/nichlink-visual --list
-#   tools/nichlink-visual --help
-#   NICHLINK_VISUAL_X=240 NICHLINK_VISUAL_Y=60 tools/nichlink-visual graph
-#   NICHLINK_VISUAL_STDOUT=1 tools/nichlink-visual tree
+#   tools/xirang-visual                 # every scene
+#   tools/xirang-visual tree add-form   # named scenes only
+#   tools/xirang-visual --list
+#   tools/xirang-visual --help
+#   XIRANG_VISUAL_X=240 XIRANG_VISUAL_Y=60 tools/xirang-visual graph
+#   XIRANG_VISUAL_STDOUT=1 tools/xirang-visual tree
 #
 # A name `--list` does not print is an error: it exits 2 and writes nothing, rather than
 # waiting for a screen that only a registered name describes.
@@ -17,14 +17,14 @@
 # 出的屏幕。
 #
 # Each scene writes two files into `target/visual` (override with
-# `NICHLINK_VISUAL_DIR`): `<scene>.txt` is the pane as plain text — the layout,
+# `XIRANG_VISUAL_DIR`): `<scene>.txt` is the pane as plain text — the layout,
 # which is what a diff should watch — and `<scene>.ansi.txt` keeps whatever SGR
 # attributes tmux stored. Measured caveat: tmux stores 24-bit RGB only when its
 # own `default-terminal` supports it, so on a plain `screen` server the colour
 # escapes are missing and only bold survives. Colour is therefore checked on a
 # real terminal; these files are for shape and regression. The default directory
 # is build output, so a run leaves nothing in the checkout.
-# 每个场景在 `target/visual`（可用 `NICHLINK_VISUAL_DIR` 覆盖）写两个文件：`<scene>.txt`
+# 每个场景在 `target/visual`（可用 `XIRANG_VISUAL_DIR` 覆盖）写两个文件：`<scene>.txt`
 # 是面板的纯文本——布局，也正是 diff 应当盯的东西；`<scene>.ansi.txt` 保留 tmux 存下的
 # SGR 属性。实测的注意点：只有 tmux 自己的 `default-terminal` 支持 24 位色时它才会存下
 # RGB，因此在朴素的 `screen` 服务端上颜色转义会缺失、只剩粗体。颜色请在真实终端里看；这些
@@ -45,14 +45,14 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # 夹具在九 crate 变三时移到了 `toolchain/` 下；旧的 `studio/tests/fixtures/...` 点名的目录不存在，而
 # 一次失败的 `cd` 会让 tmux 会话在第一帧之前就死掉——CI 里那个空面板就是它。
 FIXTURE="$ROOT/toolchain/tests/fixtures/node-editor"
-NAMESPACE="nichlink.fixture.node-editor"
-QUERY="${NICHLINK_VISUAL_QUERY:-preview_canvas_width}"
+NAMESPACE="xirang.fixture.node-editor"
+QUERY="${XIRANG_VISUAL_QUERY:-preview_canvas_width}"
 TREE_DEMO_QUERY="paint_node_editor"
-SESSION="nichlink-visual"
-BIN="$ROOT/target/debug/nichlink-studio"
-OUT_DIR="${NICHLINK_VISUAL_DIR:-$ROOT/target/visual}"
-COLUMNS="${NICHLINK_VISUAL_X:-300}"
-ROWS="${NICHLINK_VISUAL_Y:-60}"
+SESSION="xirang-visual"
+BIN="$ROOT/target/debug/xirang-studio"
+OUT_DIR="${XIRANG_VISUAL_DIR:-$ROOT/target/visual}"
+COLUMNS="${XIRANG_VISUAL_X:-300}"
+ROWS="${XIRANG_VISUAL_Y:-60}"
 
 # Scenes: name, the marker that proves the screen we asked for is up, the keys.
 # 场景：名字、证明"我们要的屏幕已经出来"的标记、按键。
@@ -104,11 +104,11 @@ prepare_scene() {
     case "$1" in
         partition)
             host=$(scene_fixture "$1")
-            mkdir -p "$host/src/panel/frame" "$host/target/nichlink/out"
-            # Its own `[workspace]`, like every project `nichlink new` writes: without one, a package
+            mkdir -p "$host/src/panel/frame" "$host/target/xirang/out"
+            # Its own `[workspace]`, like every project `xirang new` writes: without one, a package
             # nested under this checkout would be claimed by the checkout's workspace and cargo could
             # not name it — and the package name is the identity namespace.
-            # 自带 `[workspace]`，与 `nichlink new` 写的每个项目一样：没有它，嵌套在本检出之下的包会被本检出的
+            # 自带 `[workspace]`，与 `xirang new` 写的每个项目一样：没有它，嵌套在本检出之下的包会被本检出的
             # 工作区认领，cargo 就说不出它的名字——而包名就是身份命名空间。
             cat >"$host/Cargo.toml" <<'EOF'
 [workspace]
@@ -128,7 +128,7 @@ EOF
 crate::panel_object! { kind: Frame, parent: crate::panel::NODE_ID, }
 EOF
             cat >"$host/add_crates.rs" <<'EOF'
-use nichlink_toolchain::run_method::{Crate, Shape};
+use xirang_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape {
@@ -137,7 +137,7 @@ pub fn add_crates() -> Shape {
 }
 }
 EOF
-            cat >"$host/target/nichlink/out/pruning_manifest.tsv" <<'EOF'
+            cat >"$host/target/xirang/out/pruning_manifest.tsv" <<'EOF'
 # node	source	symbol	path	kind	registry_name	parent	source_hash	fields	calls	parent_node	owns_registry	logical_path
 00000000000000000000000000000001	panel/panel.rs	Panel	-	Panel	Panel	-	-	-	-	-	false	-
 00000000000000000000000000000002	panel/frame/frame.rs	Frame	-	Frame	Frame	-	-	-	-	-	false	-
@@ -202,11 +202,11 @@ usage() {
     awk '/^#!/ { next } /^#/ { print; next } /^[[:space:]]*$/ { next } { exit }' "$0" |
         sed 's/^# \{0,1\}//'
     printf '\nAvailable scenes: %s\n' "$(scenes)"
-    printf 'Pane size: %sx%s (NICHLINK_VISUAL_X / NICHLINK_VISUAL_Y)\n' "$COLUMNS" "$ROWS"
+    printf 'Pane size: %sx%s (XIRANG_VISUAL_X / XIRANG_VISUAL_Y)\n' "$COLUMNS" "$ROWS"
 }
 
 build() {
-    printf 'building nichlink-studio\n'
+    printf 'building xirang-studio\n'
     # `--offline` is the local default because this checkout is developed offline.
     # CI has a network and an empty registry cache on a cold runner, so it passes
     # an empty value here; the expansion uses `-` rather than `:-` precisely so an
@@ -214,13 +214,13 @@ build() {
     # `--offline` 是本地的默认值，因为本检出在离线环境下开发。CI 有网络，且冷启动时注册表
     # 缓存为空，因此它在这里传空值；展开用的是 `-` 而不是 `:-`，正是为了让显式传入的空值
     # 得以保留。
-    # The bin belongs to `nichlink-toolchain` since the nine-crates-into-three merge: the old
-    # `-p nichlink-studio` names a package that no longer exists, so this line could only fail.
+    # The bin belongs to `xirang-toolchain` since the nine-crates-into-three merge: the old
+    # `-p xirang-studio` names a package that no longer exists, so this line could only fail.
     # `required-features` gates the bin on `studio`, which is why the feature is named here.
-    # 合并（九 crate → 三）之后这个 bin 属于 `nichlink-toolchain`：旧的 `-p nichlink-studio` 点名的包
+    # 合并（九 crate → 三）之后这个 bin 属于 `xirang-toolchain`：旧的 `-p xirang-studio` 点名的包
     # 已经不存在，因此这一行只可能失败。`required-features` 把该 bin 门控在 `studio` 之后，所以这里点名该特性。
-    (cd "$ROOT" && cargo build -p nichlink-toolchain --features studio --bin nichlink-studio \
-        ${NICHLINK_VISUAL_CARGO_FLAGS---offline})
+    (cd "$ROOT" && cargo build -p xirang-toolchain --features studio --bin xirang-studio \
+        ${XIRANG_VISUAL_CARGO_FLAGS---offline})
 }
 
 cleanup() {
@@ -240,7 +240,7 @@ trap cleanup EXIT INT TERM
 # 失败必须分开的两件事，因为修法不同：**会话没了**（命令死了——通常是启动失败，答案在它的 stderr 里）与
 # **画面还没到**（程序活着但慢）。预算对第二种情况给得宽：冷的 CI runner 在 Studio 画出第一帧之前要解析
 # 工程并跑 `cargo metadata`，而第一次实测的 CI 运行正是在这个等待上失败、面板完全空白。
-WAIT_TRIES="${NICHLINK_VISUAL_TRIES:-600}"
+WAIT_TRIES="${XIRANG_VISUAL_TRIES:-600}"
 wait_for() {
     marker="$1"
     scene="${2:-}"
@@ -281,7 +281,7 @@ run_scene() {
     # about.
     # 空查询必须让该变量不存在：Studio 对空值也会打开搜索浮层，那会挡住本场景要看的屏幕。
     if [ -n "$query" ]; then
-        command="NICH_LINK_INITIAL_QUERY='$query' '$BIN'"
+        command="XIRANG_INITIAL_QUERY='$query' '$BIN'"
     else
         command="'$BIN'"
     fi
@@ -289,7 +289,7 @@ run_scene() {
     [ -n "$fixture" ] || fixture="$FIXTURE"
     namespace=$(scene_namespace "$name")
     tmux new-session -d -s "$SESSION" -x "$COLUMNS" -y "$ROWS" \
-        "cd '$fixture' && NICH_LINK_PACKAGE_ROOT='$fixture' NICH_LINK_NAMESPACE='$namespace' $command 2>'$OUT_DIR/$name.stderr'"
+        "cd '$fixture' && XIRANG_PACKAGE_ROOT='$fixture' XIRANG_NAMESPACE='$namespace' $command 2>'$OUT_DIR/$name.stderr'"
     # Two waits, because a scene has two things to prove: the app came up, and
     # the keys produced the screen this scene is about. Capturing between them
     # would sometimes save the previous screen.
@@ -305,7 +305,7 @@ run_scene() {
     tmux capture-pane -p -e -t "$SESSION" >"$OUT_DIR/$name.ansi.txt"
     cleanup
     printf '%-9s %s\n' "$name" "$OUT_DIR/$name.txt"
-    if [ "${NICHLINK_VISUAL_STDOUT:-}" = "1" ]; then
+    if [ "${XIRANG_VISUAL_STDOUT:-}" = "1" ]; then
         cat "$OUT_DIR/$name.txt"
     fi
 }

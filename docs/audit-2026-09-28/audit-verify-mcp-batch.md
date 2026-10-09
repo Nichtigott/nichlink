@@ -78,10 +78,10 @@ mcp/src/zz_t69_probe.rs           （挂在 crate 根，经 pub(crate) 面 + too
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo test -p nichlink-mcp --offline` | **exit 0**（3 个 `test result: ok` 段，23:11:34） |
+| `cargo test -p xirang-mcp --offline` | **exit 0**（3 个 `test result: ok` 段，23:11:34） |
 | `cargo test --workspace --offline` | **exit 0**（`test result: FAILED` 计数 0，23:11:40） |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | **exit 0**（23:12:40） |
-| `cargo test -p nichlink-conventions --offline` | **exit 0**（23:12:43） |
+| `cargo test -p xirang-conventions --offline` | **exit 0**（23:12:43） |
 | `cargo fmt --all -- --check` | **exit 0**（23:13:01） |
 
 被验的 8 个 mcp 文件在整轮门禁前后 `md5sum` 逐一相同（`OBJECT_STABLE=yes`）⇒ 结论针对静止对象；
@@ -91,12 +91,12 @@ mcp/src/zz_t69_probe.rs           （挂在 crate 根，经 pub(crate) 面 + too
 
 - **`MAX_DIFF_LINES = 200`（行数上限）没有独立装置**：我的装置只驱动字节上限那一支（验收点名
   的是它）。行数上限的行为由作者测试覆盖，本报告不为其背书。
-- **没有经 `nichlink.preview` 工具端到端驱动 `LG-23`**：装置直接调用该工具内部使用的
+- **没有经 `xirang.preview` 工具端到端驱动 `LG-23`**：装置直接调用该工具内部使用的
   `diff_package`（`preview.rs` 的 `pub(crate)` 函数，工具就是转发到它），因此"工具参数解析"这一层
   未覆盖。
 - **`LG-20` 的"不可预测性"是经验性证据**：我证明了"预置的名字不会被复用/删除、8 次调用 8 个名字"，
   但没有做统计强度或名字熵的证明（`entropy()` 取 `RandomState` 的进程内种子；跨进程不可预测性未测）。
-- **`LG-51` 只测了 `nichlink.mir`**：其它读路径的工具（`read`、`callgraph` 的 `path` 等）是否也不
+- **`LG-51` 只测了 `xirang.mir`**：其它读路径的工具（`read`、`callgraph` 的 `path` 等）是否也不
   泄露根外存在性未覆盖——本单范围只是 `mir` 的那一条。
 - **并发/竞态未测**（三条修复都与并发无关，故未构造并发装置）。
 

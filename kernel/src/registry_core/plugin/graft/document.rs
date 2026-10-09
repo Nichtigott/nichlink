@@ -217,13 +217,13 @@ pub fn validate_graft_selector(selector: &str) -> Result<(), GraftPlanDocumentEr
     }
     // A selector names one directory inside the record root, so `.` and `..` are
     // not names at all: joining them walked the writer out of the record root
-    // (`<pkg>/.nichlink/external-grafts/../graft.plan`), the write reported
+    // (`<pkg>/.xirang/external-grafts/../graft.plan`), the write reported
     // success, and `list_external_grafts` then never listed it — a record the
     // runtime never applied while the author saw a created plan. A leading dot is
     // refused with them, because a hidden record directory is the same surprise in
     // a quieter form.
     // 选择器命名记录根目录里的**一个**目录，因此 `.` 与 `..` 根本不是名字：join 它们会把写入方
-    // 带出记录根（`<pkg>/.nichlink/external-grafts/../graft.plan`），写入还报成功，随后
+    // 带出记录根（`<pkg>/.xirang/external-grafts/../graft.plan`），写入还报成功，随后
     // `list_external_grafts` 永远列不出它——一份运行期从不应用、作者却看到"计划已创建"的记录。
     // 以点开头的名字一并拒绝，因为隐藏的记录目录是同一个意外更安静的形式。
     if selector.starts_with('.') {

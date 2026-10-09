@@ -26,7 +26,7 @@ fn temp_project(label: &str, manifest: &str) -> std::path::PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-namespace-{label}-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-namespace-{label}-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("project directory");
     std::fs::write(root.join("Cargo.toml"), manifest).expect("manifest");
     std::fs::write(root.join("src/lib.rs"), "// host entry\n").expect("library target");
@@ -50,7 +50,7 @@ fn a_launched_session_authors_under_the_host_crates_package_name() {
     assert_eq!(host_manifest(), root.join("Cargo.toml"));
     // The environment override still wins verbatim, exactly as the build side reads
     // it; without one the manifest names the namespace.
-    let expected = std::env::var("NICH_LINK_NAMESPACE").unwrap_or_else(|_| "demo-app".to_owned());
+    let expected = std::env::var("XIRANG_NAMESPACE").unwrap_or_else(|_| "demo-app".to_owned());
     assert_eq!(package_namespace(), expected);
     // The adopted context is thread-local and the harness reuses threads, so the
     // fixture directory stays: a later test on this thread that falls back to
@@ -62,13 +62,13 @@ fn a_launched_session_authors_under_the_host_crates_package_name() {
 /// The namespace comes from Cargo's answer for the adopted manifest, not from a
 /// literal line scan. The load-bearing case is TOML's dotted form: it is the same
 /// table as `[package]`, a line scan sees no header and answers nothing, and
-/// Studio then authored the project under `nichlink.default` — an identity domain
+/// Studio then authored the project under `xirang.default` — an identity domain
 /// none of that project's recorded ids live in, so a trace or a graft record on
 /// disk could not resolve. The remaining cases are the ones the old scan already
 /// had to get right, kept so the authority change cannot quietly lose them.
 /// 命名空间来自 Cargo 对已采纳清单的回答，而不是字面逐行扫描。承重的情形是 TOML 的点式写法：
 /// 它与 `[package]` 是同一张表，逐行扫描看不到任何表头、什么也答不出，于是 Studio 会在
-/// `nichlink.default` 之下创作该项目——而该项目记录的任何 id 都不住在那个身份域里，落盘的
+/// `xirang.default` 之下创作该项目——而该项目记录的任何 id 都不住在那个身份域里，落盘的
 /// trace 或 graft 记录因此解析不了。其余情形是旧扫描本来就必须答对的那些，保留它们是为了让这次
 /// 权威更替不会悄悄丢掉它们。
 #[test]
@@ -204,7 +204,7 @@ fn installed_studio_never_exports_cargo_git_cache_paths() {
 
     let source = crate::build_method::scaffold::detected_source(
         &checkout.join("toolchain"),
-        &checkout.join("outside-bin/nichlink-toolchain"),
+        &checkout.join("outside-bin/xirang-toolchain"),
     );
     let (core, build) = crate::build_method::scaffold::dependency_specs(&source);
 

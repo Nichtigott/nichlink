@@ -2,10 +2,10 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "NichLink 工作区架构：宿主生命周期与九个 crate",
+    "title": "XiRang 工作区架构：宿主生命周期与九个 crate",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/Nichtigott/nichlink",
+      "url": "https://github.com/Nichtigott/xirang",
       "revision": "cf0c378c68307927589c69d628a2a327ab91b680"
     },
     "views": [
@@ -63,7 +63,7 @@
     {
       "id": "buildm",
       "type": "backend",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "构建期：扫描 src/ · 写 OUT_DIR",
       "sources": [
         {
@@ -82,7 +82,7 @@
     {
       "id": "core",
       "type": "backend",
-      "label": "nichlink-core（纯内核）",
+      "label": "xirang-core（纯内核）",
       "sublabel": "身份 · 解析 · 树 · 诊断",
       "sources": [
         {
@@ -101,7 +101,7 @@
     {
       "id": "cli",
       "type": "frontend",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "argv 分发 · cargo 子进程",
       "sources": [
         {
@@ -121,7 +121,7 @@
     {
       "id": "runm",
       "type": "backend",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "运行期：注册实例 · authoring",
       "sources": [
         {
@@ -140,7 +140,7 @@
     {
       "id": "macro",
       "type": "backend",
-      "label": "nichlink-macro",
+      "label": "xirang-macro",
       "sublabel": "编译期 face 字段前端",
       "sources": [
         {
@@ -159,7 +159,7 @@
     {
       "id": "mcp",
       "type": "frontend",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "stdio 桥 · 17 个工具",
       "sources": [
         {
@@ -179,7 +179,7 @@
     {
       "id": "pluginhost",
       "type": "security",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "wasm / 进程插件 · 准入",
       "sources": [
         {
@@ -199,7 +199,7 @@
     {
       "id": "studio",
       "type": "frontend",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "ratatui 创作与检视",
       "sources": [
         {
@@ -218,7 +218,7 @@
     {
       "id": "debugm",
       "type": "backend",
-      "label": "nichlink-toolchain",
+      "label": "xirang-toolchain",
       "sublabel": "MIR 与 trace 的证据合并",
       "sources": [
         {
@@ -302,7 +302,7 @@
       "dot": "cyan",
       "title": "宿主生命周期",
       "items": [
-        "build.rs 调 nichlink_toolchain::build_time::run()：扫描 src/、推导面与 NodeId",
+        "build.rs 调 xirang_toolchain::build_time::run()：扫描 src/、推导面与 NodeId",
         "生成计划写进 OUT_DIR，crate 根的 host!() 用 include! 拉进编译单元",
         "运行期由 run_method 建注册实例，跑 authoring 与 trace"
       ]
@@ -334,7 +334,7 @@
         "core/source/calls.rs 的两套调用扫描器仍并存（R 系列收拢暂缓）；KN4 已让它们对同一函数体给出一致的结论",
         "conventions 的 12 道门禁仍各自做文本扫描；G-09 抽出了共享的 drop_governed_lines，整体收拢暂缓",
         "命名空间被 CLI / MCP / Studio 各读一遍，规则不一致（S12，待另一窗口的在途改动落地）",
-        "发布版本号的两套读取逻辑已收敛（RC4）：工作流改调 tools/nichlink-publish --workspace-version",
+        "发布版本号的两套读取逻辑已收敛（RC4）：工作流改调 tools/xirang-publish --workspace-version",
         "MCP 的 converge / verify / usages / explain / diff / grafts 答案仍高度重叠（R 系列），但 m2/m3/m4 已让各自契约与行为一致"
       ]
     }

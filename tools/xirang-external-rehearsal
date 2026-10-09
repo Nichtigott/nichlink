@@ -3,8 +3,8 @@
 # checkout and depends on the workspace by path.
 # 演练真实用户走的路径：一个位于本检出**之外**、按路径依赖本工作区的项目。
 #
-#   tools/nichlink-external-rehearsal
-#   NICHLINK_REHEARSAL_CARGO_FLAGS="" tools/nichlink-external-rehearsal
+#   tools/xirang-external-rehearsal
+#   XIRANG_REHEARSAL_CARGO_FLAGS="" tools/xirang-external-rehearsal
 #
 # Why it exists: every other check builds the examples where they are checked in,
 # i.e. inside the workspace that owns them, where `[workspace]` members, relative
@@ -35,7 +35,7 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-CARGO_FLAGS="${NICHLINK_REHEARSAL_CARGO_FLAGS---offline}"
+CARGO_FLAGS="${XIRANG_REHEARSAL_CARGO_FLAGS---offline}"
 HOSTS="control-button control-button-graft"
 # Which host the rehearsal builds and tests, once both are copied.
 # 两个宿主都复制之后，本演练构建并测试哪一个。
@@ -103,26 +103,26 @@ cargo test $CARGO_FLAGS
 # The checkout's own CLI, pointed at a project that is not its example: the
 # external-path diagnostic and the project resolver are part of this path.
 # 本检出自己的 CLI，指向一个不是它示例的项目：外部路径诊断与项目解析都是这条路径的一部分。
-BIN="$ROOT/target/debug/nichlink"
+BIN="$ROOT/target/debug/xirang"
 if [ -x "$BIN" ]; then
   echo "checking $WORK/$SUBJECT with the built CLI" >&2
   "$BIN" check "$WORK/$SUBJECT"
   cli_half="ran"
 else
-  echo "note: $BIN is not built; skipping the CLI half (cargo build -p nichlink-cli)" >&2
+  echo "note: $BIN is not built; skipping the CLI half (cargo build -p xirang-cli)" >&2
   cli_half="skipped: $BIN is not built"
 fi
 
-# The third leg: the project a user actually gets from `nichlink new` has to compile.
-# No other check reached this half. Every NichLink path in the generated templates was
+# The third leg: the project a user actually gets from `xirang new` has to compile.
+# No other check reached this half. Every XiRang path in the generated templates was
 # spelled `crate::…` — the *host's* own crate — while the macros and trace APIs live in
-# `nichlink-toolchain`, so every scaffolded host was dead on arrival, and the one pin
+# `xirang-toolchain`, so every scaffolded host was dead on arrival, and the one pin
 # that mentioned the output asserted only that a version string appeared in the
 # manifest. Two batches of renames (core → kernel, nine crates → toolchain) went
 # unnoticed for the same reason: nothing ever built a generated project.
-# 第三条腿：用户真正从 `nichlink new` 拿到的项目必须编译得过。别的检查都到不了这一半。
-# 生成模板里每一处 NichLink 路径都写成 `crate::…`——那是**宿主**自己的 crate——而宏与
-# trace API 住在 `nichlink-toolchain` 里，于是每个生成的宿主一出生就是坏的，而唯一提到这些
+# 第三条腿：用户真正从 `xirang new` 拿到的项目必须编译得过。别的检查都到不了这一半。
+# 生成模板里每一处 XiRang 路径都写成 `crate::…`——那是**宿主**自己的 crate——而宏与
+# trace API 住在 `xirang-toolchain` 里，于是每个生成的宿主一出生就是坏的，而唯一提到这些
 # 产物的钉子只断言清单里出现了一个版本字符串。批 1 与批 2 的两次改名（core → kernel、九个
 # crate → toolchain）因此都没被发现，理由相同：从来没有东西构建过一个生成出来的项目。
 #

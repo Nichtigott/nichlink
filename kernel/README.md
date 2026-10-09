@@ -1,8 +1,8 @@
-# nichlink-kernel
+# xirang-kernel
 
 [简体中文](README.zh-CN.md) | English
 
-The kernel of NichLink: protocol nouns plus pure methods — no I/O, no
+The kernel of XiRang: protocol nouns plus pure methods — no I/O, no
 environment bindings. Everything here is testable in memory and reusable from
 any execution surface.
 
@@ -22,9 +22,9 @@ Modules under `registry_core`:
 | `syntax` (feature `syntax`) | Registration face parser, application/graft entry discovery |
 | `authoring` | Face authoring data that is always available: the field-name table, presentation metadata, and pure `validation`; only its `parse` and `snapshot` submodules are behind feature `syntax` |
 | `json` | Shared JSON string encoding for every artifact this workspace writes: the build-diagnostics document, the MIR JSONL artifact, the editor-snippet file |
-| `lexicon` | Shared text contracts: generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, scope exemptions |
+| `lexicon` | Shared text contracts: generated-entry file name, runtime crate name, environment variables, `.xirang` paths, scope exemptions |
 
 The boundary rule: anything with no I/O and no `std::env`/time/process binding
-belongs here; execution surfaces (`nichlink-toolchain`, `nichlink-toolchain`,
-`nichlink-toolchain`, `nichlink-toolchain`, studio, mcp, cli) bind these
+belongs here; execution surfaces (`xirang-toolchain`, `xirang-toolchain`,
+`xirang-toolchain`, `xirang-toolchain`, studio, mcp, cli) bind these
 methods to their contexts.

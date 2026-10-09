@@ -34,7 +34,7 @@ Linking dynamic dispatch...
 ```
 Now the three h-classes. Let me start with h1-supply-chain (the "one sibling calls a different family of names than its siblings do"). 
 
-Tree layout: graft/src/{gauge_fast,toggle_fast,slider_fast,button_fast,timeline_fast,panel_fast,spinner_fast,dial_fast,badge_fast,lib}.rs, host/src/control/object/{slider,panel,button,timeline,badge,dial,toggle,gauge,spinner}/*.rs + control.rs + registry_rule/registry_rule.rs + lib.rs + tests/offsets.rs, build.rs, Cargo.toml, host/.nichlink...
+Tree layout: graft/src/{gauge_fast,toggle_fast,slider_fast,button_fast,timeline_fast,panel_fast,spinner_fast,dial_fast,badge_fast,lib}.rs, host/src/control/object/{slider,panel,button,timeline,badge,dial,toggle,gauge,spinner}/*.rs + control.rs + registry_rule/registry_rule.rs + lib.rs + tests/offsets.rs, build.rs, Cargo.toml, host/.xirang...
 
 Symptom: "The rendered layout is off. cargo test --offline fails in the offsets test with a total that no single widget's own code explains, and every widget file reads as correct on its own."
 
@@ -157,15 +157,15 @@ The odd sibling: `host/src/control/object/toggle/toggle.rs:15 fn offset` calls `
 
 Let me confirm the numbers: `to_local(10) = 17`, `to_world(10) = 41`. Test sums 8 widgets: 7 × 17 + 41 = 119 + 41 = 160 ≠ 136 (expected = 8×17 = 136) ✓ — the test fails with 160. 
 
-Let me read toggle.rs:15 and one sibling to confirm the exact line (e.g. button.rs:15) — and get raw evidence with exit codes. Also the failing test's raw output would be nice, but running cargo test on the h1-supply-chain tree requires building nichlink-toolchain (path dep to the workspace) — expensive. The brief demands "evidence: every claim: the command you ran, its raw output and its exit code". For my arm, codegraph commands are the commands. I can cite `callers to_world` output + exit 0.
+Let me read toggle.rs:15 and one sibling to confirm the exact line (e.g. button.rs:15) — and get raw evidence with exit codes. Also the failing test's raw output would be nice, but running cargo test on the h1-supply-chain tree requires building xirang-toolchain (path dep to the workspace) — expensive. The brief demands "evidence: every claim: the command you ran, its raw output and its exit code". For my arm, codegraph commands are the commands. I can cite `callers to_world` output + exit 0.
 
-Hmm, but the class brief demands raw output for every claim. My codegraph commands give raw output. That's fine — I'm the codegraph arm; but a *stronger* evidence would be an actual cargo test run showing the failure. That's a nonbridge call, builds the toolchain (heavy). Given that the ninth round arm probably ran cargo (its tool was nichlink-mcp, and the brief requires 交付后门必须绿 only for modifiable trees; for read-only diagnosis the evidence requirement says command+output+exit code).
+Hmm, but the class brief demands raw output for every claim. My codegraph commands give raw output. That's fine — I'm the codegraph arm; but a *stronger* evidence would be an actual cargo test run showing the failure. That's a nonbridge call, builds the toolchain (heavy). Given that the ninth round arm probably ran cargo (its tool was xirang-mcp, and the brief requires 交付后门必须绿 only for modifiable trees; for read-only diagnosis the evidence requirement says command+output+exit code).
 
 Let me consider the budget: building the toolchain offline for h1-supply-chain's host would take maybe 1-3 minutes (the workspace's deps are cached). It would also let me verify my predicted number 160 vs 136 — a strong, decisive piece of counter-proof. Given the value (the truth for h1-supply-chain is exactly "toggle uses to_world" and the symptom number), a single cargo test run is worth it. Also for h3-cross-file-chain (shipped tree assertion) and h2 (tests pass; ledger) I might run cargo too.
 
-But careful: the host crates need `carrier/control-button-graft`? No — h-classes' host Cargo.toml points graft to `../graft` (per TREES.json correction). So the host depends on `../graft` (present) ✓ and nichlink-toolchain (path to workspace ✓). Also the build.rs needs the toolchain's build feature — offline should work with the cargo registry cache (the workspace builds offline).
+But careful: the host crates need `carrier/control-button-graft`? No — h-classes' host Cargo.toml points graft to `../graft` (per TREES.json correction). So the host depends on `../graft` (present) ✓ and xirang-toolchain (path to workspace ✓). Also the build.rs needs the toolchain's build feature — offline should work with the cargo registry cache (the workspace builds offline).
 
-Also: cargo needs a target dir — I'll use my probe cargo-target (shared). Each host tree has the same crate name `control_button`? The trees fa/fb/fc/h1/... all use package name `nichlink-example-control-button`; sharing one target dir is fine (artifacts keyed by name+version+source), but different trees have different source → cargo will rebuild. Sharing is OK.
+Also: cargo needs a target dir — I'll use my probe cargo-target (shared). Each host tree has the same crate name `control_button`? The trees fa/fb/fc/h1/... all use package name `xirang-example-control-button`; sharing one target dir is fine (artifacts keyed by name+version+source), but different trees have different source → cargo will rebuild. Sharing is OK.
 
 Hmm, but there's a risk: the h1-supply-chain host's Cargo.lock may reference path deps that exist. Let me check host/Cargo.toml quickly... Let me just try running the offsets test for h1-supply-chain. If it fails to build (missing deps/network), I'll fall back to static evidence and report the attempted command in the log.
 
@@ -177,7 +177,7 @@ Let me also grab the toggle.rs and button.rs sources via codegraph first (log), 
 
 Let me do both in one bash call: cg node toggle.rs, cg node button.rs, then nb.sh with cargo (timeout 600s).
 
-Wait — one consideration: the h1-supply-chain host crate name is `control_button`, and its `graft` dep is `control_button_graft` at `../graft`. The graft crate's Cargo.toml may reference nichlink-toolchain too. Fine.
+Wait — one consideration: the h1-supply-chain host crate name is `control_button`, and its `graft` dep is `control_button_graft` at `../graft`. The graft crate's Cargo.toml may reference xirang-toolchain too. Fine.
 
 Let me run.
 ```
@@ -190,8 +190,8 @@ Let me run.
 ```
 **host/src/lib.rs** — 98 lines, 3 symbols · no other indexed file depends on it
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -200,7 +200,7 @@ Let me run.
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -216,7 +216,7 @@ Let me run.
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -237,7 +237,7 @@ Let me run.
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -736,7 +736,7 @@ Now let me try running the test to get the actual failure output — good eviden
 
 Risk: build time. Let me run with a generous timeout and in background if needed. Let me first check if the toolchain builds quickly... Let me just run it with timeoutMs 600000 (10 min) — the harness may move it to background if it exceeds.
 
-Actually, `cargo test --offline` for this host requires building nichlink-toolchain (a big crate with proc-macro deps like syn? maybe). The workspace's own build cache is at /home/nich/Moirai_N3/nichlink/target (the workspace target dir) — a DIFFERENT target dir than my probe cargo-target, so it will rebuild from scratch. Could take several minutes. The deps come from the local registry cache (offline OK).
+Actually, `cargo test --offline` for this host requires building xirang-toolchain (a big crate with proc-macro deps like syn? maybe). The workspace's own build cache is at /home/nich/Moirai_N3/nichlink/target (the workspace target dir) — a DIFFERENT target dir than my probe cargo-target, so it will rebuild from scratch. Could take several minutes. The deps come from the local registry cache (offline OK).
 
 Given the value (only for h1-supply-chain, h3, h2 evidence) — that's 3 questions × maybe 2-5 min = manageable. But if the toolchain build is heavy (it has a proc-macro crate, wasmtime? — plugin_host might pull heavy deps when features are off... default features = build+run, so maybe moderate).
 
@@ -744,7 +744,7 @@ Let me try once for h1-supply-chain and measure. If it's fast enough, I'll do h2
 
 Alternatively, I can verify the arithmetic without cargo: the test sums offset(10) over 8 widgets; toggle returns to_world(10)=41; others to_local(10)=17 ⇒ total = 7*17 + 41 = 160 ≠ 136. That's already a decisive, checkable claim derived from source (and codegraph callers). The cargo run adds "the test actually fails with 160" — nice-to-have but expensive.
 
-Hmm. The captain's measurement wants steps/context. Extra cargo runs inflate my nonbridge count and time. The ninth round arm (nichlink-mcp) probably didn't need cargo for read-only diagnostics... but the brief's "evidence = command + raw output + exit code" suggests some command.
+Hmm. The captain's measurement wants steps/context. Extra cargo runs inflate my nonbridge count and time. The ninth round arm (xirang-mcp) probably didn't need cargo for read-only diagnostics... but the brief's "evidence = command + raw output + exit code" suggests some command.
 
 I'll do ONE cargo run for h1-supply-chain as a feasibility probe; if it builds within ~3-4 min, I'll reuse the same target dir for h2/h3 (incremental → fast). This is valuable evidence for 3 questions. Let me run it in the background and continue working on h3 static analysis meanwhile.
 

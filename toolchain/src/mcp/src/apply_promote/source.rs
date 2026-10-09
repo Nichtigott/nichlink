@@ -160,7 +160,7 @@ pub(super) fn external_root(
         }
         // The typed declaration names the **library**, and a package is free to name its library
         // something else — the shipped example does exactly that
-        // (`nichlink-example-control-button-graft` with `[lib] name = "control_button_graft"`). So
+        // (`xirang-example-control-button-graft` with `[lib] name = "control_button_graft"`). So
         // the crate segment is matched against the package name and against the library the
         // dependency's own manifest declares.
         // 类型化声明点名的是**库**，而一个包可以给库起别的名字——出厂示例正是这样。因此 crate 段同时与
@@ -243,10 +243,10 @@ fn library_name(crate_root: &Path) -> String {
 /// （`FlowContract::new(ContractId::new("x"), 1, "In", "Out")`），而创作 patch 收的是紧凑的
 /// `id|version|input|output` 拼法；内核把紧凑形式渲染成表达式的方向有，反方向没有读取器。四个部分本来
 /// 就在类型化快照里，因此从这里读，而不是在这里再写一个解析器。
-pub(super) fn external_registry(root: &Path) -> Result<nichlink_kernel::Registry, String> {
+pub(super) fn external_registry(root: &Path) -> Result<xirang_kernel::Registry, String> {
     let namespace = crate::mcp::registry::namespace(root)?;
-    let mut registry = nichlink_kernel::Registry::root_for_namespace(
-        nichlink_kernel::FrameworkId::new("nichlink.mcp"),
+    let mut registry = xirang_kernel::Registry::root_for_namespace(
+        xirang_kernel::FrameworkId::new("xirang.mcp"),
         namespace.clone(),
     );
     let source_root = crate::build_method::source_layout(root)?.scan_root;
@@ -292,7 +292,7 @@ pub(super) struct External {
 
 impl External {
     pub(super) fn from_syntax(
-        face: &nichlink_kernel::syntax::FaceSyntax,
+        face: &xirang_kernel::syntax::FaceSyntax,
         file: &Path,
         flow: String,
     ) -> Result<Self, String> {

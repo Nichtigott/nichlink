@@ -1,14 +1,14 @@
-//! `nichlink grafts`: inspect the external graft plans on disk.
-//! `nichlink grafts`：检视磁盘上的外部 graft 计划。
+//! `xirang grafts`: inspect the external graft plans on disk.
+//! `xirang grafts`：检视磁盘上的外部 graft 计划。
 //!
-//! A plan under `.nichlink/external-grafts/` is an authoring record the build
+//! A plan under `.xirang/external-grafts/` is an authoring record the build
 //! never opens; the build only warns when the host entry's `static_graft_plan!`
 //! does not declare the slot (see `build_method/src/graft_plan_check.rs`). That
 //! warning is easy to miss in a long `cargo` log, so this command makes the same
 //! decision inspectable on demand, using the kernel's `GraftPlanDocument` parser
 //! and the build's `declared_grafts`/`names_face` rather than a second copy of
 //! either rule. Read-only: it opens files and writes nothing.
-//! `.nichlink/external-grafts/` 下的计划是构建从不打开的创作记录；只有当宿主入口的
+//! `.xirang/external-grafts/` 下的计划是构建从不打开的创作记录；只有当宿主入口的
 //! `static_graft_plan!` 没有声明该槽位时构建才警告（见
 //! `build_method/src/graft_plan_check.rs`）。在冗长的 `cargo` 日志里这条警告容易被
 //! 漏掉，因此本命令用内核的 `GraftPlanDocument` 解析器和构建的
@@ -29,8 +29,8 @@ use crate::cli::explain::json::{render_json, write_error};
 
 use super::resolve_package;
 
-/// List every plan under `.nichlink/external-grafts/*/graft.plan`.
-/// 列出 `.nichlink/external-grafts/*/graft.plan` 下的每个计划。
+/// List every plan under `.xirang/external-grafts/*/graft.plan`.
+/// 列出 `.xirang/external-grafts/*/graft.plan` 下的每个计划。
 pub(crate) fn grafts(
     args: &mut impl Iterator<Item = String>,
     out: &mut dyn Write,
@@ -64,7 +64,7 @@ pub(crate) fn grafts(
             // 并带上原因。
             if json_output {
                 let report = json!({
-                    "schema": "nichlink.grafts/1",
+                    "schema": "xirang.grafts/1",
                     "entry": Value::Null,
                     "entry_error": Value::Null,
                     "plans": [],
@@ -111,7 +111,7 @@ pub(crate) fn grafts(
 
     if json_output {
         let report = json!({
-            "schema": "nichlink.grafts/1",
+            "schema": "xirang.grafts/1",
             "entry": entry,
             "entry_error": entry_error,
             "plans": rows,
@@ -130,7 +130,7 @@ pub(crate) fn grafts(
     if rows.is_empty() {
         writeln!(
             out,
-            "no external graft plans under .nichlink/external-grafts/"
+            "no external graft plans under .xirang/external-grafts/"
         )
         .map_err(write_error)?;
         return report_problems(problems);
@@ -207,11 +207,11 @@ fn report_problems(problems: Vec<String>) -> Result<(), String> {
 ///
 /// The rule — which plans exist, what each targets, and whether the host entry declares
 /// that slot — belongs to `crate::build_method::graft_plan_rows`, because the MCP
-/// bridge's `nichlink.grafts` asks the same question and two copies of a rule like this
-/// drift. This only renders the rows into the `nichlink.grafts/1` JSON shape.
+/// bridge's `xirang.grafts` asks the same question and two copies of a rule like this
+/// drift. This only renders the rows into the `xirang.grafts/1` JSON shape.
 /// 规则——有哪些计划、每条针对什么、以及宿主入口是否声明了那个槽位——属于
-/// `crate::build_method::graft_plan_rows`，因为 MCP 桥的 `nichlink.grafts` 问的是同一个
-/// 问题，而这类规则的两份副本会漂移。这里只把那些行渲染成 `nichlink.grafts/1` 的 JSON 形状。
+/// `crate::build_method::graft_plan_rows`，因为 MCP 桥的 `xirang.grafts` 问的是同一个
+/// 问题，而这类规则的两份副本会漂移。这里只把那些行渲染成 `xirang.grafts/1` 的 JSON 形状。
 pub(crate) fn plan_rows(
     manifest: &Path,
     faces: &[FaceView],
@@ -225,8 +225,8 @@ pub(crate) fn plan_rows(
     )
 }
 
-/// Render one plan row as the `nichlink.grafts/1` JSON shape.
-/// 把一条计划行渲染成 `nichlink.grafts/1` 的 JSON 形状。
+/// Render one plan row as the `xirang.grafts/1` JSON shape.
+/// 把一条计划行渲染成 `xirang.grafts/1` 的 JSON 形状。
 ///
 /// Shared with the overlay projection, which carries the same rows: two renderers
 /// for one row would let the `grafts` verb and `explain --overlay` describe the

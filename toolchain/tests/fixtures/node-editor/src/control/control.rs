@@ -2,7 +2,7 @@
 //! Fixture Control folder face: it owns a Registry, and every direct child must
 //! satisfy the rule kept beside it.
 
-use nichlink_run_method::{ContractId, FlowContract};
+use xirang_run_method::{ContractId, FlowContract};
 
 /// 父注册面交给子对象的绘制结果。
 /// The frame a parent face hands to its children for painting.

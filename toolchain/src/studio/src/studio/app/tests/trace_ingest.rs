@@ -88,7 +88,7 @@ fn fixture(label: &str) -> Fixture {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-trace-{label}-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-trace-{label}-{suffix}"));
     let control = root.join("src/control/control.rs");
     let rule = root.join("src/control/registry_rule/registry_rule.rs");
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
@@ -430,7 +430,7 @@ fn the_loader_reads_the_convention_path() {
     fixture.write_fixture(&matching_artifact(&fixture, &trace));
     let expected = fixture
         .root
-        .join(crate::run_method::lexicon::NICHLINK_DIR)
+        .join(crate::run_method::lexicon::XIRANG_DIR)
         .join(crate::run_method::lexicon::TRACE_DIR)
         .join(crate::run_method::lexicon::TRACE_FILE);
     assert_eq!(fixture.artifact_path(), expected);

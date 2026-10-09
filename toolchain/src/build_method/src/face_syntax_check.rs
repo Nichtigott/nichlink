@@ -53,7 +53,7 @@ fn visit_parent_macro_errors(src: &Path, nodes: &[Node], errors: &mut BuildDiagn
                     .macro_name
                     .strip_suffix("_object")
                     .filter(|name| *name != "external")
-                    .filter(|name| *name != "control" || source.contains("generated-by=NichLink"));
+                    .filter(|name| *name != "control" || source.contains("generated-by=XiRang"));
                 if let Some(declared) = declared {
                     let Some(parent) = face.parent() else {
                         errors.push(
@@ -137,7 +137,7 @@ fn visit_stable_names(
     for node in nodes {
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
-            if !nichlink_kernel::lexicon::is_registration_path(&relative)
+            if !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Ok(source) = fs::read_to_string(file)
                 && let Some(face) = parsed_face(&source, &relative)
                 && let Some(stable_name) = face.string("stable_name")
@@ -287,7 +287,7 @@ fn missing_registry_rule(src: &Path, file: &Path, face: &FaceSyntax) -> BuildDia
     let relative = relative_display(src, file);
     let directory = Path::new(&relative)
         .parent()
-        .map(|parent| nichlink_kernel::declaration::portable_path(&parent.to_string_lossy()))
+        .map(|parent| xirang_kernel::declaration::portable_path(&parent.to_string_lossy()))
         .unwrap_or_default();
     let canonical = if directory.is_empty() {
         format!("{REGISTRY_RULE_MODULE}/registry_rule.rs")
@@ -630,7 +630,7 @@ mod tests {
             .expect("clock after Unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "nichlink-build-{label}-{}-{stamp}",
+            "xirang-build-{label}-{}-{stamp}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("temporary fixture root");

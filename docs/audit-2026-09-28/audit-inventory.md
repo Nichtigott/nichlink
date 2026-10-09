@@ -1,7 +1,7 @@
-# nichlink 结构审计 · 机械清点与基线快照
+# xirang 结构审计 · 机械清点与基线快照
 
 > 任务 t1（executor）。机器可读版本：`docs/audit-2026-09-28/audit-inventory.json`（同目录，约 1.9 MB，所有数字都能从它复算）。
-> 审计对象是**工作树**：HEAD `cf0c378`（清单第二项(记录那一面):nichlink.diff records:true——graft 记录相对源码,身份换了就报 re-identified）。工作树未提交改动：审计开始时 `git status --porcelain` **121** 项（其中 `M` 101 项、`??` 20 项；任务书写的是 120，以上为实测）。本轮只出报告，源码一行未改。
+> 审计对象是**工作树**：HEAD `cf0c378`（清单第二项(记录那一面):xirang.diff records:true——graft 记录相对源码,身份换了就报 re-identified）。工作树未提交改动：审计开始时 `git status --porcelain` **121** 项（其中 `M` 101 项、`??` 20 项；任务书写的是 120，以上为实测）。本轮只出报告，源码一行未改。
 > 工具链：`rustc 1.96.0 (ac68faa20 2026-05-25)` / `cargo 1.96.0 (30a34c682 2026-05-25)`。生成时间 2026-09-28T12:43:11+0800。
 
 ## 0. 门禁基线快照（四条，全部在本工作树上连续跑完）
@@ -11,13 +11,13 @@
 | 1 | `cargo fmt --all -- --check` | **0** | ✅ 通过 | 无输出（格式零差异） |
 | 2 | `cargo test --workspace --offline` | **0** | ✅ 通过 | test result 汇总：**52 个测试套件 / 740 passed / 0 failed / 25 ignored** |
 | 3 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | **0** | ✅ 通过 | `Finished \`dev\` profile [unoptimized + debuginfo] target(s) in 0.66s`，无 warning |
-| 4 | `tools/nichlink-publish --check-table` | **0** | ✅ 通过 | `dependency table matches the manifests (9 crates)` |
+| 4 | `tools/xirang-publish --check-table` | **0** | ✅ 通过 | `dependency table matches the manifests (9 crates)` |
 
 四条**全部 exit 0**，基线是绿的。任何片区审计若声称门禁红，必须附上可复现命令与输出；否则以本快照为准。
 
-- 四条按 1→4 顺序连续执行，全部在本工作树上、同一轮内取得；日志留在 `/tmp/nichlink-audit-logs/{fmt_check,test,clippy,publish_check}.log`（含完整 stdout+stderr 与 `EXIT_CODE=` 行）。
+- 四条按 1→4 顺序连续执行，全部在本工作树上、同一轮内取得；日志留在 `/tmp/xirang-audit-logs/{fmt_check,test,clippy,publish_check}.log`（含完整 stdout+stderr 与 `EXIT_CODE=` 行）。
 - `cargo` 三条均带 `--offline`（AGENTS.md 要求）。除 `--check` 外没有跑过 `cargo fmt` 的写操作，也没有跑任何会改文件的命令。
-- `tools/nichlink-publish --check-table` 只读本检出，不需要网络与 token。
+- `tools/xirang-publish --check-table` 只读本检出，不需要网络与 token。
 - **这份快照的范围是"报告文件出现之前的工作树"**：`conventions` 的 `doc_blocks`/`doc_anchors` 会把 `docs/` 下的 markdown 当活文档扫描，豁免只看**文件名前缀**（`audit*` / `design*`）。审计报告一旦以别的名字落进本目录，`cargo test --workspace` 就会变红——那是报告自己触发的门禁，不是源码回归。本目录下的报告一律用 `audit-*` 前缀（本条即为此类），所以 `cargo test` 仍应全绿；若变红，先检查是否有不符合豁免前缀的文件进了 `docs/`。
 - **数据新鲜度**：工作树里最后一份被改动的源码是 `mcp/src/apply.rs`（12:06:03）；门禁与清点在 12:31–12:38 之间跑完，因此本快照覆盖的是最新工作树，不存在"清点早于源码"的空窗。Cargo.lock 是审计前就已被改的 ` M` 项（mtime 11:18），本轮三条 cargo 命令没有重写它。
 - 三条 cargo 命令的 `target/` 是热的：`test` 增量编译 1.33s、`clippy` 0.66s。**这是指纹命中后的结果，不是跳过**——cargo 只有在指纹与当前源码一致时才复用；若工作树之后被改动，必须重跑本表。
@@ -47,7 +47,7 @@
 | 函数名 ASCII 校验 | 2462 个名字的字符数全部等于字节数，0 个非 ASCII 标识符 |
 | 600 行棘轮基线（`conventions/src/size.rs` 钉了 `contracts.rs = 639`） | 实测 `core/src/registry_core/plugin/contracts/contracts.rs` = **639 行**，一致 |
 
-复算：`python3 /tmp/nichlink-audit-logs/census.py && python3 /tmp/nichlink-audit-logs/census2.py`，再由 `/tmp/nichlink-audit-logs/build_md.py` 渲染本文件。三个脚本是纯词法解析、只用标准库、只读仓库，不依赖 codegraph 索引也不联网——索引会滞后于工作树，所以清点不用它。注意脚本放在 `/tmp`（本轮写权限只开放本目录的两个产物文件）；`/tmp` 若被清理，按 §1 口径可重写（扫描器约 400 行 Python），本文件与 `audit-inventory.json` 本身已把口径写全。
+复算：`python3 /tmp/xirang-audit-logs/census.py && python3 /tmp/xirang-audit-logs/census2.py`，再由 `/tmp/xirang-audit-logs/build_md.py` 渲染本文件。三个脚本是纯词法解析、只用标准库、只读仓库，不依赖 codegraph 索引也不联网——索引会滞后于工作树，所以清点不用它。注意脚本放在 `/tmp`（本轮写权限只开放本目录的两个产物文件）；`/tmp` 若被清理，按 §1 口径可重写（扫描器约 400 行 Python），本文件与 `audit-inventory.json` 本身已把口径写全。
 
 ## 2. crate 体量表
 
@@ -55,22 +55,22 @@
 
 | crate | 目录 | 文件 | 总行 | src 行 | tests 行 | fn | pub fn | test fn | 模块边 | 未挂载 | 最大文件 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `nichlink-core` | `core/` | 93 | 21,787 | 21,579 | 208 | 792 | 358 | 276 | 90 | 0 | `core/src/registry_core/plugin/contracts/contracts.rs` (639) |
-| `nichlink-macro` | `macro/` | 3 | 917 | 917 | 0 | 26 | 12 | 7 | 2 | 0 | `macro/src/lib.rs` (402) |
-| `nichlink-run-method` | `run_method/` | 61 | 9,584 | 8,277 | 1,157 | 277 | 143 | 89 | 51 | 0 | `run_method/src/runtime/trace/frames/frames.rs` (452) |
-| `nichlink-build-method` | `build_method/` | 48 | 10,110 | 9,928 | 182 | 292 | 114 | 114 | 45 | 0 | `build_method/src/graft_plan_check.rs` (465) |
-| `nichlink-cli` | `cli/` | 14 | 2,802 | 2,802 | 0 | 68 | 27 | 33 | 11 | 0 | `cli/src/lib_tests.rs` (1,015) |
-| `nichlink-mcp` | `mcp/` | 39 | 8,682 | 8,682 | 0 | 242 | 44 | 141 | 37 | 0 | `mcp/src/apply.rs` (563) |
-| `nichlink-debug-method` | `debug_method/` | 5 | 481 | 444 | 37 | 19 | 10 | 6 | 3 | 0 | `debug_method/src/adapters.rs` (214) |
-| `nichlink-studio` | `studio/` | 72 | 12,308 | 12,209 | 99 | 333 | 138 | 138 | 68 | 0 | `studio/src/studio/app/tests/call_tree.rs` (702) |
-| `nichlink-plugin-host` | `plugin-host/` | 15 | 3,888 | 1,987 | 1,901 | 136 | 38 | 72 | 10 | 0 | `plugin-host/tests/fault_matrix.rs` (968) |
-| `nichlink-example-control-button` | `examples/control-button/` | 13 | 1,635 | 199 | 1,179 | 53 | 2 | 40 | 8 | 0 | `examples/control-button/tests/registry.rs` (743) |
-| `nichlink-example-control-button-graft` | `examples/control-button-graft/` | 4 | 134 | 134 | 0 | 1 | 1 | 0 | 3 | 0 | `examples/control-button-graft/src/button_fast.rs` (36) |
-| `nichlink-conventions` | `conventions/` | 20 | 6,399 | 6,399 | 0 | 209 | 36 | 113 | 19 | 0 | `conventions/src/doc_anchors.rs` (557) |
+| `xirang-core` | `core/` | 93 | 21,787 | 21,579 | 208 | 792 | 358 | 276 | 90 | 0 | `core/src/registry_core/plugin/contracts/contracts.rs` (639) |
+| `xirang-macro` | `macro/` | 3 | 917 | 917 | 0 | 26 | 12 | 7 | 2 | 0 | `macro/src/lib.rs` (402) |
+| `xirang-run-method` | `run_method/` | 61 | 9,584 | 8,277 | 1,157 | 277 | 143 | 89 | 51 | 0 | `run_method/src/runtime/trace/frames/frames.rs` (452) |
+| `xirang-build-method` | `build_method/` | 48 | 10,110 | 9,928 | 182 | 292 | 114 | 114 | 45 | 0 | `build_method/src/graft_plan_check.rs` (465) |
+| `xirang-cli` | `cli/` | 14 | 2,802 | 2,802 | 0 | 68 | 27 | 33 | 11 | 0 | `cli/src/lib_tests.rs` (1,015) |
+| `xirang-mcp` | `mcp/` | 39 | 8,682 | 8,682 | 0 | 242 | 44 | 141 | 37 | 0 | `mcp/src/apply.rs` (563) |
+| `xirang-debug-method` | `debug_method/` | 5 | 481 | 444 | 37 | 19 | 10 | 6 | 3 | 0 | `debug_method/src/adapters.rs` (214) |
+| `xirang-studio` | `studio/` | 72 | 12,308 | 12,209 | 99 | 333 | 138 | 138 | 68 | 0 | `studio/src/studio/app/tests/call_tree.rs` (702) |
+| `xirang-plugin-host` | `plugin-host/` | 15 | 3,888 | 1,987 | 1,901 | 136 | 38 | 72 | 10 | 0 | `plugin-host/tests/fault_matrix.rs` (968) |
+| `xirang-example-control-button` | `examples/control-button/` | 13 | 1,635 | 199 | 1,179 | 53 | 2 | 40 | 8 | 0 | `examples/control-button/tests/registry.rs` (743) |
+| `xirang-example-control-button-graft` | `examples/control-button-graft/` | 4 | 134 | 134 | 0 | 1 | 1 | 0 | 3 | 0 | `examples/control-button-graft/src/button_fast.rs` (36) |
+| `xirang-conventions` | `conventions/` | 20 | 6,399 | 6,399 | 0 | 209 | 36 | 113 | 19 | 0 | `conventions/src/doc_anchors.rs` (557) |
 | **工作区成员合计** | — | **387** | **78,727** | **73,557** | **4,763** | **2448** | **923** | **1029** | **347** | **0** | — |
-| `nichlink-fixture-node-editor` (非工作区成员) | `studio/tests/fixtures/node-editor/` | 7 | 224 | 214 | 0 | 14 | 9 | 0 | 0 | 5 | — |
+| `xirang-fixture-node-editor` (非工作区成员) | `studio/tests/fixtures/node-editor/` | 7 | 224 | 214 | 0 | 14 | 9 | 0 | 0 | 5 | — |
 
-全仓库 `.rs` 文件共 **394** 个（成员 387 + 夹具 7）、**78,951** 行。`target/` 下的构建产物（含 `examples/control-button/target/nichlink/out/generated_lib.rs`）不计入。
+全仓库 `.rs` 文件共 **394** 个（成员 387 + 夹具 7）、**78,951** 行。`target/` 下的构建产物（含 `examples/control-button/target/xirang/out/generated_lib.rs`）不计入。
 
 ## 3. 最大文件 top 30
 
@@ -78,36 +78,36 @@
 
 | # | 行数 | crate | role | 文件 | fn | pub fn | `#[cfg(test)]` 挂载 |
 | ---: | ---: | --- | --- | --- | ---: | ---: | --- |
-| 1 | **1,015** | `nichlink-cli` | src | `cli/src/lib_tests.rs` | 32 | 0 | 是 |
-| 2 | **968** | `nichlink-plugin-host` | tests | `plugin-host/tests/fault_matrix.rs` | 32 | 0 | 否 |
-| 3 | **743** | `nichlink-example-control-button` | tests | `examples/control-button/tests/registry.rs` | 28 | 0 | 否 |
-| 4 | **702** | `nichlink-studio` | src | `studio/src/studio/app/tests/call_tree.rs` | 18 | 0 | 是 |
-| 5 | **639** | `nichlink-core` | src | `core/src/registry_core/plugin/contracts/contracts.rs` | 31 | 16 | 否 |
-| 6 | **563** | `nichlink-mcp` | src | `mcp/src/apply.rs` | 9 | 2 | 否 |
-| 7 | **562** | `nichlink-studio` | src | `studio/src/studio/app/tests/project.rs` | 18 | 0 | 是 |
-| 8 | **557** | `nichlink-conventions` | src | `conventions/src/doc_anchors.rs` | 19 | 1 | 否 |
-| 9 | **551** | `nichlink-core` | src | `core/src/registry_core/declaration/runtime_checks.rs` | 20 | 12 | 否 |
-| 10 | **517** | `nichlink-mcp` | src | `mcp/src/apply_tests.rs` | 12 | 0 | 是 |
-| 11 | **509** | `nichlink-studio` | src | `studio/src/studio/app/support.rs` | 23 | 21 | 否 |
-| 12 | **508** | `nichlink-conventions` | src | `conventions/src/lib.rs` | 19 | 10 | 否 |
-| 13 | **504** | `nichlink-core` | src | `core/src/registry_core/tree/connector/connector.rs` | 12 | 3 | 否 |
-| 14 | **502** | `nichlink-core` | src | `core/src/registry_core/syntax/entries/graft.rs` | 14 | 1 | 否 |
-| 15 | **500** | `nichlink-conventions` | src | `conventions/src/size.rs` | 17 | 5 | 否 |
-| 16 | **469** | `nichlink-core` | src | `core/src/registry_core/source/source.rs` | 9 | 5 | 否 |
-| 17 | **465** | `nichlink-build-method` | src | `build_method/src/graft_plan_check.rs` | 18 | 3 | 否 |
-| 18 | **463** | `nichlink-core` | src | `core/src/registry_core/tree/graft_ops/overlay.rs` | 12 | 6 | 否 |
-| 19 | **461** | `nichlink-core` | src | `core/src/registry_core/declaration/registration.rs` | 16 | 15 | 否 |
-| 20 | **455** | `nichlink-core` | src | `core/src/registry_core/plugin/catalog/catalog.rs` | 17 | 6 | 否 |
-| 21 | **452** | `nichlink-run-method` | src | `run_method/src/runtime/trace/frames/frames.rs` | 30 | 20 | 否 |
-| 22 | **449** | `nichlink-core` | src | `core/src/registry_core/plugin/graft/document.rs` | 18 | 5 | 否 |
-| 23 | **449** | `nichlink-build-method` | src | `build_method/src/scaffold/project.rs` | 14 | 4 | 否 |
-| 24 | **448** | `nichlink-mcp` | src | `mcp/src/tools.rs` | 8 | 2 | 否 |
-| 25 | **444** | `nichlink-build-method` | src | `build_method/src/face_view.rs` | 10 | 1 | 否 |
-| 26 | **444** | `nichlink-conventions` | src | `conventions/src/lint.rs` | 14 | 3 | 否 |
-| 27 | **443** | `nichlink-plugin-host` | src | `plugin-host/src/process.rs` | 14 | 7 | 否 |
-| 28 | **439** | `nichlink-build-method` | src | `build_method/src/entry.rs` | 10 | 7 | 否 |
-| 29 | **438** | `nichlink-studio` | src | `studio/src/studio/app/tests/trace_ingest.rs` | 18 | 0 | 是 |
-| 30 | **437** | `nichlink-studio` | src | `studio/src/studio/app/tests/edit.rs` | 6 | 0 | 是 |
+| 1 | **1,015** | `xirang-cli` | src | `cli/src/lib_tests.rs` | 32 | 0 | 是 |
+| 2 | **968** | `xirang-plugin-host` | tests | `plugin-host/tests/fault_matrix.rs` | 32 | 0 | 否 |
+| 3 | **743** | `xirang-example-control-button` | tests | `examples/control-button/tests/registry.rs` | 28 | 0 | 否 |
+| 4 | **702** | `xirang-studio` | src | `studio/src/studio/app/tests/call_tree.rs` | 18 | 0 | 是 |
+| 5 | **639** | `xirang-core` | src | `core/src/registry_core/plugin/contracts/contracts.rs` | 31 | 16 | 否 |
+| 6 | **563** | `xirang-mcp` | src | `mcp/src/apply.rs` | 9 | 2 | 否 |
+| 7 | **562** | `xirang-studio` | src | `studio/src/studio/app/tests/project.rs` | 18 | 0 | 是 |
+| 8 | **557** | `xirang-conventions` | src | `conventions/src/doc_anchors.rs` | 19 | 1 | 否 |
+| 9 | **551** | `xirang-core` | src | `core/src/registry_core/declaration/runtime_checks.rs` | 20 | 12 | 否 |
+| 10 | **517** | `xirang-mcp` | src | `mcp/src/apply_tests.rs` | 12 | 0 | 是 |
+| 11 | **509** | `xirang-studio` | src | `studio/src/studio/app/support.rs` | 23 | 21 | 否 |
+| 12 | **508** | `xirang-conventions` | src | `conventions/src/lib.rs` | 19 | 10 | 否 |
+| 13 | **504** | `xirang-core` | src | `core/src/registry_core/tree/connector/connector.rs` | 12 | 3 | 否 |
+| 14 | **502** | `xirang-core` | src | `core/src/registry_core/syntax/entries/graft.rs` | 14 | 1 | 否 |
+| 15 | **500** | `xirang-conventions` | src | `conventions/src/size.rs` | 17 | 5 | 否 |
+| 16 | **469** | `xirang-core` | src | `core/src/registry_core/source/source.rs` | 9 | 5 | 否 |
+| 17 | **465** | `xirang-build-method` | src | `build_method/src/graft_plan_check.rs` | 18 | 3 | 否 |
+| 18 | **463** | `xirang-core` | src | `core/src/registry_core/tree/graft_ops/overlay.rs` | 12 | 6 | 否 |
+| 19 | **461** | `xirang-core` | src | `core/src/registry_core/declaration/registration.rs` | 16 | 15 | 否 |
+| 20 | **455** | `xirang-core` | src | `core/src/registry_core/plugin/catalog/catalog.rs` | 17 | 6 | 否 |
+| 21 | **452** | `xirang-run-method` | src | `run_method/src/runtime/trace/frames/frames.rs` | 30 | 20 | 否 |
+| 22 | **449** | `xirang-core` | src | `core/src/registry_core/plugin/graft/document.rs` | 18 | 5 | 否 |
+| 23 | **449** | `xirang-build-method` | src | `build_method/src/scaffold/project.rs` | 14 | 4 | 否 |
+| 24 | **448** | `xirang-mcp` | src | `mcp/src/tools.rs` | 8 | 2 | 否 |
+| 25 | **444** | `xirang-build-method` | src | `build_method/src/face_view.rs` | 10 | 1 | 否 |
+| 26 | **444** | `xirang-conventions` | src | `conventions/src/lint.rs` | 14 | 3 | 否 |
+| 27 | **443** | `xirang-plugin-host` | src | `plugin-host/src/process.rs` | 14 | 7 | 否 |
+| 28 | **439** | `xirang-build-method` | src | `build_method/src/entry.rs` | 10 | 7 | 否 |
+| 29 | **438** | `xirang-studio` | src | `studio/src/studio/app/tests/trace_ingest.rs` | 18 | 0 | 是 |
+| 30 | **437** | `xirang-studio` | src | `studio/src/studio/app/tests/edit.rs` | 6 | 0 | 是 |
 
 超过 600 行（`conventions/src/size.rs` 的 `CEILING`，非测试源码文件的棘轮上限）的文件：**5** 个。
 
@@ -213,18 +213,18 @@
 
 | crate | 非测试 fn | 平均名长 | 中位数 | ≥25 字符 | ≥5 段 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `nichlink-core` | 516 | 11.4 | 10 | 14 | 1 |
-| `nichlink-macro` | 19 | 10.9 | 11 | 0 | 0 |
-| `nichlink-run-method` | 188 | 13.1 | 12 | 5 | 3 |
-| `nichlink-build-method` | 178 | 15.2 | 15 | 10 | 0 |
-| `nichlink-cli` | 35 | 10.3 | 11 | 0 | 0 |
-| `nichlink-mcp` | 101 | 9.3 | 9 | 0 | 0 |
-| `nichlink-debug-method` | 13 | 8.5 | 9 | 0 | 0 |
-| `nichlink-studio` | 195 | 13.2 | 13 | 5 | 1 |
-| `nichlink-plugin-host` | 64 | 8.8 | 7 | 0 | 0 |
-| `nichlink-example-control-button` | 13 | 5.3 | 4 | 0 | 0 |
-| `nichlink-example-control-button-graft` | 1 | 17.0 | 17 | 0 | 0 |
-| `nichlink-conventions` | 96 | 13.0 | 13 | 1 | 1 |
+| `xirang-core` | 516 | 11.4 | 10 | 14 | 1 |
+| `xirang-macro` | 19 | 10.9 | 11 | 0 | 0 |
+| `xirang-run-method` | 188 | 13.1 | 12 | 5 | 3 |
+| `xirang-build-method` | 178 | 15.2 | 15 | 10 | 0 |
+| `xirang-cli` | 35 | 10.3 | 11 | 0 | 0 |
+| `xirang-mcp` | 101 | 9.3 | 9 | 0 | 0 |
+| `xirang-debug-method` | 13 | 8.5 | 9 | 0 | 0 |
+| `xirang-studio` | 195 | 13.2 | 13 | 5 | 1 |
+| `xirang-plugin-host` | 64 | 8.8 | 7 | 0 | 0 |
+| `xirang-example-control-button` | 13 | 5.3 | 4 | 0 | 0 |
+| `xirang-example-control-button-graft` | 1 | 17.0 | 17 | 0 | 0 |
+| `xirang-conventions` | 96 | 13.0 | 13 | 1 | 1 |
 
 ## 5. 按目录的函数计数
 
@@ -271,7 +271,7 @@
 
 每个文件后面标：`行数 / fn 数`。标记含义：`[root]` 是 target 源根（lib/bin/test/example/bench/build），`[cfg(test)]` 表示经带 `#[cfg(test)]` 的声明挂载，`[feat=...]` 表示经 `#[cfg(feature = "...")]` 门控挂载，`[gen]` 表示由构建期生成的 `$OUT_DIR/generated_lib.rs` 挂载（工作树里没有手写 `mod` 声明）。
 
-### `nichlink-core`（`core/`，93 文件 / 21,787 行 / 792 fn，90 条挂载边）
+### `xirang-core`（`core/`，93 文件 / 21,787 行 / 792 fn，90 条挂载边）
 
 ```
 ├─ `src/lib.rs`  60 行 / 0 fn  [root]  `lib`
@@ -369,7 +369,7 @@
 └─ `tests/ungated_authoring_data.rs`  31 行 / 2 fn  [root]  `ungated_authoring_data`
 ```
 
-### `nichlink-macro`（`macro/`，3 文件 / 917 行 / 26 fn，2 条挂载边）
+### `xirang-macro`（`macro/`，3 文件 / 917 行 / 26 fn，2 条挂载边）
 
 ```
 └─ `src/lib.rs`  402 行 / 7 fn  [root]  `lib`
@@ -377,7 +377,7 @@
     └─ `src/mirror.rs`  379 行 / 14 fn    `lib::mirror`
 ```
 
-### `nichlink-run-method`（`run_method/`，61 文件 / 9,584 行 / 277 fn，51 条挂载边）
+### `xirang-run-method`（`run_method/`，61 文件 / 9,584 行 / 277 fn，51 条挂载边）
 
 ```
 ├─ `examples/scale_audit.rs`  150 行 / 3 fn  [root]  `scale_audit`
@@ -443,7 +443,7 @@
 └─ `tests/path_compat.rs`  179 行 / 8 fn  [root]  `path_compat`
 ```
 
-### `nichlink-build-method`（`build_method/`，48 文件 / 10,110 行 / 292 fn，45 条挂载边）
+### `xirang-build-method`（`build_method/`，48 文件 / 10,110 行 / 292 fn，45 条挂载边）
 
 ```
 ├─ `src/lib.rs`  206 行 / 3 fn  [root]  `lib`
@@ -496,11 +496,11 @@
 └─ `tests/outside_src_layout.rs`  116 行 / 4 fn  [root]  `outside_src_layout`
 ```
 
-### `nichlink-cli`（`cli/`，14 文件 / 2,802 行 / 68 fn，11 条挂载边）
+### `xirang-cli`（`cli/`，14 文件 / 2,802 行 / 68 fn，11 条挂载边）
 
 ```
-├─ `src/bin/cargo-nichlink.rs`  23 行 / 1 fn  [root]  `cargo-nichlink`
-├─ `src/bin/nichlink.rs`  15 行 / 1 fn  [root]  `nichlink`
+├─ `src/bin/cargo-xirang.rs`  23 行 / 1 fn  [root]  `cargo-xirang`
+├─ `src/bin/xirang.rs`  15 行 / 1 fn  [root]  `xirang`
 └─ `src/lib.rs`  293 行 / 10 fn  [root]  `lib`
     ├─ `src/commands/build.rs`  42 行 / 1 fn    `lib::build_command`
     ├─ `src/commands/check.rs`  80 行 / 1 fn    `lib::check_command`
@@ -515,7 +515,7 @@
     └─ `src/lib_tests.rs`  1,015 行 / 32 fn  [cfg(test)]  `lib::tests`
 ```
 
-### `nichlink-mcp`（`mcp/`，39 文件 / 8,682 行 / 242 fn，37 条挂载边）
+### `xirang-mcp`（`mcp/`，39 文件 / 8,682 行 / 242 fn，37 条挂载边）
 
 ```
 ├─ `src/lib.rs`  118 行 / 0 fn  [root]  `lib`
@@ -559,7 +559,7 @@
 └─ `src/main.rs`  20 行 / 1 fn  [root]  `main`
 ```
 
-### `nichlink-debug-method`（`debug_method/`，5 文件 / 481 行 / 19 fn，3 条挂载边）
+### `xirang-debug-method`（`debug_method/`，5 文件 / 481 行 / 19 fn，3 条挂载边）
 
 ```
 ├─ `src/lib.rs`  41 行 / 0 fn  [root]  `lib`
@@ -569,10 +569,10 @@
 └─ `tests/collector_integration.rs`  37 行 / 1 fn  [root]  `collector_integration`
 ```
 
-### `nichlink-studio`（`studio/`，72 文件 / 12,308 行 / 333 fn，68 条挂载边）
+### `xirang-studio`（`studio/`，72 文件 / 12,308 行 / 333 fn，68 条挂载边）
 
 ```
-├─ `src/bin/nichlink-dev.rs`  427 行 / 25 fn  [root]  `nichlink-dev`
+├─ `src/bin/xirang-dev.rs`  427 行 / 25 fn  [root]  `xirang-dev`
 ├─ `src/lib.rs`  14 行 / 0 fn  [root]  `lib`
 │   └─ `src/studio/studio.rs`  125 行 / 4 fn    `lib::studio`
 │       ├─ `src/studio/app/app.rs`  242 行 / 7 fn    `lib::studio::app`
@@ -646,7 +646,7 @@
 └─ `tests/launch.rs`  99 行 / 5 fn  [root]  `launch`
 ```
 
-### `nichlink-plugin-host`（`plugin-host/`，15 文件 / 3,888 行 / 136 fn，10 条挂载边）
+### `xirang-plugin-host`（`plugin-host/`，15 文件 / 3,888 行 / 136 fn，10 条挂载边）
 
 ```
 ├─ `src/lib.rs`  63 行 / 3 fn  [root]  `lib`
@@ -666,7 +666,7 @@
 └─ `tests/wasm_table_cost.rs`  291 行 / 10 fn  [root]  `wasm_table_cost`
 ```
 
-### `nichlink-example-control-button`（`examples/control-button/`，13 文件 / 1,635 行 / 53 fn，8 条挂载边）
+### `xirang-example-control-button`（`examples/control-button/`，13 文件 / 1,635 行 / 53 fn，8 条挂载边）
 
 ```
 ├─ `build.rs`  3 行 / 1 fn  [root]  `build`
@@ -680,17 +680,17 @@
 └─ `tests/static_plan_allocations.rs`  308 行 / 9 fn  [root]  `static_plan_allocations`
 ```
 
-构建期生成（工作树里没有对应 `mod` 声明，模块由 `host!()` 的 `include!` 引入）。括号里 `__nichlink_ra_*` 是生成器写给 rust-analyzer 的别名声明，`mod` 后面的才是真模块名：
+构建期生成（工作树里没有对应 `mod` 声明，模块由 `host!()` 的 `include!` 引入）。括号里 `__xirang_ra_*` 是生成器写给 rust-analyzer 的别名声明，`mod` 后面的才是真模块名：
 
 ```
-· `target/debug/build/nichlink-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs`（构建产物，不在 src 树里）
-    ├─ `src/control/control.rs`  39 行 / 1 fn  (`mod __nichlink_ra_control, control`)
-    ├─ `src/control/object/button/button.rs`  40 行 / 1 fn  (`mod __nichlink_ra_control_object_button, button`)
-    ├─ `src/control/object/slider/slider.rs`  27 行 / 1 fn  (`mod __nichlink_ra_control_object_slider, slider`)
-    └─ `src/control/registry_rule/registry_rule.rs`  8 行 / 0 fn  (`mod __nichlink_ra_control_registry_rule, registry_rule`)
+· `target/debug/build/xirang-example-control-button-0992fd9f245ea3f0/out/generated_lib.rs`（构建产物，不在 src 树里）
+    ├─ `src/control/control.rs`  39 行 / 1 fn  (`mod __xirang_ra_control, control`)
+    ├─ `src/control/object/button/button.rs`  40 行 / 1 fn  (`mod __xirang_ra_control_object_button, button`)
+    ├─ `src/control/object/slider/slider.rs`  27 行 / 1 fn  (`mod __xirang_ra_control_object_slider, slider`)
+    └─ `src/control/registry_rule/registry_rule.rs`  8 行 / 0 fn  (`mod __xirang_ra_control_registry_rule, registry_rule`)
 ```
 
-### `nichlink-example-control-button-graft`（`examples/control-button-graft/`，4 文件 / 134 行 / 1 fn，3 条挂载边）
+### `xirang-example-control-button-graft`（`examples/control-button-graft/`，4 文件 / 134 行 / 1 fn，3 条挂载边）
 
 ```
 └─ `src/lib.rs`  29 行 / 1 fn  [root]  `lib`
@@ -699,7 +699,7 @@
     └─ `src/slider_fast.rs`  33 行 / 0 fn    `lib::slider_fast`
 ```
 
-### `nichlink-conventions`（`conventions/`，20 文件 / 6,399 行 / 209 fn，19 条挂载边）
+### `xirang-conventions`（`conventions/`，20 文件 / 6,399 行 / 209 fn，19 条挂载边）
 
 ```
 └─ `src/lib.rs`  508 行 / 19 fn  [root]  `lib`
@@ -726,7 +726,7 @@
 
 ### 非工作区成员的夹具包
 
-`nichlink-fixture-node-editor`（`studio/tests/fixtures/node-editor/`，7 文件 / 224 行 / 14 fn，0 条挂载边）
+`xirang-fixture-node-editor`（`studio/tests/fixtures/node-editor/`，7 文件 / 224 行 / 14 fn，0 条挂载边）
 
 它按 `src/lib.rs` → `host!()` 的方式接线，但**从不编译**（Studio 只把 `src/` 当文本读），因此没有 `$OUT_DIR/generated_lib.rs`，工作树里也没有手写 `mod` 声明——下面这些文件在编译期意义上"未挂载"，这是设计的一部分，不是漏挂：
 
@@ -770,7 +770,7 @@
 4. **挂载与门控**：339 条手写 `mod` 挂载边，全部解析成功；其中 `#[cfg(test)]` 挂载 46 条、`#[cfg(feature = ...)]` 门控挂载 11 条。另有 8 条来自构建期生成的 `generated_lib.rs`。
 5. **工作树里没有绝对路径 `#[path]`**：`#[path = "/home/..."]` 只出现在 `target/**/out/generated_lib.rs` 这类构建产物里（30 处，同一个包的多份 hash 目录），源码树里 0 处。
 6. **`#[cfg(test)]` 挂载的源文件**：`src/` 下经 `#[cfg(test)]` 挂载、且 ≥200 行的文件有 34 个：`cli/src/lib_tests.rs`(1,015)、`studio/src/studio/app/tests/call_tree.rs`(702)、`studio/src/studio/app/tests/project.rs`(562)、`mcp/src/apply_tests.rs`(517)、`studio/src/studio/app/tests/trace_ingest.rs`(438)、`studio/src/studio/app/tests/edit.rs`(437)、`run_method/src/runtime/trace/artifact/artifact_tests.rs`(426)、`core/src/registry_core/tree/graft_ops/record_tests.rs`(365)、`mcp/src/mir_tests.rs`(343)、`conventions/src/mounting_tests.rs`(339)（最大的 `cli/src/lib_tests.rs` 1015 行，靠"挂在 `#[cfg(test)]` 后 + 名字像测试"同时躲过 600 行棘轮，这是 size.rs 明确写下的边界，不是漏网）。
-7. **每 crate 的公开面密度**（pub 非测试 fn / fn）：`nichlink-core` 45%、`nichlink-macro` 46%、`nichlink-run-method` 52%、`nichlink-build-method` 38%、`nichlink-cli` 40%、`nichlink-mcp` 18%、`nichlink-debug-method` 53%、`nichlink-studio` 40%、`nichlink-plugin-host` 28%、`nichlink-example-control-button` 4%、`nichlink-example-control-button-graft` 100%、`nichlink-conventions` 17%
+7. **每 crate 的公开面密度**（pub 非测试 fn / fn）：`xirang-core` 45%、`xirang-macro` 46%、`xirang-run-method` 52%、`xirang-build-method` 38%、`xirang-cli` 40%、`xirang-mcp` 18%、`xirang-debug-method` 53%、`xirang-studio` 40%、`xirang-plugin-host` 28%、`xirang-example-control-button` 4%、`xirang-example-control-button-graft` 100%、`xirang-conventions` 17%
 
 ---
 

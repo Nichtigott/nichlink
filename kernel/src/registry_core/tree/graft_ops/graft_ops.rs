@@ -33,9 +33,9 @@ mod record;
 #[path = "resolution.rs"]
 mod resolution;
 
-// The record vocabulary is the kernel half of the `.nichlink` wiring; a runtime
+// The record vocabulary is the kernel half of the `.xirang` wiring; a runtime
 // surface names it through this page.
-// 记录词表是 `.nichlink` 接线的内核一半；运行期执行面经本页命名它。
+// 记录词表是 `.xirang` 接线的内核一半；运行期执行面经本页命名它。
 pub use self::record::*;
 
 impl Registry {

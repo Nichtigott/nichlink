@@ -7,7 +7,7 @@
 ## 1. 我自己的一次运行（加固后的装置）
 
 ```
-$ cargo test -p nichlink-plugin-host --offline --lib slot_state_tests -- --nocapture   # 在 /tmp/nk-t86
+$ cargo test -p xirang-plugin-host --offline --lib slot_state_tests -- --nocapture   # 在 /tmp/nk-t86
 PROBE install=63.439µs (the load was still held)
 PROBE install=71.592µs load=400.072092ms
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.40s
@@ -50,7 +50,7 @@ test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 3 filtered out; 
 
 ## 5. 门禁（同一批 hash）
 
-`cargo test -p nichlink-plugin-host --offline` **0**（6 passed）／`--features process-tools` **0**（6 个 ok 块）／`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**／`cargo fmt --all -- --check` **0**（0 行）。
+`cargo test -p xirang-plugin-host --offline` **0**（6 passed）／`--features process-tools` **0**（6 个 ok 块）／`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**／`cargo fmt --all -- --check` **0**（0 行）。
 `cargo test --workspace --offline` **101**，**唯一失败＝ ENV-1 那条已知离线用例** `studio::app::tests::new_project::new_project_and_explicit_root_face_compile`（该块 107 passed / 1 failed），即任务书豁免的那条；plugin-host 侧不受影响。
 
 ## 6. 未覆盖

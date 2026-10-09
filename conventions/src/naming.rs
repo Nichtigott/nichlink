@@ -1,24 +1,24 @@
 //! Crate, directory, and library names have to agree.
 //! crate 名、目录名与 library 名必须一致。
 //!
-//! `AGENTS.md` change rule 4 states the rule (`nichlink-<x>` / `<x>/` /
-//! `nichlink_<x>`) and says why it matters: scaffold templates in `build_method/`
+//! `AGENTS.md` change rule 4 states the rule (`xirang-<x>` / `<x>/` /
+//! `xirang_<x>`) and says why it matters: scaffold templates in `build_method/`
 //! and CI reference these names too. Nothing checked it, so the rule held only
 //! while reviewers remembered it — and the failure is quiet in the worst way. A
 //! directory whose crate is named something else still builds here; it breaks a
-//! host that writes `nichlink_<x>::…`, a scaffold that generates `<x>`, or a CI
-//! step that runs `cargo test -p nichlink-<x>`.
-//! `AGENTS.md` 的改动规则 4 陈述了这条规则（`nichlink-<x>` / `<x>/` / `nichlink_<x>`）并说明
+//! host that writes `xirang_<x>::…`, a scaffold that generates `<x>`, or a CI
+//! step that runs `cargo test -p xirang-<x>`.
+//! `AGENTS.md` 的改动规则 4 陈述了这条规则（`xirang-<x>` / `<x>/` / `xirang_<x>`）并说明
 //! 了它为何重要：`build_method/` 里的脚手架模板与 CI 也引用这些名字。此前没有任何东西检查它，
 //! 于是这条规则只在评审者记得时成立——而它的失败是最安静的那种：目录里那个 crate 叫别的名字
-//! 在这里照样能构建，破的是写着 `nichlink_<x>::…` 的宿主、生成 `<x>` 的脚手架、或跑
-//! `cargo test -p nichlink-<x>` 的 CI 步骤。
+//! 在这里照样能构建，破的是写着 `xirang_<x>::…` 的宿主、生成 `<x>` 的脚手架、或跑
+//! `cargo test -p xirang-<x>` 的 CI 步骤。
 //!
 //! The example hosts are outside the rule rather than an exception to it: they are a
-//! different family (`nichlink-example-*` with their own lib names), they are
+//! different family (`xirang-example-*` with their own lib names), they are
 //! `publish = false`, and `AGENTS.md` says a host documents its own types and is not
 //! linted like a crate. Every other member is checked, including the gates crate.
-//! 示例宿主在规则之外，而不是规则的例外：它们是另一个家族（`nichlink-example-*` 与它们自己的
+//! 示例宿主在规则之外，而不是规则的例外：它们是另一个家族（`xirang-example-*` 与它们自己的
 //! lib 名）、`publish = false`，而 `AGENTS.md` 说宿主自己负责文档化自己的类型、不像 crate 那样
 //! 参与 lint。其余每个成员都被检查，门禁 crate 本身也不例外。
 
@@ -27,15 +27,15 @@ use std::path::Path;
 
 use crate::{crate_directories, is_real_directory, relative, rust_sources};
 
-/// Directories whose library name deliberately does not follow `nichlink_<dir>`.
-/// 库名有意不遵循 `nichlink_<dir>` 的目录。
+/// Directories whose library name deliberately does not follow `xirang_<dir>`.
+/// 库名有意不遵循 `xirang_<dir>` 的目录。
 ///
-/// One entry, measured rather than assumed: the kernel's library is `nichlink`, not
-/// `nichlink_core`, and every host, README and doctest writes that name. The crate
-/// table in `AGENTS.md` records it as `nichlink-kernel (lib nichlink)`.
-/// 只有一项，且是实测而非假设：内核的 library 是 `nichlink` 而不是 `nichlink_core`，每个宿主、
+/// One entry, measured rather than assumed: the kernel's library is `xirang`, not
+/// `xirang_core`, and every host, README and doctest writes that name. The crate
+/// table in `AGENTS.md` records it as `xirang-kernel (lib xirang)`.
+/// 只有一项，且是实测而非假设：内核的 library 是 `xirang` 而不是 `xirang_core`，每个宿主、
 /// README 与 doctest 都写这个名字。`AGENTS.md` 的 crate 表把它记为
-/// `nichlink-kernel (lib nichlink)`。
+/// `xirang-kernel (lib xirang)`。
 pub const LIB_NAME_EXCEPTIONS: &[(&str, &str)] = &[];
 
 /// One crate directory whose names disagree.
@@ -55,10 +55,10 @@ pub struct Finding {
 pub fn findings(root: &Path) -> Vec<Finding> {
     let mut found = Vec::new();
     // Every member's package name, including the example hosts: they are outside
-    // the naming rule below, but CI runs `cargo test -p nichlink-example-…`, so a
+    // the naming rule below, but CI runs `cargo test -p xirang-example-…`, so a
     // reference to one of them is a reference to a real package.
     // 每个成员的包名，包括示例宿主：它们在下面的命名规则之外，但 CI 会跑
-    // `cargo test -p nichlink-example-…`，因此对它们的引用是对真实包的引用。
+    // `cargo test -p xirang-example-…`，因此对它们的引用是对真实包的引用。
     let manifests: Vec<(std::path::PathBuf, String, String, String)> = crate_directories(root)
         .into_iter()
         .map(|directory| {
@@ -86,7 +86,7 @@ pub fn findings(root: &Path) -> Vec<Finding> {
         let Some(name) = directory.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        let expected_package = format!("nichlink-{}", name.replace('_', "-"));
+        let expected_package = format!("xirang-{}", name.replace('_', "-"));
         match package.as_str() {
             "" => found.push(Finding {
                 directory: relative_directory.clone(),
@@ -103,13 +103,13 @@ pub fn findings(root: &Path) -> Vec<Finding> {
             .find(|(exception, _)| *exception == name)
             .map(|(_, lib)| (*lib).to_owned())
             // A Rust library name cannot carry a hyphen, so a hyphenated directory
-            // (`plugin-host/`) maps to an underscore (`nichlink_plugin_host`). This
+            // (`plugin-host/`) maps to an underscore (`xirang_plugin_host`). This
             // gate reported the workspace's own `plugin-host` before the fold was
             // here, which is the pin below.
             // Rust 的 library 名不能带连字符，因此带连字符的目录（`plugin-host/`）映射为下划线
-            // （`nichlink_plugin_host`）。在这次折叠出现之前，本门禁曾把工作区自己的
+            // （`xirang_plugin_host`）。在这次折叠出现之前，本门禁曾把工作区自己的
             // `plugin-host` 报出来——正是下面那条钉子。
-            .unwrap_or_else(|| format!("nichlink_{}", name.replace('-', "_")));
+            .unwrap_or_else(|| format!("xirang_{}", name.replace('-', "_")));
         match manifest_value(text, "lib", "name") {
             Some(actual) if actual == expected_lib => {}
             Some(actual) => found.push(Finding {
@@ -141,13 +141,13 @@ pub fn findings(root: &Path) -> Vec<Finding> {
 /// `cargo test -p <旧名>` 只会在真正跑到时才失败。
 ///
 /// Boundary: only positions where a name is a *requirement* are read — a dependency
-/// key (`nichlink-x = { … }`) or `package = "nichlink-x"` in a template, and a
-/// `-p`/`--package` argument in a workflow. Everywhere else a `nichlink-…` string is
+/// key (`xirang-x = { … }`) or `package = "xirang-x"` in a template, and a
+/// `-p`/`--package` argument in a workflow. Everywhere else a `xirang-…` string is
 /// a tool name, a job name, or prose, and reporting those would make the gate noise. A
 /// comment is the loudest case of "elsewhere": it records what once ran, so a finding there
 /// asks the author to rewrite history rather than to fix a requirement. Audit `G-07`.
-/// 边界：只读名字处于**要求**位置的地方——模板里的依赖键（`nichlink-x = { … }`）或
-/// `package = "nichlink-x"`，以及工作流里的 `-p`/`--package` 实参。其他位置的 `nichlink-…`
+/// 边界：只读名字处于**要求**位置的地方——模板里的依赖键（`xirang-x = { … }`）或
+/// `package = "xirang-x"`，以及工作流里的 `-p`/`--package` 实参。其他位置的 `xirang-…`
 /// 字符串是工具名、任务名或散文，报出来只会让门禁变成噪声。注释是"其他位置"里最响亮的一种：它记录
 /// 的是"曾经这么跑过"，那里的发现要求作者改写记录，而不是修一条要求。审计 `G-07`。
 fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
@@ -201,13 +201,13 @@ fn referenced_names(root: &Path, packages: &[String]) -> Vec<Finding> {
 /// `text` 中注释被抹白、字符串字面量被保留。
 ///
 /// The boundary this gate states is "a name in a *requirement* position", and a comment is not
-/// one: a template's `// … nichlink-old = { … }` is a record of an invocation that once ran, so
+/// one: a template's `// … xirang-old = { … }` is a record of an invocation that once ran, so
 /// reporting it asks the author to rewrite history. Its neighbour *is* one — a template writes
 /// the requirement inside a string literal — which is why neither of the kernel's two masks
 /// fits: `mask_non_code` blanks the literal too, and `mask_literals` keeps the comment. This is
 /// the one caller that needs the other half of each rule, so it scans for that half itself.
 /// 本门禁声明的边界是"处于**要求**位置的名称"，而注释不是要求位置：模板里的
-/// `// … nichlink-old = { … }` 是"曾经这么跑过"的记录，报出来等于要求作者改写记录。它旁边那句
+/// `// … xirang-old = { … }` 是"曾经这么跑过"的记录，报出来等于要求作者改写记录。它旁边那句
 /// **是**要求位置——模板把要求写在字符串字面量里——因此内核那两道 mask 都不合用：
 /// `mask_non_code` 会把字面量一起抹白，`mask_literals` 会把注释留下。这里是唯一需要两者另一半的
 /// 调用方，于是自己扫出那一半。
@@ -279,9 +279,9 @@ fn without_comments(text: &str) -> String {
 /// `text` 中 YAML 注释被抹白，引号标量不受影响。
 ///
 /// YAML starts a comment at a `#` that is at the start of a line or preceded by whitespace, so
-/// `echo a#b` keeps its `#` while `# old: cargo test -p nichlink-old` does not.
+/// `echo a#b` keeps its `#` while `# old: cargo test -p xirang-old` does not.
 /// YAML 的注释从行首的 `#` 或前面有空白字符的 `#` 开始，因此 `echo a#b` 保留它的 `#`，而
-/// `# old: cargo test -p nichlink-old` 不会。
+/// `# old: cargo test -p xirang-old` 不会。
 fn without_yaml_comments(text: &str) -> String {
     let mut kept = String::with_capacity(text.len());
     for line in text.split_inclusive('\n') {
@@ -323,14 +323,14 @@ fn without_yaml_comments(text: &str) -> String {
     kept
 }
 
-/// `nichlink-…` names in dependency-key or `package = "…"` position in a template.
-/// 模板中处于依赖键位置或 `package = "…"` 位置的 `nichlink-…` 名。
+/// `xirang-…` names in dependency-key or `package = "…"` position in a template.
+/// 模板中处于依赖键位置或 `package = "…"` 位置的 `xirang-…` 名。
 fn requirement_names(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut from = 0usize;
-    while let Some(offset) = text[from..].find("nichlink-") {
+    while let Some(offset) = text[from..].find("xirang-") {
         let start = from + offset;
-        from = start + "nichlink-".len();
+        from = start + "xirang-".len();
         let tail: String = text[from..]
             .chars()
             .take_while(|character| character.is_ascii_lowercase() || *character == '-')
@@ -340,11 +340,11 @@ fn requirement_names(text: &str) -> Vec<String> {
         }
         let after = text[from + tail.len()..].trim_start();
         // Only `=`: a template that merely starts with the name is an identifier
-        // being built (`format!("nichlink-auto-{}-{}", …)`), not a requirement.
-        // 只认 `=`：仅仅以该名字开头的模板是在拼标识符（`format!("nichlink-auto-{}-{}", …)`），
+        // being built (`format!("xirang-auto-{}-{}", …)`), not a requirement.
+        // 只认 `=`：仅仅以该名字开头的模板是在拼标识符（`format!("xirang-auto-{}-{}", …)`），
         // 不是一条依赖要求。
         if after.starts_with('=') {
-            found.push(format!("nichlink-{tail}"));
+            found.push(format!("xirang-{tail}"));
         }
     }
     let mut from = 0usize;
@@ -364,7 +364,7 @@ fn requirement_names(text: &str) -> Vec<String> {
         let Some(value) = package_field_value(text, from) else {
             continue;
         };
-        if value.starts_with("nichlink-") {
+        if value.starts_with("xirang-") {
             found.push(value);
         }
     }
@@ -376,12 +376,12 @@ fn requirement_names(text: &str) -> Vec<String> {
 ///
 /// The whitespace around `=` is optional, and the opening quote may carry a backslash: a
 /// template is Rust source, so the manifest line it generates is written inside a string
-/// literal, where every quote is escaped (`package = \"nichlink-kernel\"`). Reading only the
+/// literal, where every quote is escaped (`package = \"xirang-kernel\"`). Reading only the
 /// unescaped needle found nothing there, and the loss was invisible while a dependency key and
 /// its package name agreed — the key half found the name anyway. A *renamed* dependency has
 /// only this field, so a template that renamed one stayed silent (audit `G-07`, finding `F-3`).
 /// `=` 两侧的空白可有可无，开引号还可以带反斜杠：模板是 Rust 源码，它生成的清单行写在字符串
-/// 字面量里，因此每个引号都是转义的（`package = \"nichlink-kernel\"`）。只认未转义的针在那里什么
+/// 字面量里，因此每个引号都是转义的（`package = \"xirang-kernel\"`）。只认未转义的针在那里什么
 /// 也找不到，而只要依赖键与包名一致，这个损失就不可见——键那半边反正能找到那个名字。**被重命名**
 /// 的依赖只有这个字段，于是一条重命名的模板会保持沉默（审计 `G-07`，发现 `F-3`）。
 fn package_field_value(text: &str, from: usize) -> Option<String> {
@@ -391,24 +391,24 @@ fn package_field_value(text: &str, from: usize) -> Option<String> {
     let rest = rest.strip_prefix('"')?;
     let end = rest.find('"')?;
     // The closing quote is escaped the same way the opening one is, so the backslash that
-    // escapes it is not part of the name: `\"nichlink-toolchain\"` names one package, and the
+    // escapes it is not part of the name: `\"xirang-toolchain\"` names one package, and the
     // shipped-tree pin reported a name ending in a backslash before this strip existed.
-    // 闭引号与开引号同样被转义，因此转义它的反斜杠不属于包名：`\"nichlink-toolchain\"` 点名的
+    // 闭引号与开引号同样被转义，因此转义它的反斜杠不属于包名：`\"xirang-toolchain\"` 点名的
     // 是一个包——在这句剥离出现之前，出厂树那条钉子报出的名字是以反斜杠结尾的。
     let value = rest[..end].strip_suffix('\\').unwrap_or(&rest[..end]);
     Some(value.to_owned())
 }
 
-/// `nichlink-…` names passed as `-p`/`--package` to a command in a workflow.
-/// 工作流中作为 `-p`/`--package` 传给命令的 `nichlink-…` 名。
+/// `xirang-…` names passed as `-p`/`--package` to a command in a workflow.
+/// 工作流中作为 `-p`/`--package` 传给命令的 `xirang-…` 名。
 fn package_arguments(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     // The flag is matched without requiring the space that used to be part of the needle:
-    // `--package=nichlink-typo` is the same argument as `--package nichlink-typo`, and
-    // `-p a,nichlink-typo` names two packages in one argument. Only the argument itself is
+    // `--package=xirang-typo` is the same argument as `--package xirang-typo`, and
+    // `-p a,xirang-typo` names two packages in one argument. Only the argument itself is
     // read for names, so a list elsewhere on the line is not mistaken for one.
-    // 匹配标志时不再把那个空格当作针的一部分：`--package=nichlink-typo` 与
-    // `--package nichlink-typo` 是同一个实参，而 `-p a,nichlink-typo` 在一个实参里点了两个包。
+    // 匹配标志时不再把那个空格当作针的一部分：`--package=xirang-typo` 与
+    // `--package xirang-typo` 是同一个实参，而 `-p a,xirang-typo` 在一个实参里点了两个包。
     // 只在实参本身里读取名字，因此同一行别处的列表不会被误当成本次实参。
     for needle in ["-p", "--package"] {
         let mut from = 0usize;
@@ -432,7 +432,7 @@ fn package_arguments(text: &str) -> Vec<String> {
                         character.is_ascii_alphanumeric() || *character == '-' || *character == '_'
                     })
                     .collect();
-                if name.starts_with("nichlink-") {
+                if name.starts_with("xirang-") {
                     found.push(name);
                 }
             }

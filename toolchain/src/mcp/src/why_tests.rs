@@ -1,5 +1,5 @@
-//! Pins for `nichlink.why`: it gathers the upstream facts in one call, and it names what it left out.
-//! `nichlink.why` 的钉子：一次收齐上游事实，并点名它没答的部分。
+//! Pins for `xirang.why`: it gathers the upstream facts in one call, and it names what it left out.
+//! `xirang.why` 的钉子：一次收齐上游事实，并点名它没答的部分。
 //!
 //! The measured failure these exist against is the hop count: a symptom sent agents to `callgraph`,
 //! then to `read` for the contract, then to the registry — 5, 6, 5 and 8 instrument calls against the
@@ -48,7 +48,7 @@ fn adoption_is_answered_even_when_there_is_no_ledger() {
     let root = scratch("why-ledger");
     let answer = super::why(&root, &json!({"at": "src/lib.rs:3"})).expect("an answer");
     assert!(
-        answer.contains("no ledger at .nichlink/adopted/entries"),
+        answer.contains("no ledger at .xirang/adopted/entries"),
         "the absence is stated: {answer}"
     );
 }
@@ -87,9 +87,9 @@ fn a_line_outside_every_definition_lists_the_definitions() {
 #[test]
 fn a_ledger_entry_naming_the_file_is_read() {
     let root = scratch("why-named");
-    std::fs::create_dir_all(root.join(".nichlink/adopted")).expect("ledger directory");
+    std::fs::create_dir_all(root.join(".xirang/adopted")).expect("ledger directory");
     std::fs::write(
-        root.join(".nichlink/adopted/entries"),
+        root.join(".xirang/adopted/entries"),
         "# a ledger written for this pin\nroot/control/button|the button face renders through its \
          contract|traced once|nich|2026-10-01T00:00:00+08:00|src/lib.rs|cafe|the pin needs a \
          naming entry\n",
@@ -110,8 +110,7 @@ fn a_ledger_entry_naming_the_file_is_read() {
 /// reader rather than only to this test.
 /// 布局是推导接受的那一种（`<name>/<name>.rs`），因此这个面对每个读者都是真的，而不只对本测试真。
 fn face_package(label: &str) -> std::path::PathBuf {
-    let root =
-        std::env::temp_dir().join(format!("nichlink-mcp-why-{label}-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-mcp-why-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let write = |relative: &str, text: &str| {
         let path = root.join(relative);
@@ -165,15 +164,15 @@ fn the_plan_facts_ride_with_the_line() {
     assert!(
         // The line names the CLI that writes the file (this bridge never builds) and the calls that
         // answer the same question without it: the round measured readers spending steps trying to
-        // make the bridge run `nichlink check`, which it cannot.
+        // make the bridge run `xirang check`, which it cannot.
         // 这一行点名写那个文件的**是 CLI**（本桥从不构建），以及不需要它也能回答同一问题的调用：那一轮
-        // 量到读者花步数想让桥去跑 `nichlink check`，而桥做不到。
-        // The line now separates the two truths: a tree that does not host nichlink has no scope to
+        // 量到读者花步数想让桥去跑 `xirang check`，而桥做不到。
+        // The line now separates the two truths: a tree that does not host xirang has no scope to
         // read at all, while one that does names the file and the CLI that writes it.
-        // 这一行现在把两种真相分开：没有接入 nichlink 的树根本没有 scope 可读，接入的树则点名文件与
+        // 这一行现在把两种真相分开：没有接入 xirang 的树根本没有 scope 可读，接入的树则点名文件与
         // 写它的 CLI。
         answer.contains("scope unknown")
-            && answer.contains("does not host nichlink")
+            && answer.contains("does not host xirang")
             && answer.contains("registry")
             && answer.contains("pruning unknown (no pruning_manifest.tsv"),
         "an unbuilt tree is answered as unbuilt rather than as out-of-scope: {answer}"

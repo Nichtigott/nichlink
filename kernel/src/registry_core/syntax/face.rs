@@ -75,8 +75,8 @@ pub struct FaceSyntax {
 /// 之所以有三种形状，是因为接受父级的三类注册写法不同；解析它们是构建期身份代码的事。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParentSyntax {
-    /// The package root, written as `crate::root_node_id(crate::NICHLINK_NAMESPACE)`.
-    /// 包根，写成 `crate::root_node_id(crate::NICHLINK_NAMESPACE)`。
+    /// The package root, written as `crate::root_node_id(crate::XIRANG_NAMESPACE)`.
+    /// 包根，写成 `crate::root_node_id(crate::XIRANG_NAMESPACE)`。
     Root,
     /// The parent is named by a path and a kind, as `NodeId::from_path` takes them.
     /// 父级由路径与 kind 命名，即 `NodeId::from_path` 接收的两个参数。
@@ -142,8 +142,8 @@ impl fmt::Display for FaceSyntaxError {
 
 impl std::error::Error for FaceSyntaxError {}
 
-/// Parse every NichLink face declaration in one Rust source file.
-/// 解析一个 Rust 源文件中的全部 NichLink 注册面声明。
+/// Parse every XiRang face declaration in one Rust source file.
+/// 解析一个 Rust 源文件中的全部 XiRang 注册面声明。
 pub fn parse_faces(source: &str) -> Result<Vec<FaceSyntax>, FaceSyntaxError> {
     let file = super::nesting::parse_file(source)?;
     let mut visitor = FaceVisitor {

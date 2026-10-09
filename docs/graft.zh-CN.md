@@ -2,7 +2,7 @@
 
 [English](graft.md) | 简体中文
 
-本页记录第三层 graft：`.nichlink/external-grafts/` 记录，以及运行期如何把它变成
+本页记录第三层 graft：`.xirang/external-grafts/` 记录，以及运行期如何把它变成
 有效树，连同由此产生的优先级规则与报告。README 描述的是声明与应用，本文件是记录的
 参考。
 
@@ -13,11 +13,11 @@
 | 层次 | 产物 | 归属 | 作用 |
 | --- | --- | --- | --- |
 | **声明** | 宿主入口的 `static_graft_plan!` | 构建步骤 | 命名槽位，让剪枝保住它并填充发布态 `StaticPlan`。不删除任何代码。 |
-| **记录** | `.nichlink/external-grafts/<selector>/graft.plan` | Studio（创作）与运行期宿主 | 运行期可以叠加在声明之上的创作输入。不参与编译。 |
+| **记录** | `.xirang/external-grafts/<selector>/graft.plan` | Studio（创作）与运行期宿主 | 运行期可以叠加在声明之上的创作输入。不参与编译。 |
 | **应用** | `Registry::overlay` / `overlay_static` / `overlay_recorded` | 运行期宿主 | 校验并返回一棵新的有效树，不改动原树与外部树。 |
 
-声明宏由 `nichlink-toolchain` 导出（`nichlink_toolchain::run_method::static_graft_plan!`）；
-kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nichlink_kernel::Registry`）。
+声明宏由 `xirang-toolchain` 导出（`xirang_toolchain::run_method::static_graft_plan!`）；
+kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`xirang_kernel::Registry`）。
 
 ## 哪个文件是宿主入口
 
@@ -25,8 +25,8 @@ kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nic
 `BUILTIN_GRAFT_CUTS` 表（以及 `graft_plan.tsv` 审计文本）描述同一批槽位。构建只解析
 一次，顺序如下：
 
-1. 设置了 `NICH_LINK_ENTRY` 时以它为准——相对路径相对包根解析，绝对路径原样使用。
-   指不到文件时**构建失败**（`NICH_LINK_ENTRY names <path>, which is not a file`）。
+1. 设置了 `XIRANG_ENTRY` 时以它为准——相对路径相对包根解析，绝对路径原样使用。
+   指不到文件时**构建失败**（`XIRANG_ENTRY names <path>, which is not a file`）。
    回退才是本条规则要消除的 bug：剪枝会跟随变量，而切口表仍在描述 `main.rs`，于是
    运行期可能拿着发布态并未保留的表，或静默丢掉只在被指定文件里声明的槽位。
 2. 声明 `application!(entry = …)` 的文件；
@@ -35,16 +35,16 @@ kernel 只解析宏 stringify 出来的文本。应用方法位于 kernel（`nic
 4. Cargo 约定的 `main.rs`、然后 `lib.rs`。这一步可能指不到任何文件，那只是没有入口的
    宿主，不是错误。
 
-创作界面（`nichlink grafts`、Studio）用同一套顺序解析入口，但把问题作为消息上报，
+创作界面（`xirang grafts`、Studio）用同一套顺序解析入口，但把问题作为消息上报，
 而不是让构建失败。
 
 ## 记录如何到达覆盖层
 
-记录的加载与应用由 `nichlink-toolchain` 中不受门控的运行期 API 完成（它刻意**不**放在
+记录的加载与应用由 `xirang-toolchain` 中不受门控的运行期 API 完成（它刻意**不**放在
 `authoring` 特性之后，宿主读取计划文件不需要 `syn` 依赖）：
 
 ```rust
-use nichlink_toolchain::run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
+use xirang_toolchain::run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
 
 // `declared` 是构建捕获的静态计划，也是哪些槽位存活的仲裁者；
 // `external` 是已链接的外部注册机。
@@ -57,7 +57,7 @@ let overlay = apply_recorded_grafts(
 let effective: Registry = overlay.effective;
 ```
 
-- `graft_record_root(package_root)` 就是 `.nichlink/external-grafts/`；
+- `graft_record_root(package_root)` 就是 `.xirang/external-grafts/`；
 - `load_graft_records(package_root)` 返回每个计划目录，无论可否读取（`LoadedGraft`），
   按选择器排序；目录不存在时返回空列表而不是错误；
 - `load_graft_record(package_root, selector)` 按选择器读回一条计划，拼接前先校验选择器，
@@ -83,7 +83,7 @@ let effective: Registry = overlay.effective;
 | 记录的 `graft` 选择器在外部注册机里无法唯一解析 | 保留声明 | `RecordSelectorUnresolved` |
 | 记录指向没有任何声明保活的槽位 | 跳过记录 | `UnkeptSlot` |
 
-为什么这样区分：“总让记录赢”会让未经审查、机器本地的 `.nichlink/` 文件重新路由已发布
+为什么这样区分：“总让记录赢”会让未经审查、机器本地的 `.xirang/` 文件重新路由已发布
 行为，并击败已链接、编译器解析过的注册面；“总让声明赢”则让记录的 `graft` 完全没有生产
 读者。按声明形式区分，既保留了字符串形式本就授予的“按名字动态解析”的信任，又拒绝击败
 类型化形式。
@@ -147,7 +147,7 @@ let effective: Registry = overlay.effective;
 ## 构建期拒绝
 
 构建从不应用计划，因此它不能等运行期去发现被剪掉的槽位。它改为拒绝该构建：当存在一条
-计划，而**没有**任何声明能命名它的目标槽位时，`nichlink-toolchain` 报出一条构建错误
+计划，而**没有**任何声明能命名它的目标槽位时，`xirang-toolchain` 报出一条构建错误
 （`phase=static-plan`，指向计划文件），消息里带着可直接粘贴的子句：
 
 ```text
@@ -156,11 +156,11 @@ external graft plan `<selector>` targets `<path>`, which no declaration in the h
 
 带特性门控的声明即使在本次构建里求值为假也算数，因为门控是作者的事：当前特性组合把槽位
 编译掉的记录是配置，不是失误。正因如此，这项检查读入口的完整声明清单，而生成的切口表只读
-启用的那一部分。构建不应用该计划；`nichlink grafts` 让同一判断可按需检视（见下）。
+启用的那一部分。构建不应用该计划；`xirang grafts` 让同一判断可按需检视（见下）。
 
 ## 记录目录是运行期输入
 
-`.nichlink/external-grafts/` 是**运行期输入**而不是生成物。因为记录可以重新路由字符串
+`.xirang/external-grafts/` 是**运行期输入**而不是生成物。因为记录可以重新路由字符串
 形式声明，不审查该目录的包可能被机器本地文件改变已发布行为。请像审查源码一样审查它，
 并把它挡在不可信检出之外。也正因如此，`apply_recorded_grafts` 与 `overlay_static` 对相同
 输入可能产出不同的树；示例测试 `a_record_moves_the_effective_tree_but_not_the_static_plan`
@@ -171,15 +171,15 @@ external graft plan `<selector>` targets `<path>`, which no declaration in the h
 构建会拒绝"没有任何声明能命名的计划"（见下），运行期在应用记录时打印
 `warning: … record skipped`。
 记录仍是被跳过而不是致命错误——一条陈旧记录不该让其余记录失效——但没有任何一条路径会把
-这次跳过留在沉默里。`nichlink grafts` 是事后看到同一事实的只读方式。
+这次跳过留在沉默里。`xirang grafts` 是事后看到同一事实的只读方式。
 
 ## 从命令行读取各层
 
 | 命令 | 报告内容 |
 | --- | --- |
-| `nichlink grafts [path] [--json]` | `.nichlink/external-grafts/*/graft.plan` 下的每条计划：选择器、目标路径、graft、`full`，以及宿主入口是否声明该槽位。只读。 |
-| `nichlink explain <node-id\|logical/path> [--path <dir>] [--json]` | 单个节点的身份、构建作用域、剪枝状态，以及命名它的声明切口。 |
-| `nichlink explain --overlay [--path <dir>] [--json]` | 每个槽位的保留/剪枝状态与替换，外加计划行。 |
+| `xirang grafts [path] [--json]` | `.xirang/external-grafts/*/graft.plan` 下的每条计划：选择器、目标路径、graft、`full`，以及宿主入口是否声明该槽位。只读。 |
+| `xirang explain <node-id\|logical/path> [--path <dir>] [--json]` | 单个节点的身份、构建作用域、剪枝状态，以及命名它的声明切口。 |
+| `xirang explain --overlay [--path <dir>] [--json]` | 每个槽位的保留/剪枝状态与替换，外加计划行。 |
 
 `explain --overlay` 明确是一次**静态投影**（`"kind": "static-projection"`）：CLI 无法链接
 任意宿主的 `base_registry()` 与 `external_registry()`，因此它报告构建自己的作用域与声明
@@ -210,14 +210,14 @@ external graft plan `<selector>` targets `<path>`, which no declaration in the h
 ```rust
 // 字符串形式：用逻辑路径命名槽位，用选择器名命名实现。
 // 在覆盖时动态解析；不需要链接。
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
 // 类型化形式：编译器解析目标面的 `NODE_ID` 与外部实现的 `NODE_ID`；
 // 外部 crate 必须已链接，因此类型化声明对记录保持最终。区间写成 `cut(a to b)`，
 // 见上文“兄弟区间”一节。
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
 );

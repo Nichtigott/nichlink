@@ -116,7 +116,7 @@ mod tests {
             name: "fixture",
             crate_name: "fixture",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.default"),
+            framework: FrameworkId::new("xirang.default"),
             source: PluginSource::Official,
             mode: PluginMode::Extension,
             checksum: "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",

@@ -4,7 +4,7 @@
 //! A shape is a [`Shape`] value in the host's `add_crates.rs`:
 //!
 //! ```ignore
-//! use nichlink_toolchain::run_method::{Crate, Shape};
+//! use xirang_toolchain::run_method::{Crate, Shape};
 //!
 //! pub const SHAPE: Shape = Shape {
 //!     package_prefix: "myapp",
@@ -30,7 +30,7 @@
 //! `crate::control::object::SUBTREE` 存在当且仅当那棵子树存在。什么算合法形状这条规则住在内核里、只有一份，
 //! 因为构建脚本在编译之前就把同一份声明当文本查一遍。
 
-use nichlink_kernel::registry_core::{DeclaredCrate, validate_shape};
+use xirang_kernel::registry_core::{DeclaredCrate, validate_shape};
 
 /// One registration subtree, as the generated tree marks it.
 /// 一棵注册子树，按生成树给出的标记。

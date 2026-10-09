@@ -14,7 +14,7 @@
 
 **h4 是 T-16 重建后的那一棵**：恰有一处契约违规、线索与真值指向同一处（D4 已收口）⇒ **链长比这一轴本轮重新可用**。
 
-**语料题（第五道，`can-it-answer` 轴）**：`tools/nichlink-realbug` 生成的 ripgrep `de2567a`（真值＝那笔提交本身，
+**语料题（第五道，`can-it-answer` 轴）**：`tools/xirang-realbug` 生成的 ripgrep `de2567a`（真值＝那笔提交本身，
 `crates/printer/src/util.rs`，测试 `r3180_look_around_panic`，目标 `integration`）。它的**自证**是三条同时成立
 （回退那次非零 · 那次输出点名该测试 · 还原那次为零），留给两臂的形态与四类题一致：**症状 + 绿测试 + 真实仓库**。
 
@@ -22,7 +22,7 @@
 
 | 装置 | 值 |
 | --- | --- |
-| **工具（出题台）** | `tools/nichlink-mcp-hardbug` = `98266c8df0c2b017…`（`sha256` 全长在 `target/hardbug-runs/t21/REGISTRATION.json`） |
+| **工具（出题台）** | `tools/xirang-mcp-hardbug` = `98266c8df0c2b017…`（`sha256` 全长在 `target/hardbug-runs/t21/REGISTRATION.json`） |
 | **题树** | 上表四列；逐棵树另有 `tree_sha256`（同上文件） |
 | **判分器** | 同一个工具里的 `score` / `report`；口径由 `plan --scoring` 逐字打印（含**白跑三分类**与**四栏三轴**的定义） |
 | **对照快照** | `target/round7/tools-upstream/v1.6.1/bin/codegraph`（自带 node） |
@@ -47,7 +47,7 @@
 **绝对优势的判定（沿用 W8 的证伪条件，不放宽）**：两臂在**同一批题**上，我方同时满足
 ① 根因命中 ≥ 对照 ② 每题调用数 ≤ 对照 ③ 输出侧 token ≤ 对照 ④ 思维链字符 ≤ 对照
 ⑤ 构造反证/最小性不劣 —— 才可写"全面超越"。
-**证伪条件**：若配 codegraph 的称职 agent 靠读 `target/nichlink/out/*.tsv` 与手工推导同样拿下 ⇒ 判**无绝对优势**。
+**证伪条件**：若配 codegraph 的称职 agent 靠读 `target/xirang/out/*.tsv` 与手工推导同样拿下 ⇒ 判**无绝对优势**。
 **平手档必须写进结论**（不许把平手说成优势）。
 
 ## 四、本轮**新增**要看的东西（W8 没有的）
@@ -82,7 +82,7 @@ W8 量的是"四类复杂 bug 上两臂的代价与结果"。本轮的能力批�
 
 **后果（按轴拆）**：
 - **轴一（能不能答）的四道 hardbug 题**：至少 `arm-codegraph` 已读到（它自报，并说明"读装置时读到了"）⇒ **该臂对四题不盲**。
-  另一臂（`arm-nichlink`）的暴露情况正在确认（见附记二）。
+  另一臂（`arm-xirang`）的暴露情况正在确认（见附记二）。
 - **语料题**：泄漏的是**文件**（`crates/printer/src/util.rs`），**行号未泄漏** ⇒ 只部分失效。
 - **轴二（代价）与四项"只看不判"**（首发入口 · `next` 采纳率 · 记账性重跑 · 截断/失败）：**不受影响**——
   它们量的是"花了多少、走了什么路"，与知不知道答案无关。
@@ -153,7 +153,7 @@ W8 量的是"四类复杂 bug 上两臂的代价与结果"。本轮的能力批�
 **对本轮结论的影响**：无。轴二与四项"只看不判"照旧可用；轴一的 `void` 范围与 `partial` 的读法都写清楚了，
 复核者据此判断即可。
 
-### 附记二（`arm-nichlink` 报告后核实）：**语料树根本不含缺陷** ⇒ 轴一本轮对**五题全部 `void`**
+### 附记二（`arm-xirang` 报告后核实）：**语料树根本不含缺陷** ⇒ 轴一本轮对**五题全部 `void`**
 
 **事实（我独立核实）**：
 ```
@@ -163,10 +163,10 @@ $ git -C …/repo log --oneline -1   →  de2567a printer: fix panic in replacem
 $ git -C …/repo status --porcelain →  D HomebrewFormula   （工作区与 de2567a 一致 ⇒ **含修复**）
 ```
 ⇒ **那棵树检出在"修复提交"上、工作区干净，缺陷不在树里**。两臂都察觉了这一点，并各自**从提交里把缺陷重建出来**才作答：
-`arm-codegraph` 明说"在副本里逐字回退那 4 行守卫"；`arm-nichlink` 则自己构造了 `-U --json` 的模式把 panic 逼出来，并如实记下
+`arm-codegraph` 明说"在副本里逐字回退那 4 行守卫"；`arm-xirang` 则自己构造了 `-U --json` 的模式把 panic 逼出来，并如实记下
 "`r3180_look_around_panic` 在本树**是绿的**（114+328 全过）"。**两臂的行号因此不同（`:527` vs `:580`）——它们是两次不同的重建。**
 
-**根因（生成器侧的缺陷，比泄漏更严重）**：`tools/nichlink-realbug build` 的自证顺序是
+**根因（生成器侧的缺陷，比泄漏更严重）**：`tools/xirang-realbug build` 的自证顺序是
 **回退 → 跑红 → 还原 → 跑绿**，于是它**留在盘上的是还原后的那一版**✗。自证的三条判据本身没错（红/绿都真跑过），
 但**没有一条要求"题目要在盘上"**——生成器把题目构造出来、验完、又拆掉了，还写下"injected"的字样。
 ⇒ **纪律**：凡"构造出来的题目"，自证之后必须**留在题面状态**（或在副本里自证、盘上留注入态），
@@ -183,13 +183,13 @@ $ git -C …/repo status --porcelain →  D HomebrewFormula   （工作区与 de
 | h1 · h2 · h3 · h4 | 真值 `file`+`line`+`mechanism` 在臂的工作目录的 7 份文档里，且 `build` 确定性、`plan` 印缺陷形状 |
 | realbug（ripgrep `de2567a`） | **缺陷不在树里**（检出在修复提交上）；两臂各自重建 ⇒ 它们答的是"那笔提交修了什么"，不是"树里哪里坏了" |
 
-**`arm-nichlink` 报的顺序事实可核，但不恢复盲性**：它称四道 hardbug 的根因**在读那两份文档之前**已由桥的调用独立确立
+**`arm-xirang` 报的顺序事实可核，但不恢复盲性**：它称四道 hardbug 的根因**在读那两份文档之前**已由桥的调用独立确立
 （其答案里有逐条调用清单可回放），语料题是**读后开工**。即使这一顺序成立，**配方与真值仍摊在同一个工作目录里**
 （附记一之补），因此轴一不因此转为可用；顺序事实进结论的**观察段**。
 
-**臂报告的副作用（记账用，不需处置）**：跑桥的 `check` 在各树 `<tree>/target/` 下留构建产物与 `target/nichlink/out/check-*.log`
-（四棵 hardbug 树本就有 `target/`；ripgrep 树此前没有，现在约 2G）；臂在工作区新增 `answers/arm-nichlink/`、
-`logs/arm-nichlink/`（含两个副本与 `q5-panic-evidence.txt`）与 `target/hardbug-runs/t21/cargo-home`（`~/.cargo` 的副本，
+**臂报告的副作用（记账用，不需处置）**：跑桥的 `check` 在各树 `<tree>/target/` 下留构建产物与 `target/xirang/out/check-*.log`
+（四棵 hardbug 树本就有 `target/`；ripgrep 树此前没有，现在约 2G）；臂在工作区新增 `answers/arm-xirang/`、
+`logs/arm-xirang/`（含两个副本与 `q5-panic-evidence.txt`）与 `target/hardbug-runs/t21/cargo-home`（`~/.cargo` 的副本，
 沙箱里 `~/.cargo` 只读）。**四棵题树与语料树的源码零改动**（`git status` 已核）。
 
 **本轮还剩什么可用**（不变，且它正是这批能力改的东西）：**轴二（代价三档 / 调用数 / 链长）** 与

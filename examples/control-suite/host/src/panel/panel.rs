@@ -1,12 +1,12 @@
 //! Panel folder face: a second root child that owns its own Registry.
 //! Panel 文件夹面：第二个根子面，拥有自己的 Registry。
 
-use nichlink_toolchain::run_method::{ContractId, FlowContract};
+use xirang_toolchain::run_method::{ContractId, FlowContract};
 
 crate::root_object! {
     kind: Panel,
     needs_registry: true,
-    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),
+    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),
     flow: FlowContract::new(
         ContractId::new("panel.frame.v1"),
         1,

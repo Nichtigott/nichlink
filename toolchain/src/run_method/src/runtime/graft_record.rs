@@ -1,13 +1,13 @@
-//! Graft records on disk: loading `.nichlink/external-grafts/` and applying it.
-//! 磁盘上的嫁接记录：读取 `.nichlink/external-grafts/` 并应用。
+//! Graft records on disk: loading `.xirang/external-grafts/` and applying it.
+//! 磁盘上的嫁接记录：读取 `.xirang/external-grafts/` 并应用。
 //!
 //! The kernel owns reconciliation
-//! ([`Registry::overlay_recorded`](nichlink_kernel::Registry::overlay_recorded)); this
+//! ([`Registry::overlay_recorded`](xirang_kernel::Registry::overlay_recorded)); this
 //! page owns the filesystem boundary. It is deliberately **not**
 //! feature-gated: a runtime host must not need the `authoring` feature (and its
 //! `syn` dependency) merely to read a plan file, so the loader takes an explicit
 //! `package_root` instead of the authoring thread-local context.
-//! 内核拥有对账（[`Registry::overlay_recorded`](nichlink_kernel::Registry::overlay_recorded)）；
+//! 内核拥有对账（[`Registry::overlay_recorded`](xirang_kernel::Registry::overlay_recorded)）；
 //! 本页拥有文件系统边界。它刻意**不**受特性门控：运行期宿主读取计划文件不该需要
 //! `authoring` 特性（及其 `syn` 依赖），因此加载器接收显式的 `package_root`，而不是
 //! 创作期的线程局部上下文。
@@ -22,7 +22,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use crate::run_method::{GraftPlanDocument, Registry, StaticGraftCut};
 
@@ -40,12 +40,12 @@ pub use crate::run_method::registry_core::tree::graft_ops::{
 /// 一次性目录树，而不必改动进程级状态。
 pub fn graft_record_root(package_root: &Path) -> PathBuf {
     package_root
-        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::XIRANG_DIR)
         .join(lexicon::EXTERNAL_GRAFT_DIR)
 }
 
-/// One directory under `.nichlink/external-grafts/`, read or broken.
-/// `.nichlink/external-grafts/` 下的一个目录，读得懂或坏了。
+/// One directory under `.xirang/external-grafts/`, read or broken.
+/// `.xirang/external-grafts/` 下的一个目录，读得懂或坏了。
 ///
 /// A broken plan is reported rather than hidden: the author has to see it, and
 /// the other records still apply. The build treats the same file as advisory
@@ -84,9 +84,9 @@ impl LoadedGraft {
 /// selector.
 /// `package_root` 下的每个计划目录，无论是否可读，按选择器排序。
 ///
-/// A missing `.nichlink/external-grafts/` is an empty list, not an error: most
+/// A missing `.xirang/external-grafts/` is an empty list, not an error: most
 /// packages have no records at all.
-/// `.nichlink/external-grafts/` 不存在时返回空列表而不是错误：大多数包根本没有记录。
+/// `.xirang/external-grafts/` 不存在时返回空列表而不是错误：大多数包根本没有记录。
 pub fn load_graft_records(package_root: &Path) -> Result<Vec<LoadedGraft>, String> {
     let root = graft_record_root(package_root);
     let entries = match fs::read_dir(&root) {
@@ -123,8 +123,8 @@ pub fn load_graft_records(package_root: &Path) -> Result<Vec<LoadedGraft>, Strin
 /// 按目录选择器读回一条计划。
 ///
 /// The selector is validated before it is joined, so a record cannot address a
-/// path outside `.nichlink/external-grafts/`.
-/// 选择器在拼接之前先校验，因此记录无法寻址 `.nichlink/external-grafts/` 之外的路径。
+/// path outside `.xirang/external-grafts/`.
+/// 选择器在拼接之前先校验，因此记录无法寻址 `.xirang/external-grafts/` 之外的路径。
 pub fn load_graft_record(package_root: &Path, selector: &str) -> Result<GraftPlanDocument, String> {
     let selector = selector.trim();
     crate::run_method::registry_core::validate_graft_selector(selector)?;
@@ -215,8 +215,8 @@ pub(crate) fn graft_report_lines(reports: &[RecordReport]) -> Vec<String> {
         .collect()
 }
 
-/// Load `.nichlink/external-grafts/` under `package_root` and overlay it.
-/// 读取 `package_root` 下的 `.nichlink/external-grafts/` 并覆盖。
+/// Load `.xirang/external-grafts/` under `package_root` and overlay it.
+/// 读取 `package_root` 下的 `.xirang/external-grafts/` 并覆盖。
 ///
 /// `declared` is the build-captured static plan (`builtin_static_plan().grafts()`);
 /// it is the arbiter of which slots stay alive. A record cannot resurrect a slot
@@ -241,7 +241,7 @@ pub(crate) fn graft_report_lines(reports: &[RecordReport]) -> Vec<String> {
 /// 更早（`build_method::graft_plan_check`：没有任何声明可能命名的计划）；这里覆盖构建
 /// 之后新增的记录，或槽位已不在原树里的记录。
 ///
-/// `.nichlink/external-grafts/` is **runtime input**, not generated state. A
+/// `.xirang/external-grafts/` is **runtime input**, not generated state. A
 /// record may re-route a string-form declaration, so a package that does not
 /// review this directory can have shipped behavior changed by a machine-local
 /// file; review it the way source is reviewed and keep it out of untrusted
@@ -249,7 +249,7 @@ pub(crate) fn graft_report_lines(reports: &[RecordReport]) -> Vec<String> {
 /// `overlay_static` can produce different trees for identical inputs; the
 /// example test `a_record_moves_the_effective_tree_but_not_the_static_plan`
 /// pins that intended divergence rather than treating it as a bug.
-/// `.nichlink/external-grafts/` 是**运行期输入**而不是生成物。记录可以重新路由字符串
+/// `.xirang/external-grafts/` 是**运行期输入**而不是生成物。记录可以重新路由字符串
 /// 形式声明，因此不审查该目录的包可能被机器本地文件改变已发布行为；请像审查源码一样
 /// 审查它，并把它挡在不可信检出之外。也正因如此，`apply_recorded_grafts` 与
 /// `overlay_static` 对相同输入可能产出不同的树；示例测试

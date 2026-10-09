@@ -8,10 +8,10 @@
 //!
 //! **A move is an identity change.** `NodeId = hash(namespace, source path, name)` takes the source
 //! path as an input, so the face comes back under a new id and everything booked against the old one
-//! stops resolving. The record under `.nichlink/moves/` is a compatibility note for the next reader,
+//! stops resolving. The record under `.xirang/moves/` is a compatibility note for the next reader,
 //! not an audit ledger, and only the most recent five are kept.
 //! **一次搬动就是一次身份变化。** `NodeId = hash(命名空间, 源码路径, 名字)` 把源码路径当输入，因此面会以
-//! 新 id 回来，而按旧 id 记账的一切都不再解析。`.nichlink/moves/` 下的记录是留给下一个读者的兼容提示，
+//! 新 id 回来，而按旧 id 记账的一切都不再解析。`.xirang/moves/` 下的记录是留给下一个读者的兼容提示，
 //! 不是审计账本，只保留最近五条。
 //!
 //! **What it writes, and why it is not the executor** (the maintainer's three premises, decided
@@ -26,10 +26,10 @@
 //! 字段——因此 `move` 是一块新的写入路径，必须自己保证原子性与回滚。
 //!
 //! **Line-level, and it refuses rather than guesses** (audit `M7`, §M7.68). The front end gives no
-//! source offsets — `nichlink-macro` is a proc-macro, so its spans serve diagnostics, and the kernel's
+//! source offsets — `xirang-macro` is a proc-macro, so its spans serve diagnostics, and the kernel's
 //! syntax face carries `location.line` and nothing finer — so the `parent:` field is found by **line**
 //! and a file that does not spell it exactly once is refused by name.
-//! **行级，而且拒绝而不是猜**（审计 `M7`，§M7.68）。前端不给源码偏移——`nichlink-macro` 是 proc-macro，
+//! **行级，而且拒绝而不是猜**（审计 `M7`，§M7.68）。前端不给源码偏移——`xirang-macro` 是 proc-macro，
 //! 它的 span 服务诊断，而 kernel 的 syntax 面只有 `location.line`——因此 `parent:` 是按行找的，拼不出
 //! 恰好一次的文本会被点名拒绝。
 
@@ -39,18 +39,18 @@ use serde_json::Value;
 
 use crate::build_method::FaceView;
 use crate::mcp::apply::Outcome;
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::lexicon;
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::lexicon;
 
 /// Relocate one face under a new parent, previewing unless the caller is applying.
 /// 把一个面搬到新的父级之下；除非调用方在落盘，否则只预览。
 ///
 /// It takes **both** roots for the reason the caller cannot explain in one line: the claim ledger
 /// (`add_crates.rs`) and the host entry are read from the **project** root, because a preview's copy skips
-/// `.nichlink/` by design, while every write lands in the work directory — which is also why it takes the
+/// `.xirang/` by design, while every write lands in the work directory — which is also why it takes the
 /// `applying` flag rather than inferring it.
 /// 它要**两个**根，理由没法在调用处一行说清：认领台账（`add_crates.rs`）与宿主入口都从**项目**根读，因为
-/// 预览副本按设计跳过 `.nichlink/`；而每一处写入都落在工作目录里——这也是它接 `applying` 标志而不是自己
+/// 预览副本按设计跳过 `.xirang/`；而每一处写入都落在工作目录里——这也是它接 `applying` 标志而不是自己
 /// 推断的原因。
 pub(crate) fn run_move(
     root: &Path,
@@ -75,8 +75,8 @@ pub(crate) fn run_move(
     let source_root = crate::build_method::source_layout(work)?.scan_root;
     let face = named_face(&views, &node).ok_or_else(|| {
         format!(
-            "no face in this tree has the path or identity `{node}`; `nichlink.faces` lists them, and \
-             `nichlink.explain <path>` answers for one"
+            "no face in this tree has the path or identity `{node}`; `xirang.faces` lists them, and \
+             `xirang.explain <path>` answers for one"
         )
     })?;
     // The destination is a face that owns a registry, or the package root itself — which is not a face,
@@ -87,7 +87,7 @@ pub(crate) fn run_move(
     } else {
         Some(named_face(&views, &to).ok_or_else(|| {
             format!(
-                "no face in this tree has the path or identity `{to}`; `nichlink.faces` lists them, and \
+                "no face in this tree has the path or identity `{to}`; `xirang.faces` lists them, and \
                  the package root is spelled `root`"
             )
         })?)
@@ -98,7 +98,7 @@ pub(crate) fn run_move(
         return Err(format!(
             "`{}` does not own a registry, so nothing may be mounted under it; pick a face whose \
              declaration carries `needs_registry: true` (the ones this tool would accept are in \
-             `nichlink.faces`)",
+             `xirang.faces`)",
             parent.path
         ));
     }
@@ -171,7 +171,7 @@ pub(crate) fn run_move(
     }
     message.push_str(&format!(
         "       identity {old_id} → {new_id}\n       `NodeId` hashes the source path, so every record \
-         that names the old identity stops resolving; the note under `.nichlink/moves/` is what the \
+         that names the old identity stops resolving; the note under `.xirang/moves/` is what the \
          next reader gets instead\n"
     ));
 
@@ -352,10 +352,10 @@ fn rewrite_parent_line(text: &str, spelling: &str) -> Result<ParentEdit, String>
     let comma = if value.ends_with(',') { "," } else { "" };
     let value = value.trim_end_matches(',');
     // Only the two spellings the tree itself writes are accepted: a typed `crate::…::NODE_ID`, and the
-    // root's `crate::root_node_id(crate::NICHLINK_NAMESPACE)`. Anything else is a shape this action has
+    // root's `crate::root_node_id(crate::XIRANG_NAMESPACE)`. Anything else is a shape this action has
     // never seen, and rewriting it would be a guess (audit `M7`, §M7.68).
     // 只接受这棵树自己写的那两种拼法：类型化的 `crate::…::NODE_ID`，以及根的
-    // `crate::root_node_id(crate::NICHLINK_NAMESPACE)`。别的形状这个动作没见过，改写它就是猜
+    // `crate::root_node_id(crate::XIRANG_NAMESPACE)`。别的形状这个动作没见过，改写它就是猜
     // （审计 `M7`，§M7.68）。
     let typed = value.starts_with("crate::") && value.ends_with("::NODE_ID");
     let root = value.contains("root_node_id(");
@@ -655,7 +655,7 @@ fn write_record(
     old_id: NodeId,
     new_id: NodeId,
 ) -> Result<PathBuf, String> {
-    let directory = work.join(lexicon::NICHLINK_DIR).join(lexicon::MOVES_DIR);
+    let directory = work.join(lexicon::XIRANG_DIR).join(lexicon::MOVES_DIR);
     let next = next_number(&directory);
     let record = directory.join(next.to_string());
     std::fs::create_dir_all(&record)
@@ -675,7 +675,7 @@ fn write_record(
 
 /// How the root is spelled in a `parent:` line.
 /// 根在 `parent:` 行里的拼法。
-const ROOT_PARENT_SPELLING: &str = "crate::root_node_id(crate::NICHLINK_NAMESPACE)";
+const ROOT_PARENT_SPELLING: &str = "crate::root_node_id(crate::XIRANG_NAMESPACE)";
 
 /// How many move records are kept (the maintainer's decision, 2026-10-09).
 /// 保留多少条搬动记录（维护者 2026-10-09 的决定）。

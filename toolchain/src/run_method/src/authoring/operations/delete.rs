@@ -7,8 +7,8 @@ use super::super::*;
 use super::generated_paths;
 use super::trash::trash_root;
 
-/// Move one generated module subtree into the recoverable NichLink trash.
-/// 将一个生成模块子树移动到可恢复的 NichLink 回收目录。
+/// Move one generated module subtree into the recoverable XiRang trash.
+/// 将一个生成模块子树移动到可恢复的 XiRang 回收目录。
 pub fn delete_module(registry: &Registry, spec: &str) -> Result<AuthoringChange, String> {
     let mut fields = spec.split_whitespace();
     let id = fields
@@ -43,7 +43,7 @@ pub fn delete_module(registry: &Registry, spec: &str) -> Result<AuthoringChange,
     }
     let trash = trash_root().join(format!("{name}-{id}-{}", super::trash::stamp()?));
     fs::create_dir_all(trash.parent().expect("trash has a parent"))
-        .map_err(|error| format!("cannot create NichLink trash: {error}"))?;
+        .map_err(|error| format!("cannot create XiRang trash: {error}"))?;
     fs::rename(module_dir, &trash)
         .map_err(|error| format!("cannot move module to trash: {error}"))?;
 

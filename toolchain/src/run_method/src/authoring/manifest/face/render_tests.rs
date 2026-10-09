@@ -29,7 +29,7 @@ mod field_truth_tests {
         std::fs::create_dir_all(face_path.parent().expect("fixture parent")).expect("fixture dir");
         std::fs::write(
             &face_path,
-            "// generated-by=NichLink\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
+            "// generated-by=XiRang\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
         )
         .expect("fixture face");
 
@@ -140,7 +140,7 @@ mod field_truth_tests {
                 .expect("fixture dir");
             std::fs::write(
                 &face_path,
-                "// generated-by=NichLink\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
+                "// generated-by=XiRang\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
             )
             .expect("fixture face");
 
@@ -183,7 +183,7 @@ mod field_truth_tests {
         std::fs::create_dir_all(face_path.parent().expect("fixture parent")).expect("fixture dir");
         std::fs::write(
             &face_path,
-            "// generated-by=NichLink\npub struct Widget;\n\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
+            "// generated-by=XiRang\npub struct Widget;\n\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
         )
         .expect("fixture face");
 
@@ -220,7 +220,7 @@ mod field_truth_tests {
         std::fs::create_dir_all(face_path.parent().expect("fixture parent")).expect("fixture dir");
         std::fs::write(
             &face_path,
-            "// generated-by=NichLink\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
+            "// generated-by=XiRang\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
         )
         .expect("fixture face");
         let mut manifest = parse::source(&face_path).expect("the fixture parses");
@@ -255,7 +255,7 @@ mod field_truth_tests {
         std::fs::create_dir_all(face_path.parent().expect("fixture parent")).expect("fixture dir");
         std::fs::write(
             &face_path,
-            "// generated-by=NichLink\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
+            "// generated-by=XiRang\ncrate::root_object! {\n    kind: Widget,\n    parent: crate::ROOT_NODE_ID,\n}\n",
         )
         .expect("fixture face");
         let mut manifest = parse::source(&face_path).expect("the fixture parses");
@@ -279,7 +279,7 @@ mod field_truth_tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-lg38-{label}-{}-{sequence}",
+            "xirang-lg38-{label}-{}-{sequence}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
@@ -297,12 +297,12 @@ mod plugin_preservation_tests {
     /// 弄丢。
     #[test]
     fn a_face_with_a_plugin_refuses_a_silent_rewrite() {
-        let root = std::env::temp_dir().join("nichlink-plugin-face-fixture");
+        let root = std::env::temp_dir().join("xirang-plugin-face-fixture");
         let face = root.join("widget/widget.rs");
         std::fs::create_dir_all(face.parent().expect("fixture parent")).expect("fixture dir");
         std::fs::write(
             &face,
-            "// generated-by=NichLink\n\
+            "// generated-by=XiRang\n\
              crate::root_object! {\n\
                  kind: Widget,\n\
                  parent: crate::ROOT_NODE_ID,\n\

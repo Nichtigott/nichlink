@@ -12,12 +12,12 @@ No `.rs` file was edited and no git command was run. Evidence is quoted code.
 Targeted read-only verification (all green, exit 0):
 
 ```
-cargo test -p nichlink-core        --offline graft          # 31 passed
-cargo test -p nichlink-build-method --offline graft          # 15 passed
-cargo test -p nichlink-run-method   --offline --test graft_record  # 4 passed
-cargo test -p nichlink-studio       --offline graft          # 9 passed
-cargo test -p nichlink-example-control-button --offline graft       # 11 passed
-cargo test -p nichlink-example-control-button --offline a_record_moves # 1 passed
+cargo test -p xirang-core        --offline graft          # 31 passed
+cargo test -p xirang-build-method --offline graft          # 15 passed
+cargo test -p xirang-run-method   --offline --test graft_record  # 4 passed
+cargo test -p xirang-studio       --offline graft          # 9 passed
+cargo test -p xirang-example-control-button --offline graft       # 11 passed
+cargo test -p xirang-example-control-button --offline a_record_moves # 1 passed
 ```
 
 ## Claim table
@@ -28,17 +28,17 @@ cargo test -p nichlink-example-control-button --offline a_record_moves # 1 passe
 | C2 | `Registry::overlay` "is the **application**: it validates and returns the effective tree at runtime, leaving both the base registry and the external registry untouched." | `README.md:560-562`; `README.zh-CN.md:519` | **MET** | `core/.../tree/graft_ops/overlay.rs:95-121` (`overlay`/`overlay_static`), `:132` stages `let mut staged = self.clone()`; `external` is `&Registry` and only read (`:136-168`). |
 | C3 | The record file "is not compiled and **nothing else applies it**; the screen reads it back to list, open, re-scope, and delete plans." | `README.md:563-565` | **NOT MET** | Runtime now applies it: `run_method/src/runtime/graft_record.rs:161-184` `apply_recorded_grafts` → `core/.../tree/graft_ops/record.rs:417-562` `overlay_recorded`. The CLI and build also read it (`cli/src/grafts.rs`, `cli/src/explain.rs:380`, `build_method/src/graft_plan_check.rs:49-75`). Only "not compiled" is true. |
 | C4 | Same record claim in Chinese: "它不参与编译，**也没有别的消费者**" | `README.zh-CN.md:520-521` | **NOT MET** | Same as C3. |
-| C5 | Studio keeps the three layers apart; `g` writes the record and never host source. | `studio/README.md:17-23` | **MET** | The three-layer description and "writes `.nichlink/...`, never host source" are true (`studio/src/studio/app/graft.rs:81-126`, no `fs::copy`). (The *code comment* at `studio/src/studio/app/graft.rs:11-12` adds "consumed here and by nothing else", which C3 refutes — see S8.) |
-| C6 | "A `.nichlink/.../graft.plan` file is an authoring record, **not** a declaration the compiler sees and **not an overlay application**." | `docs/migration.md:179-181`; `docs/migration.zh-CN.md:95-96` | **PARTIAL** | "not a declaration the compiler sees" is true. "not an overlay application" is only true in the narrow sense that the file is not the `overlay` call; the document is now the **input** to one (`run_method/src/runtime/graft_record.rs:161-184` → `record.rs:417-562`), and the section never says so. The next sentence, "the format now has a reader", understates it. |
+| C5 | Studio keeps the three layers apart; `g` writes the record and never host source. | `studio/README.md:17-23` | **MET** | The three-layer description and "writes `.xirang/...`, never host source" are true (`studio/src/studio/app/graft.rs:81-126`, no `fs::copy`). (The *code comment* at `studio/src/studio/app/graft.rs:11-12` adds "consumed here and by nothing else", which C3 refutes — see S8.) |
+| C6 | "A `.xirang/.../graft.plan` file is an authoring record, **not** a declaration the compiler sees and **not an overlay application**." | `docs/migration.md:179-181`; `docs/migration.zh-CN.md:95-96` | **PARTIAL** | "not a declaration the compiler sees" is true. "not an overlay application" is only true in the narrow sense that the file is not the `overlay` call; the document is now the **input** to one (`run_method/src/runtime/graft_record.rs:161-184` → `record.rs:417-562`), and the section never says so. The next sentence, "the format now has a reader", understates it. |
 | C7 | "`overlay` returns a new effective Registry. Neither `base` nor `external` is modified." | `README.md:496-497`; `README.zh-CN.md:461`; `docs/migration.md:168-170` | **MET** | `overlay.rs:95-101` returns `RegistryResult<Self>`; mutation is on `staged` only; `overlay.rs:239-289` writes `staged`'s entry. Example test `graft_replaces_the_slot_and_leaves_both_trees_untouched`. |
 | C8 | "If any cut fails its flow contract, destination parent rule, admission, or connector check, **none of the plan is published**." | `README.md:498-499`; `README.zh-CN.md:462-463`; `docs/migration.md:170-172` | **MET** | Sequential cuts mutate `staged` (overlay.rs:132), but any `?`/`return Err` discards it; connector check runs after all cuts (`overlay.rs:178-181`). Example test `graft_chain_rejects_atomically`. |
 | C9 | "A normal cut replaces one node and keeps the base node's children." | `README.md:503-513`; `README.zh-CN.md:466-476`; `docs/migration.md:168` | **MET** | `overlay.rs:258-287` takes `let mut kept = entry.child.clone()`, reconfigures it with the replacement rule, and refuses if a kept child violates it. Example tests `graft_replaces_one_face_only`, `a_non_full_graft_does_not_install_a_rule_its_children_violate`. |
 | C10 | "`full` explicitly drops the base subtree and uses the external subtree." | `README.md:515-524`; `README.zh-CN.md:478-487`; `docs/migration.md:168-169` | **MET** | `overlay.rs:239-257` adopts `external.entry_at(replacement.id)...child.clone()` and rebases; a replacement with no child registry drops base children. Example test `graft_replaces_a_whole_subtree_with_full`. |
 | C11 | Static string form: `static_graft_plan!(FRAMEWORK, cut "root/control/button" graft "button_fast",)` and `base.overlay_static(builtin_static_plan().grafts(), external)`. | `README.md:481-494`; `README.zh-CN.md:446-459`; `docs/migration.md:161-165` | **MET** | `run_method/src/macros/entry.rs:60-66` (declaration macro) and `core/.../release/release.rs:105-131,175-190` (`StaticGraftCut::new`, `StaticPlan::grafts`). `core/.../syntax/entries/graft.rs:324-338` parses the quoted form. |
-| C12 | Dynamic `graft_plan!` "only when an editor, command, or hot reload path must construct and modify a plan at runtime." | `README.md:537-538`; `README.zh-CN.md:499-500`; `run_method/README.md:14-15` | **MET** (macro) / **PARTIAL** (migration example) | `run_method/src/macros/entry.rs:80-119` implements it. But `docs/migration.md:161` and `docs/migration.zh-CN.md:79` write `nichlink::graft_plan!`; the macro is `#[macro_export]` in `nichlink-run-method`, so the canonical path is `nichlink_run_method::graft_plan!` (as the README uses). |
+| C12 | Dynamic `graft_plan!` "only when an editor, command, or hot reload path must construct and modify a plan at runtime." | `README.md:537-538`; `README.zh-CN.md:499-500`; `run_method/README.md:14-15` | **MET** (macro) / **PARTIAL** (migration example) | `run_method/src/macros/entry.rs:80-119` implements it. But `docs/migration.md:161` and `docs/migration.zh-CN.md:79` write `xirang::graft_plan!`; the macro is `#[macro_export]` in `xirang-run-method`, so the canonical path is `xirang_run_method::graft_plan!` (as the README uses). |
 | C13 | "A path range can target contiguous siblings under one parent Registry." | `README.md:540-548`; `README.zh-CN.md:502-510`; `docs/migration.md:169` | **PARTIAL** | Implemented and tested (`resolution.rs:42-99`; example `graft_replaces_a_contiguous_sibling_range`), and a cross-parent range is refused (`resolution.rs:73-75`). But "contiguous" is decided by **alphabetical `registry_name` order after sorting** (`resolution.rs:79-98`), not by tree/insertion order; the roadmap itself lists "`resolve_cut_targets` 按 `registry_name` 排序是否等价于'连续兄弟区间'的意图" as an open uncertainty (`docs/roadmap-1.0.md:230`). |
 | C14 | The static macro "constructs no `Vec` or `String`; the builder writes its contents directly into the `StaticPlan`." | `README.md:477-479`; `README.zh-CN.md:443-444` | **MET** | `run_method/src/macros/entry.rs:61-65` expands to two `const _` items and `stringify!`, no collection. Build-time parsing does allocate `String`s, but the stored table is `&'static [StaticGraftCut]` (`renderer/pass.rs:63-100`). |
-| C15 | Pruning: "it conservatively derives the faces needed by this crate — what the entry reaches plus the slot each `cut(` in `static_graft_plan!` names — and emits only those faces ... so a face nobody declared is not shipped (`NICH_LINK_SCOPE` widens that scope on purpose)" with full-tree fallback. | `README.md:591-603`; `README.zh-CN.md:542-549`; `build_method/README.md:35-37` | **PARTIAL** | Narrowing is real (`build_method/src/scope.rs:159-242`; `static_plan.rs:44-84`; tests `a_typed_cut_narrows_the_scope_to_the_declared_slot`, `the_declared_slots_define_the_build_time_scope`). Caveats: (a) an unplaceable/typed-unrecognized or root cut falls back to the **whole tree** (`scope.rs:199-228,273-282`), which the README does acknowledge at `:602-603`, so "not shipped" is not guaranteed; (b) the build's static-plan capture resolves the entry without `NICH_LINK_ENTRY` (`graft_view/query.rs:27-31`) while `SourceScope` honours it (`scope.rs:113-129`), so under that env var pruning and the captured plan can read different files. |
+| C15 | Pruning: "it conservatively derives the faces needed by this crate — what the entry reaches plus the slot each `cut(` in `static_graft_plan!` names — and emits only those faces ... so a face nobody declared is not shipped (`XIRANG_SCOPE` widens that scope on purpose)" with full-tree fallback. | `README.md:591-603`; `README.zh-CN.md:542-549`; `build_method/README.md:35-37` | **PARTIAL** | Narrowing is real (`build_method/src/scope.rs:159-242`; `static_plan.rs:44-84`; tests `a_typed_cut_narrows_the_scope_to_the_declared_slot`, `the_declared_slots_define_the_build_time_scope`). Caveats: (a) an unplaceable/typed-unrecognized or root cut falls back to the **whole tree** (`scope.rs:199-228,273-282`), which the README does acknowledge at `:602-603`, so "not shipped" is not guaranteed; (b) the build's static-plan capture resolves the entry without `XIRANG_ENTRY` (`graft_view/query.rs:27-31`) while `SourceScope` honours it (`scope.rs:113-129`), so under that env var pruning and the captured plan can read different files. |
 | C16 | Generated code stores checked topology as `&'static [StaticFace]` and grafts as `&'static [StaticGraftCut]`; `builtin_static_plan()` borrows that data; "no heap allocation, global constructor, inventory walk, or startup registration loop." | `README.md:617-621`; `README.zh-CN.md:560-563` | **MET** | `renderer/pass.rs:39-101` emits the two static slices and `builtin_static_plan()`; `release/release.rs:37-43,172-190` is `Copy` over slices. (Dev-only `registrations()` at `pass.rs:102-106` builds a `Vec`, but it is not the release read path.) |
 | C17 | "`overlay_static` skips dynamic `GraftPlan` and selector-string allocation" but still validates once. | `README.md:498-501`; `README.zh-CN.md:463-464`; cost table `README.md:635-636`; `README.zh-CN.md:575-576` | **MET** | `overlay.rs:111-121` calls `overlay_cuts` with `GraftCutRef::static_cut` (`overlay.rs:63-77`); no `GraftPlan`/selector `String` is constructed. It still clones the tree and builds a `BTreeSet` (`overlay.rs:132-133,169-174`), so "allocates no plan" is the honest reading, not "allocates nothing". |
 | C18 | Overlay validation gates on framework match, `FlowContract`, destination rule, admission, connectors. | `README.md:496-498`; `README.md:231-232`; `README.md:446-448`; `docs/migration.md:170-172` | **MET** | Framework: `overlay.rs:129-131`. Flow: `overlay.rs:195-209`. Destination rule: `overlay.rs:218-232`. Admission + connectors: the connector pass `overlay.rs:178-180` → `connector/connector.rs:285-296` ("the parent Registry admission gate rejects that external branch"). Example tests `graft_rejects_a_foreign_framework`, `graft_rejects_an_incompatible_flow_contract`. |
@@ -53,12 +53,12 @@ cargo test -p nichlink-example-control-button --offline a_record_moves # 1 passe
 | C27 | `run_method` "graft validation ... lives in the kernel"; declaration macros include `static_graft_plan!`, `graft_plan!`. | `run_method/README.md:5-15`; `run_method/README.zh-CN.md:5-14` | **MET** | Validation lives in `core` (`overlay.rs`, `record.rs`); macros in `run_method/src/macros/entry.rs`. The README omits the new ungated runtime record API (`apply_recorded_grafts`, `load_graft_records`, `LoadedGraft`, `GraftOverlay`) — see U8. |
 | C28 | A `static_graft_plan!` plan is captured "whether or not the host also declares `application!(entry = ...)`". | `docs/migration.md:133-136`; `docs/migration.zh-CN.md:65` | **MET** | `graft_view/query.rs:27-31` falls back to `default_entry_source`; `entry.rs:22-48` picks the file that calls `host!()`. |
 | C29 | "An extension only needs to satisfy the target registration rule. A replacement also needs an input/output contract that is semantically compatible with the slot." | `README.md:242-245`; `README.zh-CN.md:225-226` | **MET** | Registration rule on extension: `graft_ops.rs:151-162`; overlay additionally requires both declared (`overlay.rs:195-197`) and `semantically_compatible_with` (`overlay.rs:198-209`); the comparison itself is `core/.../plugin/contracts/contracts.rs:88,181` (id/version/input/output). |
-| C30 | Records "coexist without turning upstream into a patch queue"; competing implementations remain separate crates. | `README.md:40-44`; `README.zh-CN.md:35-36`; `docs/discussion-introduction.md:18`; `docs/discussion-introduction.en.md:19` | **MET** | External registry is a separate `Registry`; example `examples/control-button-graft/` declares with `nichlink_run_method::external_object!`. A bare selector matching two faces is refused (`resolution.rs:101-132`, `GraftError::AmbiguousReplacement`), which is the safe version of "coexist". |
+| C30 | Records "coexist without turning upstream into a patch queue"; competing implementations remain separate crates. | `README.md:40-44`; `README.zh-CN.md:35-36`; `docs/discussion-introduction.md:18`; `docs/discussion-introduction.en.md:19` | **MET** | External registry is a separate `Registry`; example `examples/control-button-graft/` declares with `xirang_run_method::external_object!`. A bare selector matching two faces is refused (`resolution.rs:101-132`, `GraftError::AmbiguousReplacement`), which is the safe version of "coexist". |
 | C31 | "The framework tree and third-party implementation remain in their own crates. The host only declares an overlay plan in its `main.rs` or `lib.rs`." | `README.md:457-459`; `README.zh-CN.md:424-425` | **MET** | Host declares `static_graft_plan!`/`graft_plan!`; no source of either tree is copied (`README.md:477-478`; verified no copy path). |
 | C32 | `build_method` README: graft cut targets and plugin-declaring faces are forced liveness roots. | `build_method/README.md:35-37`; `build_method/README.zh-CN.md:30-31` | **MET** (with C15 caveat) | `scope.rs:159-242`. Plugin detection: `graft_view/matching.rs:74-81`. Fallback keeps the whole tree, which also keeps the slot. |
 | C33 | Post-release plugin/graft: "`overlay_static` allocates no plan but still performs contract, admission, and connector validation once." | `README.md:636`; `README.zh-CN.md:576` | **MET** | One `overlay_cuts` call (`overlay.rs:111-121`); validations as C18. "Once" is per overlay call; no caching exists. **VERIFIED later (U2):** the static overlay is not zero-allocation — the tree clone and the visited-cut set are real — but it builds no `GraftPlan` and is cheaper than the dynamic spelling of the same cuts. Measured in `examples/control-button/tests/static_plan_allocations.rs`: 6 allocations/96 bytes with no cuts (the floor), 60/3 470 for one cut against the dynamic 77/4 053, and 107/5 628 for the example's two cuts against 138/6 438; the one-cut plan alone is 3/350. Numbers in `docs/performance-baseline.md`. |
 | C34 | "The last two choices make the affected boundary visible instead of silently discarding data. A graft is accepted only after the chosen boundary contracts and the destination registration rule pass." | `README.md:446-448`; `README.zh-CN.md:415-416` | **MET** | `overlay.rs:195-232` (flow first, then `registration_rule.validate`). |
-| C35 | Cost/binary claims: read-only topology has "No startup allocation"; the release plan has "no heap allocation, global constructor, inventory walk, or startup registration loop"; `overlay_static` "allocates no plan". | `README.md:617-621,631-637`; `README.zh-CN.md:560-563,573-577` | **VERIFIED later (U1 + U2)** | The read-only pass could only see the code shape (`release/release.rs:37-43,172-219` is `Copy` over slices; `renderer/pass.rs:39-101`; `overlay.rs:111-121`). Both halves are now measured. *Startup allocation:* `examples/control-button/tests/static_plan_allocations.rs` counts heap allocations with a global allocator and reads **0 allocations / 0 bytes** for `builtin_static_plan()` plus `faces`/`grafts`/`len`/`is_empty`, `find` (hit and miss), `children_of`, and a walk over every face; inserting a single `String::from` into `StaticPlan::find` makes it report 2 allocations/16 bytes, so the assertion is live. *Linked artifact:* `CARGO_NET_OFFLINE=true tools/nichlink-release-audit` exits 0 and no artifact carries an `.inventory` section; `nm target/release/nichlink` has **0** symbols matching `inventory`, and `.init_array` holds exactly two 8-byte entries — `std::sys::args::unix::imp::ARGV_INIT_ARRAY` and `__frame_dummy_init_array_entry` — neither of which is a registration constructor. `overlay_static` "allocates no plan" is C33's later verification. Numbers in `docs/performance-baseline.md`. |
+| C35 | Cost/binary claims: read-only topology has "No startup allocation"; the release plan has "no heap allocation, global constructor, inventory walk, or startup registration loop"; `overlay_static` "allocates no plan". | `README.md:617-621,631-637`; `README.zh-CN.md:560-563,573-577` | **VERIFIED later (U1 + U2)** | The read-only pass could only see the code shape (`release/release.rs:37-43,172-219` is `Copy` over slices; `renderer/pass.rs:39-101`; `overlay.rs:111-121`). Both halves are now measured. *Startup allocation:* `examples/control-button/tests/static_plan_allocations.rs` counts heap allocations with a global allocator and reads **0 allocations / 0 bytes** for `builtin_static_plan()` plus `faces`/`grafts`/`len`/`is_empty`, `find` (hit and miss), `children_of`, and a walk over every face; inserting a single `String::from` into `StaticPlan::find` makes it report 2 allocations/16 bytes, so the assertion is live. *Linked artifact:* `CARGO_NET_OFFLINE=true tools/xirang-release-audit` exits 0 and no artifact carries an `.inventory` section; `nm target/release/xirang` has **0** symbols matching `inventory`, and `.init_array` holds exactly two 8-byte entries — `std::sys::args::unix::imp::ARGV_INIT_ARRAY` and `__frame_dummy_init_array_entry` — neither of which is a registration constructor. `overlay_static` "allocates no plan" is C33's later verification. Numbers in `docs/performance-baseline.md`. |
 
 ## Not met or partial
 
@@ -72,7 +72,7 @@ the sentence should go.
    the record; `docs/migration.md:179-181` calls it "not an overlay application"
    without saying it is the overlay's input. *Smallest honest fix: docs* —
    rewrite the record bullet to state that the record is runtime input consumed
-   by `apply_recorded_grafts` (and by `nichlink grafts` / `explain --overlay`),
+   by `apply_recorded_grafts` (and by `xirang grafts` / `explain --overlay`),
    and that the build only warns about it. Do **not** remove the claim; the
    underlying feature is real.
 2. **C13 — "contiguous siblings" is under-defined.** The code selects the span
@@ -84,7 +84,7 @@ the sentence should go.
    cheap fix; a code change needs a decision first.
 3. **C15 — "a face nobody declared is not shipped" has fallback holes and an
    entry-resolution split.** An unplaceable/root/typed-unrecognized cut keeps
-   the whole tree (`scope.rs:199-228,273-282`), and `NICH_LINK_ENTRY` is honoured
+   the whole tree (`scope.rs:199-228,273-282`), and `XIRANG_ENTRY` is honoured
    by `SourceScope` but ignored by the build's plan capture
    (`scope.rs:113-129` vs `graft_view/query.rs:27-31`). *Smallest honest fix:
    code* — pass the same resolved entry into `host_graft_entries` (or honour the
@@ -108,11 +108,11 @@ the sentence should go.
    `ui/forms/graft.rs:85-94`). *Smallest honest fix: docs* — call it a warning /
    pre-flight report, not a check, or make `s` refuse when absent (code).
 7. **C12 — the migration example's macro path is wrong.** `docs/migration.md:161`
-   and `docs/migration.zh-CN.md:79` use `nichlink::graft_plan!`; the macro is
-   exported from `nichlink-run-method`. *Smallest honest fix: docs* — write
-   `nichlink_run_method::graft_plan!`. (Same class: `docs/migration.md:19` and
-   `docs/migration.zh-CN.md:13` say `nichlink::external_object!`, which is also a
-   `nichlink_run_method` macro — see S2.)
+   and `docs/migration.zh-CN.md:79` use `xirang::graft_plan!`; the macro is
+   exported from `xirang-run-method`. *Smallest honest fix: docs* — write
+   `xirang_run_method::graft_plan!`. (Same class: `docs/migration.md:19` and
+   `docs/migration.zh-CN.md:13` say `xirang::external_object!`, which is also a
+   `xirang_run_method` macro — see S2.)
 8. **C14-adjacent, C17, C16, C33 — "zero allocation" claims are narrow but
    honest; no change required.** `overlay_static` still clones the tree, builds a
    `BTreeSet`, and `resolve_node` collects a `Vec` (`overlay.rs:132-133,136-148`;
@@ -137,7 +137,7 @@ Recommendation is **document** unless noted.
   `an_unresolved_record_selector_falls_back_to_the_declaration`,
   `granularity_is_overridden_as_one_atomic_record`, and the example test
   `a_record_moves_the_effective_tree_but_not_the_static_plan`. **Document**, and
-  state the security boundary that `.nichlink/` is machine-local runtime input
+  state the security boundary that `.xirang/` is machine-local runtime input
   (see U7).
 - **U2 — `RecordReport` variants and which are fatal.** Seven advisory variants
   (`record.rs:64-112`); the only fatal record condition is a contradictory
@@ -154,7 +154,7 @@ Recommendation is **document** unless noted.
 - **U4 — build-time `cargo:warning` for an undeclared plan.** `graft_plan_check.rs:99-121`
   + `pipeline.rs:37-44,68-72` warn when no declaration names a plan's slot.
   Neither `build_method/README.md` nor the root README mentions it. **Document**.
-- **U5 — `nichlink grafts` and `explain --overlay`.** Implemented
+- **U5 — `xirang grafts` and `explain --overlay`.** Implemented
   (`cli/src/grafts.rs:30-120`; `cli/src/explain.rs:371-456`) and in `--help`
   (`cli/src/lib.rs:22-24,34-38`), but absent from `README.md:697-711` and from
   `cli/README.md:13-19`. `explain --overlay` is explicitly labelled
@@ -168,7 +168,7 @@ Recommendation is **document** unless noted.
   precedence policy turns on it (U1), yet no README shows or explains it. The
   only trace is the phrase "the slot each `cut(` in `static_graft_plan!` names"
   (`README.md:598`). **Document**.
-- **U7 — `.nichlink/external-grafts/` is a runtime trust boundary.** Because a
+- **U7 — `.xirang/external-grafts/` is a runtime trust boundary.** Because a
   record can re-route a string declaration, `apply_recorded_grafts` and
   `overlay_static` can produce different trees for identical inputs; the code
   requires the directory to be reviewed like source and kept out of untrusted
@@ -199,7 +199,7 @@ which is a comment fix, not a feature.
 
 Claims that still assert pre-change behaviour:
 
-1. **Record is inert — `README.md:563-565`**: "`.nichlink/external-grafts/<selector>/graft.plan`
+1. **Record is inert — `README.md:563-565`**: "`.xirang/external-grafts/<selector>/graft.plan`
    is the **record** the screen writes. It is not compiled and nothing else
    applies it; the screen reads it back to list, open, re-scope, and delete
    plans." Runtime now applies it (C3).
@@ -227,10 +227,10 @@ Claims that still assert pre-change behaviour:
    B3c-1 the far endpoint is `StaticGraftCut::cut_end`; a path is never a range.
    No README asserts the old encoding (the README range example at
    `README.md:545` is the still-valid *command* string form).
-7. **`nichlink::graft_plan!` / `nichlink::external_object!` — `docs/migration.md:19,161`**
+7. **`xirang::graft_plan!` / `xirang::external_object!` — `docs/migration.md:19,161`**
    and `docs/migration.zh-CN.md:13,79`. These macros are exported by
-   `nichlink-run-method`; the README itself uses
-   `nichlink_run_method::static_graft_plan!`. Same class as C12.
+   `xirang-run-method`; the README itself uses
+   `xirang_run_method::static_graft_plan!`. Same class as C12.
 8. **Studio comment — `studio/src/studio/app/graft.rs:11-12`**: the record "is
    consumed here and by nothing else." Stale (C3). (Comment, not README.)
 
@@ -269,14 +269,14 @@ and framework, flow-contract, destination-rule, admission, and connector checks
 gate publication atomically. The examples and the targeted tests back every one
 of those behaviours (C1, C2, C7–C11, C14–C18, C22, C23, C25, C31–C34). The
 feature does **not** yet meet its documented design on the third layer: the
-READMEs still describe `.nichlink/external-grafts/<selector>/graft.plan` as an
+READMEs still describe `.xirang/external-grafts/<selector>/graft.plan` as an
 inert authoring record that "nothing else applies it", while the code now feeds
 it into `Registry::overlay_recorded` with a deliberate, code-only precedence
 policy (record beats a string declaration, typed declaration is final,
 unresolved selector falls back), an identity-drift reconciliation rule, seven
 advisory `RecordReport` variants, and a build `cargo:warning` — none of which
 appear in any README (C3, C4, C6, U1–U4). Additional documentation gaps are the typed
-cut form (U6), the `nichlink grafts` / `explain --overlay` surfaces and the fact
+cut form (U6), the `xirang grafts` / `explain --overlay` surfaces and the fact
 that the CLI cannot rebuild an arbitrary host's Registry (U5), the runtime trust
 boundary of the record directory (U7), and the ungated runtime record API that
 no host binary currently calls (U8). Three claims are outright false or
@@ -287,7 +287,7 @@ still does, and has no `root()` accessor, C21/S5), and the implication that
 Studio's declared-slot "check" gates plan writing (it only warns, C24). Two
 behaviours need an owner decision rather than a doc edit: whether a sibling
 range is defined by sorted `registry_name`/logical-path span or by tree order
-(the roadmap's own open question), and the `NICH_LINK_ENTRY` split where pruning
+(the roadmap's own open question), and the `XIRANG_ENTRY` split where pruning
 and the captured static plan can read different entry files (C13, C15). The gap
 to 1.0 is therefore not the graft engine — it is documentation truth: bring the
 root/en/zh READMEs, `studio/README.md`, `migration*.md`, `cli/README.md`, and

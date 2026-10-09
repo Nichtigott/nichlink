@@ -41,7 +41,7 @@
 - **s6**：真值表（队长实测）`(10,true)=T (10,false)=F (0,true)=T (0,false)=T (-5,true)=T` vs 契约 `has_receipt && amount != 0` ⇒ 差异恰为 `(0,true)`、`(0,false)`；我另行核对 s6 树：全部 `Entry::new` 调用点 7 处无一传 `false`、零额只出现一次且只喂 `audit_count` ⇒ 未覆盖类 = 零金额分录。cg 逐项命中；mcp 的类别陈述包含 `(false,0)` 故判对，但它对实现值的两处断言与源码矛盾（见摘要 3）。
 - **fa**：`cargo run --offline --example tree`：`a-extend-mcp` 3 行（无 `Foo`）、`a-extend-cg` 4 行（有 `root/control/switch`）。mcp 满足 §4（未改测试）、违反「对象真的加进去」（它自己也报了这个不圆满）；cg 满足上线、违反 §4（`tests/registry.rs` 42 增 8 删：树 3→4、faces 3→4、scope 2→3，并补 switch 断言）。
 - **fb**：`tree` 示例 `b-deepen-mcp` 3 行（Button 仍叶子）、`b-deepen-cg` 5 行（+`/button/label`、`/button/icon`）。cg 的 `tests/registry.rs` 是 111 行改动，含把 `assert!(!cut.is_full())` 反成 `assert!(cut.is_full())`、把叶子面钉子从 Button 改指 Slider；另改 `tests/static_plan_allocations.rs` 与 `examples/graft_record.rs`。mcp 的结论「加深只剩文件夹面一条路 ⇒ 必改公开路径/测试」与队长实测（parts 层可门绿）矛盾；cg 明确否决了该路线（「parts 是编译期类型标签，不是对象真的有了内部」）——这是真实设计判断，两臂立场都记。
-- **fc 台账**：两树 `.nichlink/adopted/entries` 均在；mcp 1 行（逐字同交付前）、cg 2 行（纯追加，`git diff` = 1 insertion）。我按内核 `adoption_fingerprint`（path+0+len+0+content+0，排序后 sha256）复算：mcp 行 `9df3f08a…` 相符；cg 行 1 同、行 2 `9c40c287…` 相符；两树行数/字段 = 8、无空字段、点名的文件都存在。cg 的处置「保留不续期 + 新锚记首次确认」与其论证自洽。
+- **fc 台账**：两树 `.xirang/adopted/entries` 均在；mcp 1 行（逐字同交付前）、cg 2 行（纯追加，`git diff` = 1 insertion）。我按内核 `adoption_fingerprint`（path+0+len+0+content+0，排序后 sha256）复算：mcp 行 `9df3f08a…` 相符；cg 行 1 同、行 2 `9c40c287…` 相符；两树行数/字段 = 8、无空字段、点名的文件都存在。cg 的处置「保留不续期 + 新锚记首次确认」与其论证自洽。
 - **fd/fe 门**：4 棵树默认面与 `--all-features` 都 rc=0，且 `the_audit_counts_the_non_zero_entries ... ok` 在两面都出现（audit 特性面确实跑到）。fd 两臂都只动 `crates/report/{query,render}.rs`、fe 两臂都只动 `crates/core/src/audit.rs` + `crates/report/src/query.rs`，`git diff` 恰好两行。
 - **fmt 既有差异**：`crates/report/src/buckets.rs:23` 与 `tests/buckets.rs:14` 的格式差异是夹具自带；fd/fe 的 cg 提到它并保持最小 diff，**不记成引入格式问题**。
 
@@ -83,7 +83,7 @@
 - 逐条论据（不具鉴别力的 15 题）：r1–r4 的决定性判据都是「同一文件里文档契约与代码相邻」的一处对照，一条 `grep`/`read` 就能定，两臂答案逐项相同；s1 的决定性证据是 `search ".post("`（mcp）与 `callers Store::post`（cg），一条文本搜索即可定；s2/s4/s5/s6/s7/s8 两臂答案的要点逐条一致（s6 见摘要 3）；fa 两臂各守一条互斥硬约束（装置缺陷），不能据此判优劣。**注**：s3 的「工具设计边界」不构成鉴别力，因为两臂受同一限制。
 
 ## 5. 硬约束（应零命中）
-执行面命中 = 0：`git log`/`git show`/`git stash`/`git diff HEAD~`/`git diff <历史>` 在两臂会话里**一次都没执行**（逐条列出所有 `git` 命令：mcp 全是 `git status --short`、`git diff --stat`、`git check-ignore`，另有 2 次 `git checkout -- <文件>`；cg 全是 `git status --porcelain`、`git diff [--stat|文件]`、`git ls-files`）。`nichlink-mcp-eval` 只在 BRIEF 原文与"不许读它"的推理里出现，没有任何 read/bash 调用指向它。跨臂/跨题读树：按 `log-*-<id>` 与答案逐文件扫，**零命中**（无 `log-<另一臂>-*`、无 `/tmp/round5/<别题>-<另一臂>`、无别题答案）。
+执行面命中 = 0：`git log`/`git show`/`git stash`/`git diff HEAD~`/`git diff <历史>` 在两臂会话里**一次都没执行**（逐条列出所有 `git` 命令：mcp 全是 `git status --short`、`git diff --stat`、`git check-ignore`，另有 2 次 `git checkout -- <文件>`；cg 全是 `git status --porcelain`、`git diff [--stat|文件]`、`git ls-files`）。`xirang-mcp-eval` 只在 BRIEF 原文与"不许读它"的推理里出现，没有任何 read/bash 调用指向它。跨臂/跨题读树：按 `log-*-<id>` 与答案逐文件扫，**零命中**（无 `log-<另一臂>-*`、无 `/tmp/round5/<别题>-<另一臂>`、无别题答案）。
 - **边界一处（如实记，不影响判定）**：mcp 在 fb 里执行 `git checkout -- src/control/object/button/button.rs` 与 `git checkout -- src/control/control.rs src/control/object/button/button.rs src/control/object/slider/slider.rs`，用来回退**它自己**做实验时的改动。禁令字面是 `git log`/`git show`/`git diff <历史>`/`git stash`，且未读历史、未影响答案内容（树最终 pristine）。
 
 ## 6. 复测重点读数

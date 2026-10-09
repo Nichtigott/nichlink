@@ -10,7 +10,7 @@ fn package(manifest: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-build-missing-src-{}-{sequence}",
+        "xirang-build-missing-src-{}-{sequence}",
         std::process::id()
     ));
     std::fs::create_dir_all(&root).expect("package directory");
@@ -27,8 +27,8 @@ fn package(manifest: &str) -> PathBuf {
 #[test]
 fn a_package_without_a_source_tree_is_reported_as_a_layout_problem() {
     let root = package("[package]\nname = \"probe\"\nversion = \"0.1.0\"\n");
-    let out_dir = root.join("target/nichlink/out");
-    let diagnostics = nichlink_toolchain::build_method::check_for(&root, &out_dir, "probe")
+    let out_dir = root.join("target/xirang/out");
+    let diagnostics = xirang_toolchain::build_method::check_for(&root, &out_dir, "probe")
         .expect_err("a package without a source tree must be refused");
     let rendered = diagnostics.render_build_diagnostics();
     assert!(rendered.contains("face-layout"), "{rendered}");
@@ -54,9 +54,8 @@ fn an_empty_source_tree_is_not_a_layout_problem() {
     let root = package("[package]\nname = \"probe\"\nversion = \"0.1.0\"\n");
     std::fs::create_dir_all(root.join("src")).expect("source tree");
     std::fs::write(root.join("src/lib.rs"), "\n").expect("library root");
-    let out_dir = root.join("target/nichlink/out");
-    if let Err(diagnostics) = nichlink_toolchain::build_method::check_for(&root, &out_dir, "probe")
-    {
+    let out_dir = root.join("target/xirang/out");
+    if let Err(diagnostics) = xirang_toolchain::build_method::check_for(&root, &out_dir, "probe") {
         let rendered = diagnostics.render_build_diagnostics();
         assert!(
             !rendered.contains("face-layout"),

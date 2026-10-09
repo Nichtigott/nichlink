@@ -312,7 +312,7 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
             // no separator anywhere between the lines of a doc block — so counting them against the run
             // limit refused every crate whose module header is a long `//!` block. Measured on a real
             // crate taken from the registry cache: `tokio/src/fs/mod.rs` has 213 consecutive `//!` lines
-            // ≈ 1065 tokens, and `nichlink check .` refused it with "input nests 1025 levels of tokens
+            // ≈ 1065 tokens, and `xirang check .` refused it with "input nests 1025 levels of tokens
             // folded into one expression, above the limit of 1024" (audit `M7`, §M7.56). The same held
             // for four more of that crate's files, and for `tokio/src/lib.rs` (431 `//!` lines), `syn`
             // (249) and `serde` (113): a guard that only accepts this repository's own sources is a guard
@@ -321,7 +321,7 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
             // 一条，因为一行 `//!` 会变成 `#[doc = "…"]`——五个 token，而文档块各行之间没有任何分隔符——把
             // 它们计进串上限，就拒绝了每一个模块头是一长段 `//!` 的 crate。在一个取自 registry 缓存的真
             // crate 上实测：`tokio/src/fs/mod.rs` 有连续 213 行 `//!` ≈ 1065 个 token，而
-            // `nichlink check .` 以「input nests 1025 levels of tokens folded into one expression, above
+            // `xirang check .` 以「input nests 1025 levels of tokens folded into one expression, above
             // the limit of 1024」拒绝了它（审计 `M7`，§M7.56）。同一个 crate 的另外四个文件、以及
             // `tokio/src/lib.rs`（431 行）、`syn`（249 行）、`serde`（113 行）同样如此：一个只接受本仓库
             // 自己源码的守卫，会拒绝它本来就是要被指向的那些树。

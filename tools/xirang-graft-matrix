@@ -24,30 +24,30 @@
 #   6. 同一槽位的**两条相同字符串切口**——被点名为重叠并给出赢家，而且**不致命**：交接清单把它记成缺陷，
 #      实测不成立，因此这条腿断言的是它的反面。
 #
-# Usage: tools/nichlink-graft-matrix        (NICHLINK_GRAFT_MATRIX_CARGO_FLAGS to override)
-# 用法：tools/nichlink-graft-matrix        （用 NICHLINK_GRAFT_MATRIX_CARGO_FLAGS 覆盖 cargo 旗标）
+# Usage: tools/xirang-graft-matrix        (XIRANG_GRAFT_MATRIX_CARGO_FLAGS to override)
+# 用法：tools/xirang-graft-matrix        （用 XIRANG_GRAFT_MATRIX_CARGO_FLAGS 覆盖 cargo 旗标）
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-graft-matrix.XXXXXX")
-CARGO_FLAGS="${NICHLINK_GRAFT_MATRIX_CARGO_FLAGS---offline}"
-NICHLINK="$ROOT/target/debug/nichlink"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/xirang-graft-matrix.XXXXXX")
+CARGO_FLAGS="${XIRANG_GRAFT_MATRIX_CARGO_FLAGS---offline}"
+XIRANG="$ROOT/target/debug/xirang"
 # Build the binary this script drives, rather than assuming somebody else did: a fresh checkout has no
-# `target/debug/nichlink`, and a gate that only passes where it was built by hand fails on the machine
+# `target/debug/xirang`, and a gate that only passes where it was built by hand fails on the machine
 # that matters (measured on CI). Self-contained on purpose — this runs before the helpers below exist.
 # 自己构建本脚本要驱动的二进制：全新检出不带它，而在"有人手工构建过"的机器上才通过的闸门，恰好在最要紧的
 # 那台机器上失败（CI 实测）。这里刻意不依赖下面的辅助函数——它跑在它们定义之前。
-if [ ! -x "$NICHLINK" ]; then
+if [ ! -x "$XIRANG" ]; then
   echo "building the CLI this matrix drives" >&2
-  "${CARGO:-cargo}" build ${CARGO_FLAGS-} -p nichlink-toolchain --features cli --bin nichlink >&2 ||
-    { echo "cannot build $NICHLINK" >&2; exit 1; }
+  "${CARGO:-cargo}" build ${CARGO_FLAGS-} -p xirang-toolchain --features cli --bin xirang >&2 ||
+    { echo "cannot build $XIRANG" >&2; exit 1; }
 fi
 fail() { printf 'graft matrix FAILED: %s\n' "$1" >&2; exit 1; }
 step() { printf '== %s\n' "$1"; }
 build() { command cargo build $CARGO_FLAGS "$@"; }
 
 step "building the CLI this matrix drives"
-build -p nichlink-toolchain --features cli --bin nichlink >/dev/null 2>&1 ||
-  fail "cannot build $NICHLINK"
+build -p xirang-toolchain --features cli --bin xirang >/dev/null 2>&1 ||
+  fail "cannot build $XIRANG"
 
 host() {
   area="$WORK/$1"
@@ -72,8 +72,8 @@ s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(con
            "", s, count=1)
 p.write_text(s)
 PY
-(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the root-face cut does not check"
-[ "$(sed -n '2p' "$AREA/app/target/nichlink/out/graft_plan.tsv" | cut -f1)" = "crate::ROOT_NODE_ID" ] ||
+(cd "$AREA/app" && "$XIRANG" check . >/dev/null 2>&1) || fail "the root-face cut does not check"
+[ "$(sed -n '2p' "$AREA/app/target/xirang/out/graft_plan.tsv" | cut -f1)" = "crate::ROOT_NODE_ID" ] ||
   fail "the plan does not record the root-face cut"
 (cd "$AREA/app" && build >/dev/null 2>&1) || fail "the root-face cut does not build"
 
@@ -87,7 +87,7 @@ s = re.sub(
     "cut(crate::control::object::button::NODE_ID)\n        graft(control_button_graft::button_fast::NODE_ID),\n    cut(crate::control::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
 p.write_text(s)
 PY
-(cd "$AREA/app" && "$NICHLINK" check . >"$WORK/overlap.out" 2>&1) ||
+(cd "$AREA/app" && "$XIRANG" check . >"$WORK/overlap.out" 2>&1) ||
   fail "overlapping cuts no longer check: $(head -3 "$WORK/overlap.out")"
 # The decision is spoken: both entries named, and which one answers.
 grep -q "two graft cuts overlap" "$WORK/overlap.out" ||
@@ -106,9 +106,9 @@ printf '   hint: %s\n' "$(grep -m1 'two graft cuts overlap' "$WORK/overlap.out" 
 # 一个不再编译那个切口面的宿主合法地不为它发射切口，而在这里读宿主自己的表，看起来与"计划缺失"一模一样。这与
 # 另外两处装置判据犯的是同一个错误（审计 `M7`，§M7.55），值得写明：**"哪条切口赢了"**这个问题的与形状无关的
 # 证人，是那个携带并集的 crate。
-NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$AREA/app" >/dev/null 2>&1 ||
+XIRANG_SHAPE_FACADE=1 "$XIRANG" check "$AREA/app" >/dev/null 2>&1 ||
   fail "the facade shape does not check"
-PLAN="$AREA/app/target/nichlink/out/graft_plan.tsv"
+PLAN="$AREA/app/target/xirang/out/graft_plan.tsv"
 [ -f "$PLAN" ] || fail "no graft plan to read"
 # The fixture declares three cuts — `button`, then `control` (full), then `slider`. Pairwise "later
 # wins" therefore leaves exactly the **last** one: `slider` supersedes `control`, which superseded
@@ -128,7 +128,7 @@ fi
 step "leg 3/3: re-partitioning the host keeps the plan and every crate"
 AREA=$(host repartition)
 cat >"$AREA/app/add_crates.rs" <<'RS'
-use nichlink_toolchain::run_method::{Crate, Shape};
+use xirang_toolchain::run_method::{Crate, Shape};
 
 pub fn add_crates() -> Shape {
     Shape::of("app", &[Crate::named("objects").at(&[crate::control::SUBTREE])])
@@ -146,7 +146,7 @@ RS
 # 而在全新检出（CI）上该文件不存在，`md5sum` 哈希的是空输入，于是每次都报 "re-partitioning changed the
 # graft plan"。实测——这正是这条腿在 CI 上红而本地绿的原因。下面的存在性检查正是让"计划缺失"不会变成
 # "两个空哈希相等、于是报成功"。
-(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the declared host does not check"
+(cd "$AREA/app" && "$XIRANG" check . >/dev/null 2>&1) || fail "the declared host does not check"
 # The witness is the **facade shape's own** table, read before and after the split. Not the host's: this
 # fixture declares a crate, so the host has handed that subtree away and legitimately emits fewer cuts than the
 # declaration names — reading the host here is the mistake this file has now made three times (audit `M7`,
@@ -158,15 +158,15 @@ RS
 # facade 携带并集，因此它的计划是"这棵树声明了什么"的与形状无关的读法，而问它两次正是这条腿存在的意义：
 # 重新划分会不会改变它？
 facade_plan() {
-  NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$AREA/app" >/dev/null 2>&1 ||
+  XIRANG_SHAPE_FACADE=1 "$XIRANG" check "$AREA/app" >/dev/null 2>&1 ||
     fail "the facade shape does not check"
-  cat "$AREA/app/target/nichlink/out/graft_plan.tsv"
+  cat "$AREA/app/target/xirang/out/graft_plan.tsv"
 }
 before=$(facade_plan)
 [ -n "$(printf '%s' "$before" | tail -n +2)" ] ||
   fail "the facade carries no cut at all, so this leg would compare two empty plans: $before"
-(cd "$AREA/app" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
-(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the split host does not check"
+(cd "$AREA/app" && "$XIRANG" crates --write . >/dev/null 2>&1) || fail "the split is not written"
+(cd "$AREA/app" && "$XIRANG" check . >/dev/null 2>&1) || fail "the split host does not check"
 # The partition root is the **workspace** root, so the generated packages sit beside the host, and the
 # remap config it wrote is found by running cargo from there.
 # 划分根是**工作区**根：生成包落在宿主旁边，而它写下的 remap 配置要靠"从那里跑 cargo"才会被找到。
@@ -193,7 +193,7 @@ s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(con
            "", s, count=1)
 p.write_text(s)
 PY
-(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the replacing cut does not check"
+(cd "$AREA/app" && "$XIRANG" check . >/dev/null 2>&1) || fail "the replacing cut does not check"
 (cd "$AREA/app" && build >/dev/null 2>&1) || fail "the replacing cut does not build"
 TREE=$(ls -t "$AREA"/target/debug/build/*/out/generated_lib.rs 2>/dev/null | head -1)
 [ -n "$TREE" ] || fail "no generated tree to read"
@@ -239,8 +239,8 @@ s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(con
            "", s, count=1)
 p.write_text(s)
 PY
-  (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the $shape shape does not check"
-  SLOTS=$("$NICHLINK" explain --overlay --path "$AREA/app" 2>/dev/null)
+  (cd "$AREA/app" && "$XIRANG" check . >/dev/null 2>&1) || fail "the $shape shape does not check"
+  SLOTS=$("$XIRANG" explain --overlay --path "$AREA/app" 2>/dev/null)
   # Logical paths, not module paths: a face at `control/object/button/button.rs` has the module path
   # `control::object::button` and the **logical** path `root/control/button` — the overlay prints the latter,
   # and asserting the former is how this leg's first version failed (audit `M7`, §M7.65).
@@ -270,7 +270,7 @@ PY
 # asserts the **opposite** of the claim, so a change that ever makes the claim true fails here.
 # 交接清单把这个形状记成缺陷——"同一槽位两条相同的字符串切口会让构建失败，且理由与文件矛盾"——而它实测不成立。
 # 这条腿就是让那个答案保持诚实的东西：它断言的是那句话的**反面**，因此哪天那句话成真，这里会红。
-(cd "$AREA/app" && "$NICHLINK" check . >"$WORK/identical.out" 2>&1) ||
+(cd "$AREA/app" && "$XIRANG" check . >"$WORK/identical.out" 2>&1) ||
   fail "two identical string cuts do not check: $(head -3 "$WORK/identical.out")"
 grep -q "two graft cuts overlap" "$WORK/identical.out" ||
   fail "the overlap went unmentioned: $(head -3 "$WORK/identical.out")"

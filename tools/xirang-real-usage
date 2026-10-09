@@ -26,20 +26,20 @@
 # 它们分成两半；③ 宿主不再编译的面，它一条切口都不发，且它的生成树**一个都不点名**（缺席是被断言的，不是
 # 假设的）；④ `explain --overlay` 的 slot 数等于宿主自己生成树里的面数——只读面与编译产物一致。
 #
-# Usage: tools/nichlink-real-usage     (NICHLINK_REAL_USAGE_CARGO_FLAGS to override)
-# 用法：tools/nichlink-real-usage     （用 NICHLINK_REAL_USAGE_CARGO_FLAGS 覆盖 cargo 旗标）
+# Usage: tools/xirang-real-usage     (XIRANG_REAL_USAGE_CARGO_FLAGS to override)
+# 用法：tools/xirang-real-usage     （用 XIRANG_REAL_USAGE_CARGO_FLAGS 覆盖 cargo 旗标）
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-real-usage.XXXXXX")
-CARGO_FLAGS="${NICHLINK_REAL_USAGE_CARGO_FLAGS---offline}"
-NICHLINK="${NICHLINK_REAL_USAGE_CLI:-$ROOT/target/debug/nichlink}"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/xirang-real-usage.XXXXXX")
+CARGO_FLAGS="${XIRANG_REAL_USAGE_CARGO_FLAGS---offline}"
+XIRANG="${XIRANG_REAL_USAGE_CLI:-$ROOT/target/debug/xirang}"
 
 fail() { printf 'real-usage FAILED: %s\n' "$1" >&2; exit 1; }
 step() { printf '== %s\n' "$1"; }
 
 step "building the CLI this gate drives"
-if [ ! -x "$NICHLINK" ]; then
-  cargo build $CARGO_FLAGS -p nichlink-toolchain --features cli --bin nichlink >&2 ||
+if [ ! -x "$XIRANG" ]; then
+  cargo build $CARGO_FLAGS -p xirang-toolchain --features cli --bin xirang >&2 ||
     fail "cannot build the CLI"
 fi
 
@@ -88,7 +88,7 @@ compiled artifact disagree"
 
 check_shape() { # check_shape <label> <target-dir>
   label="$1"; target="$2"
-  row "$target" nichlink-example-partitioned-button; host_faces=$ROW_FACES; host_cuts=$ROW_CUTS; agree "$label host"
+  row "$target" xirang-example-partitioned-button; host_faces=$ROW_FACES; host_cuts=$ROW_CUTS; agree "$label host"
   row "$target" partitioned-button-objects;        ghost_faces=$ROW_FACES; ghost_cuts=$ROW_CUTS; agree "$label ghost"
   row "$target" partitioned-button-facade;         facade_faces=$ROW_FACES; facade_cuts=$ROW_CUTS; agree "$label facade"
   printf '   %-8s host faces=%s cuts=%s · ghost faces=%s cuts=%s · facade faces=%s cuts=%s\n' \
@@ -114,8 +114,8 @@ check_shape() { # check_shape <label> <target-dir>
 
 step "shape 1/2: development (the generated packages mount the host's sources)"
 DEV=$(plant dev)
-"$NICHLINK" check "$DEV/app" >/dev/null 2>&1 || fail "the unpartitioned host does not check"
-"$NICHLINK" crates --write "$DEV/app" >/dev/null 2>&1 || fail "the development split is not written"
+"$XIRANG" check "$DEV/app" >/dev/null 2>&1 || fail "the unpartitioned host does not check"
+"$XIRANG" crates --write "$DEV/app" >/dev/null 2>&1 || fail "the development split is not written"
 # From the partition root **by changing directory**, never by `--manifest-path`: the development shape
 # remounts the host's sources through a `.cargo/config.toml` it writes at the root, and cargo reads config by
 # walking up from the **current directory** — measured, the same build succeeds from the root and dies with
@@ -138,7 +138,7 @@ check_shape dev "$DEV/target"
 # 本门禁第一版正是这么读的：在上面这次拆分上实测，`explain --overlay` 报 **3** 个 slot，而宿主编译 **0** 个面，
 # 两者都对。slot 是**这棵树**发布的一个面；逐包行是每个 **crate** 编译的东西。因此该与它相比的是携带并集的
 # 那个 crate。
-SLOTS=$("$NICHLINK" explain --overlay --path "$DEV/app" 2>/dev/null |
+SLOTS=$("$XIRANG" explain --overlay --path "$DEV/app" 2>/dev/null |
   sed -n 's/^ *slots (\([0-9]*\)):.*/\1/p' | head -1)
 [ -n "$SLOTS" ] || fail "explain --overlay printed no slot count"
 [ "$SLOTS" = "$facade_faces" ] ||
@@ -155,8 +155,8 @@ report the tree's published slots"
 
 step "shape 2/2: release (every generated package carries its own sources)"
 REL=$(plant release)
-"$NICHLINK" check "$REL/app" >/dev/null 2>&1 || fail "the unpartitioned host does not check"
-"$NICHLINK" crates --release --write "$REL/app" >/dev/null 2>&1 || fail "the release split is not written"
+"$XIRANG" check "$REL/app" >/dev/null 2>&1 || fail "the unpartitioned host does not check"
+"$XIRANG" crates --release --write "$REL/app" >/dev/null 2>&1 || fail "the release split is not written"
 # The whole workspace, not only the facade: the host is a package of its own here, and its own generated
 # tree is one of the three rows this gate reads. Building only the facade would leave that row missing and
 # the release half would assert less than the development half (measured while writing this: the facade's

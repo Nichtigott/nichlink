@@ -9,7 +9,7 @@
 ### step 44（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/s3; L=target/round9/logs/g1.jsonl\necho '===== check census (g1 root=s3 tree)'; $B --call check --root $R --log $L --face default --census true --timeout_ms 300000 2>&1 | sed -n '1,40p'; echo \"EXIT=$?\"\necho '===== callgraph orphans'; $B --call callgraph --root $R --log $L --orphans true 2>&1 | sed -n '5,14p'; echo \"EXIT=$?\"\necho '===== search literal audit_unused'; $B --call search --root $R --log $L --literal 'audit_unused'; echo \"EXIT=$?\"", "description": "g1 evidence calls on s3 tree", "timeoutMs": 300000}
+{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/s3; L=target/round9/logs/g1.jsonl\necho '===== check census (g1 root=s3 tree)'; $B --call check --root $R --log $L --face default --census true --timeout_ms 300000 2>&1 | sed -n '1,40p'; echo \"EXIT=$?\"\necho '===== callgraph orphans'; $B --call callgraph --root $R --log $L --orphans true 2>&1 | sed -n '5,14p'; echo \"EXIT=$?\"\necho '===== search literal audit_unused'; $B --call search --root $R --log $L --literal 'audit_unused'; echo \"EXIT=$?\"", "description": "g1 evidence calls on s3 tree", "timeoutMs": 300000}
 ```
 
 **结果**：
@@ -21,7 +21,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/s3
 tree   12 rust file(s), 18 function(s)
 elapsed 200 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/s3/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/s3/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -49,7 +49,7 @@ census: 1 named numeric constant(s); a static fact about this tree, not a verdic
 ### step 45（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/s5; L=target/round9/logs/g2.jsonl\necho '===== check'; $B --call check --root $R --log $L --face default --timeout_ms 300000 2>&1 | sed -n '1,20p'; echo \"EXIT=$?\"\necho '===== read render.rs whole'; $B --call read --root $R --log $L --path crates/report/src/render.rs --whole 2>&1 | tail -22; echo \"EXIT=$?\"\necho '===== callgraph render'; $B --call callgraph --root $R --log $L --function render 2>&1 | sed -n '5,26p'; echo \"EXIT=$?\"", "description": "g2 evidence calls on s5 tree", "timeoutMs": 300000}
+{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/s5; L=target/round9/logs/g2.jsonl\necho '===== check'; $B --call check --root $R --log $L --face default --timeout_ms 300000 2>&1 | sed -n '1,20p'; echo \"EXIT=$?\"\necho '===== read render.rs whole'; $B --call read --root $R --log $L --path crates/report/src/render.rs --whole 2>&1 | tail -22; echo \"EXIT=$?\"\necho '===== callgraph render'; $B --call callgraph --root $R --log $L --function render 2>&1 | sed -n '5,26p'; echo \"EXIT=$?\"", "description": "g2 evidence calls on s5 tree", "timeoutMs": 300000}
 ```
 
 **结果**：
@@ -61,7 +61,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/s5
 tree   12 rust file(s), 18 function(s)
 elapsed 200 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/s5/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/s5/target/xirang/out/check-default.log
 exit   101
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -138,7 +138,7 @@ Created file
 ### step 64（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp\necho '===== fd evidence'; $B --call check --root target/round9/trees/fd --log target/round9/logs/fd.jsonl --face default --timeout_ms 300000 2>&1 | sed -n '1,14p'; echo \"EXIT=$?\"\necho '===== fe evidence'; $B --call check --root target/round9/trees/fe --log target/round9/logs/fe.jsonl --face default --timeout_ms 300000 2>&1 | sed -n '1,14p'; echo \"EXIT=$?\"", "description": "fd/fe post-fix check evidence", "timeoutMs": 300000}
+{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp\necho '===== fd evidence'; $B --call check --root target/round9/trees/fd --log target/round9/logs/fd.jsonl --face default --timeout_ms 300000 2>&1 | sed -n '1,14p'; echo \"EXIT=$?\"\necho '===== fe evidence'; $B --call check --root target/round9/trees/fe --log target/round9/logs/fe.jsonl --face default --timeout_ms 300000 2>&1 | sed -n '1,14p'; echo \"EXIT=$?\"", "description": "fd/fe post-fix check evidence", "timeoutMs": 300000}
 ```
 
 **结果**：
@@ -150,7 +150,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fd
 tree   12 rust file(s), 18 function(s)
 elapsed 600 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -166,7 +166,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fe
 tree   12 rust file(s), 18 function(s)
 elapsed 1001 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fe/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fe/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -181,7 +181,7 @@ EXIT=0
 ### step 140（turn 1）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/h1; L=target/round9/logs/h1.jsonl\necho '===== h1 check audit face after fix'; $B --call check --root $R --log $L --face audit --timeout_ms 300000 2>&1 | sed -n '1,12p'; echo \"EXIT=$?\"\necho '===== fd check audit face after fix'; $B --call check --root target/round9/trees/fd --log target/round9/logs/fd.jsonl --face audit --timeout_ms 300000 2>&1 | sed -n '1,12p'; echo \"EXIT=$?\"", "description": "h1 and fd audit-face post-fix calls", "timeoutMs": 300000}
+{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/h1; L=target/round9/logs/h1.jsonl\necho '===== h1 check audit face after fix'; $B --call check --root $R --log $L --face audit --timeout_ms 300000 2>&1 | sed -n '1,12p'; echo \"EXIT=$?\"\necho '===== fd check audit face after fix'; $B --call check --root target/round9/trees/fd --log target/round9/logs/fd.jsonl --face audit --timeout_ms 300000 2>&1 | sed -n '1,12p'; echo \"EXIT=$?\"", "description": "h1 and fd audit-face post-fix calls", "timeoutMs": 300000}
 ```
 
 **结果**：
@@ -193,7 +193,7 @@ face   audit
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/h1
 tree   12 rust file(s), 18 function(s)
 elapsed 600 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h1/target/nichlink/out/check-audit.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h1/target/xirang/out/check-audit.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -207,7 +207,7 @@ face   audit
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fd
 tree   12 rust file(s), 18 function(s)
 elapsed 600 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/nichlink/out/check-audit.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fd/target/xirang/out/check-audit.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

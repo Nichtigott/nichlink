@@ -5,15 +5,15 @@
 //! MIR JSONL was a format with a parser, a renderer, and no writer anywhere in the
 //! workspace; a `-Zunpretty=mir` text dump was readable only inside Studio and only
 //! on a nightly toolchain. These two tools close both halves without re-implementing
-//! the parse: `nichlink.mir` reads either form and emits the canonical JSONL, and
-//! `nichlink.unified` hands a graph plus a recorded trace to
+//! the parse: `xirang.mir` reads either form and emits the canonical JSONL, and
+//! `xirang.unified` hands a graph plus a recorded trace to
 //! `debug_method`'s `UnifiedCallGraph`, which is the one place a live call confirms a
 //! compiler candidate. The producer of the *text* stays outside this bridge — it is
 //! `cargo rustc -Zunpretty=mir` on a nightly toolchain — and saying so is part of the
 //! answer rather than a gap to hide.
 //! MIR JSONL 过去是一种"有解析器、有渲染器、整个工作区没有写入方"的格式；而 `-Zunpretty=mir` 文本
 //! 此前只能在 Studio 里读、且需要 nightly 工具链。这两个工具把两半都补上，而不重新实现解析：
-//! `nichlink.mir` 读任一形式并能输出规范 JSONL，`nichlink.unified` 把图与已记录的 trace 交给
+//! `xirang.mir` 读任一形式并能输出规范 JSONL，`xirang.unified` 把图与已记录的 trace 交给
 //! `debug_method` 的 `UnifiedCallGraph`——真实调用确认编译器候选的唯一地方。*文本*的生产者仍在本桥
 //! 之外（nightly 上的 `cargo rustc -Zunpretty=mir`），把这一点说出来是答案的一部分，而不是要藏的缺口。
 //!
@@ -32,9 +32,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::run_method::{CallTrace, read_trace_artifact, trace_artifact_path};
-use nichlink_kernel::EvidenceKind;
-use nichlink_kernel::mir::{MirGraph, MirSnapshot};
 use serde_json::Value;
+use xirang_kernel::EvidenceKind;
+use xirang_kernel::mir::{MirGraph, MirSnapshot};
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
 use crate::mcp::truncation::withheld;
@@ -55,7 +55,7 @@ pub(crate) fn mir(root: &Path, arguments: &Value) -> Result<String, String> {
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "nichlink.mir requires path (a MIR text dump or a JSONL artifact)".to_owned()
+            "xirang.mir requires path (a MIR text dump or a JSONL artifact)".to_owned()
         })?;
     let (path, mut graph) = load_mir(root, relative)?;
     if let Some(against) = arguments.get("against").and_then(Value::as_str) {
@@ -192,7 +192,7 @@ pub(crate) fn unified(root: &Path, arguments: &Value) -> Result<String, String> 
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "nichlink.unified requires path (a MIR text dump or a JSONL artifact)".to_owned()
+            "xirang.unified requires path (a MIR text dump or a JSONL artifact)".to_owned()
         })?;
     let (path, graph) = load_mir(root, relative)?;
     // The trace belongs to this package's tree, so a MIR snapshot naming a
@@ -413,7 +413,7 @@ fn load_mir(root: &Path, relative: &str) -> Result<(PathBuf, MirGraph), String> 
 fn snapshot_for(root: &Path) -> Result<MirSnapshot, String> {
     let namespace = crate::mcp::registry::namespace(root)?;
     Ok(MirSnapshot {
-        root: nichlink_kernel::root_node_id(&namespace),
+        root: xirang_kernel::root_node_id(&namespace),
         namespace,
     })
 }
@@ -616,7 +616,7 @@ fn delta_report(
             "{output}REFUSED: the two artifacts describe different trees, so a call-graph delta \
              between them would be a plausible, wrong answer\n  {} is namespace `{}` root {}\n  {} \
              is namespace `{}` root {}\nDiff two snapshots of one tree, or fix the namespace with \
-             NICH_LINK_NAMESPACE.\n",
+             XIRANG_NAMESPACE.\n",
             path.display(),
             now.namespace,
             now.root,

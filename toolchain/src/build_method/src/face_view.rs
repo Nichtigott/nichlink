@@ -1,14 +1,14 @@
 //! Read-only registration-face view for operator commands.
 //! 面向操作命令的只读注册面视图。
 //!
-//! `nichlink explain` has to answer "what is this node, and why is it (not)
+//! `xirang explain` has to answer "what is this node, and why is it (not)
 //! shipped" for a host it cannot link. It therefore reads the same discovery
 //! tree, the same face parser, and the same parent/identity rules the build
 //! uses, and never re-implements them: this module is the one place a command
 //! turns a package root into per-face rows. The scope/pruning manifest readers
 //! live in `scope_view`, mounted below and re-exported so the public
 //! `face_view::…` paths are unchanged.
-//! `nichlink explain` 必须为它无法链接的宿主回答"这个节点是什么、为什么（没）被发布"。
+//! `xirang explain` 必须为它无法链接的宿主回答"这个节点是什么、为什么（没）被发布"。
 //! 因此它读的是构建使用的同一棵发现树、同一个注册面解析器与同一套父级/身份规则，
 //! 绝不重新实现：本模块是命令把包根变成逐面行数据的唯一位置。作用域/修剪清单读取方
 //! 位于 `scope_view`，在下方挂载并重新导出，因此公开的 `face_view::…` 路径保持不变。
@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::registry_identity::NodeId;
 use super::registry_syntax::{FaceSyntax, ParentSyntax};

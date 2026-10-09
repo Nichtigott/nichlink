@@ -2,7 +2,7 @@
 //! 插件准入：把一条记录写进本包的插件锁。
 //!
 //! Studio's plugin form (`submit_plugin`) is the other writer, and this is the same
-//! path: `source` selects `official.lock` or `user.lock` under `.nichlink/plugins/`,
+//! path: `source` selects `official.lock` or `user.lock` under `.xirang/plugins/`,
 //! the seven fields spell one record line, an `official` record is admitted only when
 //! the kernel's `PluginCatalog::contains_record` says the lock already accounts for
 //! that package identity, and the lock's own parser decides whether the append is
@@ -10,7 +10,7 @@
 //! (`official.rs` / `user.rs`) carries the other half of the same decision, so a failed
 //! lock write puts the entry back, exactly as Studio's writer does.
 //! Studio 的插件表单（`submit_plugin`）是另一个写入方，而这里走同一条路径：`source` 选择
-//! `.nichlink/plugins/` 下的 `official.lock` 或 `user.lock`，七个字段拼出一条记录行，`official`
+//! `.xirang/plugins/` 下的 `official.lock` 或 `user.lock`，七个字段拼出一条记录行，`official`
 //! 记录只有在核内的 `PluginCatalog::contains_record` 说锁已经覆盖那个包身份时才被准入，而这次追加是否
 //! 合法由锁自己的解析器决定——在写下任何东西之前。导入该 crate 的入口文件（`official.rs` /
 //! `user.rs`）承载同一个决定的另一半，因此锁写入失败时会把入口放回去，与 Studio 的写入方完全相同。
@@ -35,9 +35,9 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::plugin::catalog::{PluginCatalog, PluginRecord};
-use nichlink_kernel::{PluginMode, PluginSource};
 use serde_json::Value;
+use xirang_kernel::plugin::catalog::{PluginCatalog, PluginRecord};
+use xirang_kernel::{PluginMode, PluginSource};
 
 /// The directory under a package root that holds the plugin locks.
 /// 包根之下存放插件锁的目录。
@@ -51,10 +51,10 @@ use serde_json::Value;
 /// 字面量。之所以不导入那个常量，是因为 `plugin_host` 门控在 `plugins` 特性之后，而本桥自己的特性集
 /// （`mcp`）不含它；为读一个字符串而放宽特性会把签名后端一起拖进来。无论如何，这个名字就是契约：宿主
 /// 正是从这里读那两份锁。
-const PLUGIN_DIRECTORY: &str = ".nichlink/plugins";
+const PLUGIN_DIRECTORY: &str = ".xirang/plugins";
 
-/// Run one `nichlink.plugin` request, previewing unless `apply` and `confirm` are true.
-/// 执行一次 `nichlink.plugin` 请求；除非 `apply` 与 `confirm` 都为真，否则只预览。
+/// Run one `xirang.plugin` request, previewing unless `apply` and `confirm` are true.
+/// 执行一次 `xirang.plugin` 请求；除非 `apply` 与 `confirm` 都为真，否则只预览。
 pub(crate) fn plugin(root: &Path, arguments: &Value) -> Result<String, String> {
     let request = Request::parse_request(arguments)?;
     let apply = arguments
@@ -69,7 +69,7 @@ pub(crate) fn plugin(root: &Path, arguments: &Value) -> Result<String, String> {
     // 不小心跳过预览的调用方得到的是一次拒绝而不是一次写入——与 `apply delete` 同一种形状、同一个理由。
     if apply && arguments.get("confirm").and_then(Value::as_bool) != Some(true) {
         return Err(format!(
-            "nichlink.plugin requires `confirm: true` to write {}: the lock is the artifact the \
+            "xirang.plugin requires `confirm: true` to write {}: the lock is the artifact the \
              host admits plugins from, and the same decision also changes the entry file that \
              imports the crate, so the request says it rather than the bridge assuming it. \
              Nothing was written",
@@ -87,8 +87,8 @@ pub(crate) fn plugin(root: &Path, arguments: &Value) -> Result<String, String> {
     }
 }
 
-/// One validated `nichlink.plugin` request: the record, and the line the lock stores.
-/// 一次已校验的 `nichlink.plugin` 请求：那条记录，以及锁存下的那一行。
+/// One validated `xirang.plugin` request: the record, and the line the lock stores.
+/// 一次已校验的 `xirang.plugin` 请求：那条记录，以及锁存下的那一行。
 struct Request {
     record: PluginRecord,
     /// `<source>|<framework>|…|<mode>`, exactly the seven-field spelling the lock reads.
@@ -383,7 +383,7 @@ impl Plan {
             return "already selected: nothing to write\n".to_owned();
         };
         let mut report = format!(
-            "preview: nichlink.plugin would write one {} record; nothing was written\n",
+            "preview: xirang.plugin would write one {} record; nothing was written\n",
             source_name(request.record.source)
         );
         report.push_str(&format!("root {}\n", root.display()));
@@ -484,7 +484,7 @@ fn text(arguments: &Value, key: &str) -> Result<String, String> {
     match arguments.get(key).and_then(Value::as_str) {
         Some(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
         Some(_) => Err(format!("`{key}` must not be empty")),
-        None => Err(format!("nichlink.plugin requires `{key}`")),
+        None => Err(format!("xirang.plugin requires `{key}`")),
     }
 }
 

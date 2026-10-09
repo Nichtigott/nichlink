@@ -3,10 +3,10 @@
 
 use super::*;
 
-/// The write path's recoverable trash lives under `.nichlink/` and holds
+/// The write path's recoverable trash lives under `.xirang/` and holds
 /// `.rs` files, so a deleted fact must not keep answering `status` and
 /// `search` from its own backup.
-/// 写入路径的可恢复回收目录在 `.nichlink/` 下、里面就是 `.rs` 文件，因此被删掉的东西不得继续
+/// 写入路径的可恢复回收目录在 `.xirang/` 下、里面就是 `.rs` 文件，因此被删掉的东西不得继续
 /// 从它自己的备份里回答 `status` 与 `search`。
 #[test]
 fn the_recoverable_trash_is_not_indexed() {
@@ -15,10 +15,10 @@ fn the_recoverable_trash_is_not_indexed() {
     let root = std::env::temp_dir().join(format!("mcp-scan-{}-{sequence}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("src")).expect("source directory");
-    std::fs::create_dir_all(root.join(".nichlink/trash/faces")).expect("trash directory");
+    std::fs::create_dir_all(root.join(".xirang/trash/faces")).expect("trash directory");
     std::fs::write(root.join("src/live.rs"), "pub fn live() {}\n").expect("live file");
     std::fs::write(
-        root.join(".nichlink/trash/faces/deleted.rs"),
+        root.join(".xirang/trash/faces/deleted.rs"),
         "pub fn deleted() {}\n",
     )
     .expect("backup file");
@@ -29,7 +29,7 @@ fn the_recoverable_trash_is_not_indexed() {
         .collect::<Vec<_>>();
     assert!(names.iter().any(|name| name == "src/live.rs"), "{names:?}");
     assert!(
-        !names.iter().any(|name| name.contains(".nichlink")),
+        !names.iter().any(|name| name.contains(".xirang")),
         "the trash must not be indexed: {names:?}"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -111,7 +111,7 @@ fn the_index_carries_the_kernels_branch_facts() {
 
 #[test]
 fn registration_kinds_are_compact_and_deduplicated() {
-    let kinds = nichlink_kernel::source::registration_kinds(
+    let kinds = xirang_kernel::source::registration_kinds(
         "crate::control_object! { kind: Button, }\ncrate::control_object! { kind: Button, }",
     );
     assert_eq!(kinds, ["Button"]);
@@ -123,7 +123,7 @@ fn temporary_root(tag: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-{tag}-{}-{sequence}",
+        "xirang-toolchain-{tag}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -208,7 +208,7 @@ fn a_backslash_in_a_file_name_is_spelled_one_way() {
 #[test]
 fn the_containment_refusal_names_the_base_and_the_rule() {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-load-one-{}-{}",
+        "xirang-load-one-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

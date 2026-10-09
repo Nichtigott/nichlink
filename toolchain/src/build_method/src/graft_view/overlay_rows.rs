@@ -9,20 +9,20 @@
 //! is computed from: the faces the build discovered, the scope it selected, and
 //! the cuts its entry declared. This module turns those three into per-slot rows,
 //! so the CLI's `explain --overlay` and the MCP bridge's
-//! `nichlink.explain {"overlay": true}` report one traversal instead of two that
+//! `xirang.explain {"overlay": true}` report one traversal instead of two that
 //! drift. The rule moved out of the CLI in this release for the same reason
 //! `graft_plan_rows` did: a second copy is how two surfaces start disagreeing
 //! about which slot is replaced.
 //! *覆盖*是宿主两棵活的注册树在运行期产生的东西，而 CLI 一棵都链接不到——基树与外部树是在
 //! 宿主 crate 内由其生成的 `registrations()` 与 `external_object!` 声明构建的。命令**能**读到
 //! 的是覆盖由之算出的东西：构建发现的面、它选中的作用域，以及宿主入口声明的切口。本模块把这三样
-//! 变成逐槽位的行，因此 CLI 的 `explain --overlay` 与 MCP 桥的 `nichlink.explain {"overlay": true}`
+//! 变成逐槽位的行，因此 CLI 的 `explain --overlay` 与 MCP 桥的 `xirang.explain {"overlay": true}`
 //! 报告的是一次遍历，而不是两份会漂移的副本。这条规则与 `graft_plan_rows` 出于同样的理由搬出
 //! CLI：第二份副本正是两个执行面开始就"哪个槽位被替换"产生分歧的方式。
 
 use std::path::Path;
 
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 use crate::build_method::face_view::{BuildScopeView, FaceView};
 use crate::build_method::graft_view::{

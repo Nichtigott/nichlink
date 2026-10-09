@@ -59,7 +59,7 @@ pub(super) fn create_module(
     // kind that is not a valid Rust type name.
     // PascalCase 推导只有内核那一份；这里曾是一份只按 `_` 切分的本地副本，因此名字里
     // 出现别的分隔符时会产出并非合法 Rust 类型名的 kind。
-    let kind = nichlink_kernel::authoring::pascal_case(name);
+    let kind = xirang_kernel::authoring::pascal_case(name);
     let (parent_source, parent_kind) = parent_face
         .map(|face| (face.source.file.as_str(), face.kind.as_str()))
         .unwrap_or(("<root>", "root"));

@@ -3,14 +3,14 @@
 //!
 //! Split decision: this page only reads the two manifests the build writes
 //! (`source_scope.tsv`, `pruning_manifest.tsv`) and the view type derived from
-//! them. It re-exports through `super::face_view` so `nichlink_build_method`
+//! them. It re-exports through `super::face_view` so `xirang_build_method`
 //! keeps its `face_view::{BuildScopeView, PruningRow, read_build_scope,
 //! read_pruning_manifest}` surface unchanged, and it deliberately sits beside
 //! the discovery walk (which reads source) because both are the build's own
 //! read-only view of a host it cannot link.
 //! 拆分决定：本页只读取构建写出的两份清单（`source_scope.tsv`、
 //! `pruning_manifest.tsv`）以及由它们派生的视图类型。它经 `super::face_view` 重新
-//! 导出，使 `nichlink_build_method` 的 `face_view::{BuildScopeView, PruningRow,
+//! 导出，使 `xirang_build_method` 的 `face_view::{BuildScopeView, PruningRow,
 //! read_build_scope, read_pruning_manifest}` 表面保持不变；它刻意与发现遍历
 //! （读取源码）相邻，因为两者都是构建对无法链接的宿主的只读视图。
 
@@ -151,8 +151,8 @@ pub struct PruningRow {
 /// 上一次管线运行发布在 `out_dir` 的构建作用域。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuildScopeView {
-    /// `explicit` when the scope came from `NICH_LINK_SCOPE`, `auto` otherwise.
-    /// 作用域来自 `NICH_LINK_SCOPE` 时为 `explicit`，否则为 `auto`。
+    /// `explicit` when the scope came from `XIRANG_SCOPE`, `auto` otherwise.
+    /// 作用域来自 `XIRANG_SCOPE` 时为 `explicit`，否则为 `auto`。
     pub mode: String,
     /// True when the manifest recorded `# result all`: every face is in scope.
     /// 清单记录 `# result all` 时为真：每个面都在作用域内。
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn the_pruning_reader_accepts_the_three_and_the_seven_column_forms() {
         let out = std::env::temp_dir().join(format!(
-            "nichlink-pruning-forms-{}-{}",
+            "xirang-pruning-forms-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -430,7 +430,7 @@ mod tests {
             .as_nanos();
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-{label}-{}-{stamp}-{sequence}",
+            "xirang-{label}-{}-{stamp}-{sequence}",
             std::process::id()
         ));
         fs::create_dir_all(root.join("src/alpha")).expect("src tree");
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn published_output_is_current_until_the_sources_change() {
         let root = host("scope-view-current");
-        let out = root.join("target/nichlink/out");
+        let out = root.join("target/xirang/out");
         crate::build_method::check_for(&root, &out, "scope-view-current")
             .expect("a valid host checks clean");
         assert!(
@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn a_failed_check_publishes_no_trusted_output() {
         let root = host("scope-view-failed");
-        let out = root.join("target/nichlink/out");
+        let out = root.join("target/xirang/out");
         fs::write(
             root.join("src/alpha/alpha.rs"),
             "crate::root_object! {\n    kind:\n}\n",
@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn a_library_target_outside_src_matches_its_own_fingerprint() {
         let root = host_outside_src("scope-view-outside-src");
-        let out = root.join("target/nichlink/out");
+        let out = root.join("target/xirang/out");
         crate::build_method::check_for(&root, &out, "scope-view-outside-src")
             .expect("the outside-src layout is supported");
         assert!(
@@ -548,7 +548,7 @@ mod tests {
     /// `error[E0433]: cannot find registry_rule in super`）。本夹具过去没有这个文件——在没人判它时无害，
     /// 而那正是真 `cargo build` 编译不过的树。
     fn host_outside_src(label: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("nichlink-{label}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("xirang-{label}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("host/control/registry_rule")).expect("face directory");
         fs::write(

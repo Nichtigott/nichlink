@@ -17,18 +17,18 @@
 | id | 严重度 | 一句话 | file:line |
 | --- | --- | --- | --- |
 | `BR-1` | MAJOR | 两份 mcp README 仍在承诺 `unmatched` 桶，而它已在上一轮被删（现存的是 `undeclared`） | `mcp/README.md:47`、`mcp/README.zh-CN.md:35` |
-| `BR-2` | MAJOR | mcp README 称「树 diff 仍待做」，而同文件 120 行前就在描述 `nichlink.diff` | `mcp/README.md:164-166`、`mcp/README.zh-CN.md:113` |
-| `BR-3` | MAJOR | `nichlink.callgraph` 读一个 `inputSchema` 里没有的 `limit`，而回复又叫调用方「raise `limit`」 | `mcp/src/tools.rs:79` vs `mcp/src/callgraph.rs:41-44,110` |
+| `BR-2` | MAJOR | mcp README 称「树 diff 仍待做」，而同文件 120 行前就在描述 `xirang.diff` | `mcp/README.md:164-166`、`mcp/README.zh-CN.md:113` |
+| `BR-3` | MAJOR | `xirang.callgraph` 读一个 `inputSchema` 里没有的 `limit`，而回复又叫调用方「raise `limit`」 | `mcp/src/tools.rs:79` vs `mcp/src/callgraph.rs:41-44,110` |
 | `BR-4` | MAJOR | 预览 diff 把**每个非 UTF-8 文件**报成新增（本检出实测 36 个），且无上限、且每次预览整份复制 `.git` | `mcp/src/preview.rs:37-58,102-121` |
 | `BR-5` | MAJOR | 一帧非 UTF-8 请求会结束整个桥，而同样畸形的「超长行」「坏 JSON」都被作答且会话继续 | `mcp/src/protocol.rs:104-106` vs `:95-103` |
-| `BR-6` | MAJOR | 设了 `NICH_LINK_NAMESPACE` 时，`verify` 用 Cargo 名发布证据、`diff`/`search` 用覆盖名读，于是每个面都被自信地报成 `re-identified` | `mcp/src/verify.rs:43`、`mcp/src/registry.rs:59-61`、`mcp/src/tree_delta.rs:101-119` |
-| `BR-7` | MINOR | `nichlink.usages` 的描述字段清单比它实际打印的少五项 | `mcp/src/tools.rs:238-243` vs `mcp/src/usages.rs:113-141` |
-| `BR-8` | MINOR | `nichlink.diff` 的描述漏掉它新加的 `undeclared` 桶 | `mcp/src/tools.rs:146-155` vs `mcp/src/diff.rs:206-239` |
+| `BR-6` | MAJOR | 设了 `XIRANG_NAMESPACE` 时，`verify` 用 Cargo 名发布证据、`diff`/`search` 用覆盖名读，于是每个面都被自信地报成 `re-identified` | `mcp/src/verify.rs:43`、`mcp/src/registry.rs:59-61`、`mcp/src/tree_delta.rs:101-119` |
+| `BR-7` | MINOR | `xirang.usages` 的描述字段清单比它实际打印的少五项 | `mcp/src/tools.rs:238-243` vs `mcp/src/usages.rs:113-141` |
+| `BR-8` | MINOR | `xirang.diff` 的描述漏掉它新加的 `undeclared` 桶 | `mcp/src/tools.rs:146-155` vs `mcp/src/diff.rs:206-239` |
 | `BR-9` | MINOR | 「可移植路径」同一 crate 里两种拼法：`MAIN_SEPARATOR` vs 无条件折 `\` | `mcp/src/index.rs:159`、`preview.rs:85`、`converge_trace.rs:246` |
 | `BR-10` | MINOR | `tokens()` 三份逐字节副本、`blank()` 两份；`requires` 有两个语义不同的解析器 | `mcp/src/{impact,usages,converge}.rs` |
 | `BR-11` | MINOR | 测试挂载方式不统一：16 处 `#[path]` + `index.rs`/`tools.rs` 的内联 `mod tests` | `mcp/src/index.rs:218-219`、`mcp/src/tools.rs:404-410` |
 | `BR-12` | MINOR | 目录顺序与分派顺序不一致，且没有钉子保证两张名单彼此齐全 | `mcp/src/tools.rs:58-272` vs `:293-317` |
-| `BR-13` | MINOR | `--help` 在七个子命令里有四种不同下场；裸 `nichlink` 打印用法后退出 0 | `cli/src/lib.rs:139-142` 等 |
+| `BR-13` | MINOR | `--help` 在七个子命令里有四种不同下场；裸 `xirang` 打印用法后退出 0 | `cli/src/lib.rs:139-142` 等 |
 | `BR-14` | MINOR | `new --path X --git Y` 静默取 `--path`，而 `build` 对同类矛盾是拒绝的 | `cli/src/commands/new.rs:63-65` vs `cli/src/lib.rs:203-233` |
 | `BR-15` | MINOR | `cli/README.zh-CN.md` 的命令表少一条 `snippets`；两份 README 的 `studio` 行都漏了 `[path]` | `cli/README.zh-CN.md:13-24`、`cli/README.md:22` |
 | `BR-16` | MINOR | `Instant::now() + timeout` 在宿主给出可溢出 `Duration` 时 panic（公开字段、无校验） | `plugin-host/src/process.rs:369` |
@@ -69,31 +69,31 @@
   或改成「`ok` / `undeclared` / `stale` / `re-identified` / `unreadable`」这一行枚举，与 `diff.rs:206-212` 同字。
 - **复核手段**：`grep -c unmatched mcp/README.md mcp/README.zh-CN.md` 应为 0；
   `grep -n "undeclared" mcp/README.md mcp/README.zh-CN.md` 各 ≥1；
-  `cargo test -p nichlink-mcp --offline` 中 `the_record_side_tells_a_stale_record_from_a_re_identified_one`
+  `cargo test -p xirang-mcp --offline` 中 `the_record_side_tells_a_stale_record_from_a_re_identified_one`
   与 `an_undeclared_record_is_not_reported_as_ok` 仍绿。
 
 ## BR-2 —— mcp README 自相矛盾：「树 diff 仍待做」（文档承诺面；归并见 `BR-C0.2`）
 
 - **严重度**：MAJOR　**类别**：自我描述与行为不一致（文档漂移，且同文件内自相矛盾）
 - **file:line**：`mcp/README.md:164-166`、`mcp/README.zh-CN.md:113`；对照 `mcp/README.md:41-48`、`mcp/src/diff.rs`
-- **现象**：同一份 README 的 **Reads 列表第 7 条**（`:41-48`）整段描述 `nichlink.diff` 的面级 delta 与
+- **现象**：同一份 README 的 **Reads 列表第 7 条**（`:41-48`）整段描述 `xirang.diff` 的面级 delta 与
   `records: true`，而结尾一段写 “Graft writes, plugins, project scaffolding, tree diffs, and the
   consistency analysis are still to come (`docs/roadmap-1.0.md` item 7)”（中文：「graft 写入、插件、
-  项目脚手架、树 diff 与一致性分析仍待做」）。树 diff 就是 `nichlink.diff`，已出厂；被引用的
+  项目脚手架、树 diff 与一致性分析仍待做」）。树 diff 就是 `xirang.diff`，已出厂；被引用的
   `docs/roadmap-1.0.md` 第 7 条现在是别的事（「下一批」列表第 7 条是 C19 诊断字段表，第四轮第 7 条是
   `petgraph` 升级），引用也已失效。
-- **判据**：`grep -n "nichlink.diff" mcp/README.md` → `:41`；`grep -n "still to come" mcp/README.md` → `:165`。
-  工具存在且被 `tools_tests.rs:83-98` 钉住（`nichlink.diff` 断言 `no build evidence`）。
+- **判据**：`grep -n "xirang.diff" mcp/README.md` → `:41`；`grep -n "still to come" mcp/README.md` → `:165`。
+  工具存在且被 `tools_tests.rs:83-98` 钉住（`xirang.diff` 断言 `no build evidence`）。
 - **最小修复方向**：删掉这句过期的路线图话，或按当下实际剩下的集合重写并给出**可解析**的路线图锚点
   （若没有剩下的，就写「本桥的能力即上面两张清单」）。
 - **复核手段**：改后 `grep -n "still to come\|仍待做" mcp/README*.md` 应不再把 `tree diff` 列入未做；
-  `cargo test -p nichlink-mcp --offline` 全绿。
+  `cargo test -p xirang-mcp --offline` 全绿。
 
-## BR-3 —— `nichlink.callgraph` 读一个未声明的 `limit`（而回复又让调用方去 raise 它）（工具 rustdoc 承诺面；归并见 `BR-C0.3`）
+## BR-3 —— `xirang.callgraph` 读一个未声明的 `limit`（而回复又让调用方去 raise 它）（工具 rustdoc 承诺面；归并见 `BR-C0.3`）
 
 - **严重度**：MAJOR　**类别**：自我描述与行为不一致（参数契约）
 - **file:line**：`mcp/src/tools.rs:77-80`（catalog schema）、`mcp/src/callgraph.rs:41-44`、`mcp/src/callgraph.rs:108-113`
-- **现象**：catalog 给 `nichlink.callgraph` 声明的 `inputSchema.properties` 只有 `function` / `path` / `root`，
+- **现象**：catalog 给 `xirang.callgraph` 声明的 `inputSchema.properties` 只有 `function` / `path` / `root`，
   描述是「Show direct static callers and callees for one function.」；实现却读 `limit`
   （`value.clamp(1, 50)`，默认 5 个定义），并在截断行里主动叫调用方
   `… +N more definitions (raise \`limit\` or pass \`path\`)`。按 `inputSchema` 校验参数的 MCP 客户端
@@ -103,7 +103,7 @@
 - **最小修复方向**：在 catalog 里补 `"limit":{"type":"integer","minimum":1,"maximum":50}`，描述里也点名它；
   或删掉 `limit` 读取（只留 `path`）。两条都要顺手把 `callgraph` 加进 `the_evidence_tools_are_advertised_…`
   那张表，让「声明了才准读」变成一条可执行规则。
-- **复核手段**：`cargo test -p nichlink-mcp --offline tools_tests` 中把 `("nichlink.callgraph","limit")`
+- **复核手段**：`cargo test -p xirang-mcp --offline tools_tests` 中把 `("xirang.callgraph","limit")`
   加进那张表后，改前应红、改后应绿。
 
 ## BR-4 —— 预览 diff 把每个非 UTF-8 文件报成「新增」（且无上限、且整份复制 `.git`）（其中 `preview.rs` 的目录说明另有注释面条目 `BR-C2`）
@@ -115,11 +115,11 @@
   （`:108`，读不出的文件变成空串），再对**项目侧**读文本：`Ok(before) if before == after => continue`、
   `Ok(before) => "~ …"`、`Err(_) => "+ {relative}"`（`:109-121`）。一个**两边完全相同**的非 UTF-8 文件
   两侧 `read_to_string` 都失败，于是落进 `Err(_)` 支，被报成 `+ <path>`——一次没碰过它的编辑会把它列进
-  「哪些文件会变」。`copy_directory` 只跳过 `target` 与 `.nichlink`（`:45-47`），因此整份 `.git`
+  「哪些文件会变」。`copy_directory` 只跳过 `target` 与 `.xirang`（`:45-47`），因此整份 `.git`
   也在副本里、也在被列举的集合里。
-- **判据**：`[实测]` 在本检出上做只读统计：排除 `target/`、`.nichlink/` 后有 **36** 个非 UTF-8 文件，
+- **判据**：`[实测]` 在本检出上做只读统计：排除 `target/`、`.xirang/` 后有 **36** 个非 UTF-8 文件，
   其中 **29** 个在 `.git/` 下（另有 `.git/index`、`.codegraph/codegraph.db`、`.dsh-meow/memory.db` 等）；
-  即在本仓上跑一次 `nichlink.apply` 预览，回复里会出现 36 条虚假的 `+ …`。
+  即在本仓上跑一次 `xirang.apply` 预览，回复里会出现 36 条虚假的 `+ …`。
   同一脚本量出排除 `target` 的树是 46 MB（`.git` 9.9 MB），而每次预览都要复制一遍。
   `apply_tests.rs` 的夹具全是文本文件，所以现有测试看不到这件事。
   另外该 diff **没有任何上限**（`apply` 的 schema 里也没有 `limit`），与本桥其它每个答案都带界的做法相反
@@ -128,7 +128,7 @@
   或用 `fs::read` 比字节、只有确认变化才渲染。② `copy_directory`/`collect_files` 跳过 `.git`（以及其它 VCS/工具目录）。
   ③ 给 diff 加行数上限并声明出来。
 - **复核手段**：新增钉子——夹具里放一个含 `\xFF` 的二进制文件（或直接把 `.git/index` 的字节写进夹具），
-  断言 `apply` 的预览回复**不含** `+ <那个文件>`；`cargo test -p nichlink-mcp --offline apply_tests`。
+  断言 `apply` 的预览回复**不含** `+ <那个文件>`；`cargo test -p xirang-mcp --offline apply_tests`。
 
 ## BR-5 —— 一帧非 UTF-8 请求结束整个桥，而同类的畸形帧都被作答
 
@@ -148,17 +148,17 @@
 - **复核手段**：新钉子——把一条含 `0xFF` 的行与一条 `ping` 依次喂给 `run_with`，断言 stdout 上先有一条
   `-32700`、随后 `ping` 有回复（`replies()` 辅助函数已在 `protocol_tests.rs:79-95`）。
 
-## BR-6 —— `NICH_LINK_NAMESPACE` 下 `verify` 与 `diff`/`search` 各用一套命名空间
+## BR-6 —— `XIRANG_NAMESPACE` 下 `verify` 与 `diff`/`search` 各用一套命名空间
 
 - **严重度**：MAJOR（触发条件是设置该环境变量；一旦设置，答案是自信的错误答案）
   **类别**：跨工具一致性 / 正确性
 - **file:line**：`mcp/src/verify.rs:43`（`package_name`＝Cargo 名）、`mcp/src/registry.rs:59-61`（`namespace()` 先读覆盖）、
   `mcp/src/tree_delta.rs:71-118`、`mcp/src/diff.rs:40-41,62-63,92-98`、`mcp/src/search.rs:58-61,132-143`
-- **现象**：`verify` 把 `nichlink_build_method::package_name(&manifest)`（Cargo 的包名）交给 `check_for`，
+- **现象**：`verify` 把 `xirang_build_method::package_name(&manifest)`（Cargo 的包名）交给 `check_for`，
   于是本次运行发布的 `pruning_manifest.tsv` 行 id 是让 Cargo 名算的
   （`build_method/src/manifests.rs:181` → `registry_identity::package_node_id`，运行内生效的是
   `check_for` 设下的线程局部名）。而 `diff`/`search` 的源码侧走 `crate::registry::namespace(root)`，
-  它**先读 `NICH_LINK_NAMESPACE`**。两者不一致时，`TreeDelta::by_source` 仍按源码路径命中
+  它**先读 `XIRANG_NAMESPACE`**。两者不一致时，`TreeDelta::by_source` 仍按源码路径命中
   （路径与命名空间无关），于是 `status()` 对**每一个**面走 `Reidentified(previous)` 分支：
   `diff` 报 `added 0 gone 0 reidentified N`，`search` 给每条命中标 `re-identified`，而
   `build_output_is_current` 说 `build current`（指纹只散列路径与内容，与命名空间无关）——一个「刚校验过」
@@ -169,11 +169,11 @@
   没说「桥自己内部 `verify` 与 `diff` 互相打脸」。
 - **最小修复方向**：`verify` 用与 `diff` 同一个命名空间（`crate::registry::namespace(root)`）作为 `check_for`
   的 `package` 参数；或在两者不一致时明确拒绝并说明该设哪一个（与 `registry.rs:74-79` 对未命名包的处理同风格）。
-- **复核手段**：新钉子——置 `NICH_LINK_NAMESPACE=<other>`，先 `verify` 再 `diff`，断言 delta 的行是
+- **复核手段**：新钉子——置 `XIRANG_NAMESPACE=<other>`，先 `verify` 再 `diff`，断言 delta 的行是
   `added 0 gone 0 reidentified 0`（而不是「每个面都 re-identified」）。注意 `namespace_from` 已是
   可注入参数（`registry.rs:80-92`），测试不必依赖进程环境。
 
-## BR-7 —— `nichlink.usages` 的描述比它打印的字段少五项（工具 rustdoc 承诺面；归并见 `BR-C0.4`）
+## BR-7 —— `xirang.usages` 的描述比它打印的字段少五项（工具 rustdoc 承诺面；归并见 `BR-C0.4`）
 
 - **严重度**：MINOR　**类别**：自我描述与行为不一致（欠说明；行为是描述的超集）
 - **file:line**：`mcp/src/tools.rs:238-243` vs `mcp/src/usages.rs:103-142`
@@ -188,10 +188,10 @@
 - **最小修复方向**：把描述改成与 `usages.rs:113-141` 同字（或改成「每个可写字段都会打印，含 module / stable_name /
   getting_from_other_registry / flow_provider / needs_registry」），并在 README 的对应条目同步。
 - **复核手段**：`usages_tests.rs` 里已有 `every_field_the_write_path_accepts_is_read_back` 这类钉子；
-  加一条**字面**断言，让 `EDITABLE_FIELDS` 的每个名字都出现在 `tools()` 的 `nichlink.usages.description`
+  加一条**字面**断言，让 `EDITABLE_FIELDS` 的每个名字都出现在 `tools()` 的 `xirang.usages.description`
   或 README 条目里（对照 `mcp/README.md:91-98`）。
 
-## BR-8 —— `nichlink.diff` 的描述漏掉 `undeclared` 桶（工具 rustdoc 承诺面；归并见 `BR-C0.5`）
+## BR-8 —— `xirang.diff` 的描述漏掉 `undeclared` 桶（工具 rustdoc 承诺面；归并见 `BR-C0.5`）
 
 - **严重度**：MINOR　**类别**：自我描述与行为不一致（欠说明）
 - **file:line**：`mcp/src/tools.rs:146-155` vs `mcp/src/diff.rs:143-170,206-239`
@@ -199,10 +199,10 @@
   而实现（`M1` 之后）把「身份在树里、但没有 `static_graft_plan!` 切口点名它的槽位」单独分成 `undeclared`
   并在计数行与专段里输出。计数行是五个桶，描述是四个。
 - **判据**：`grep -n "undeclared" mcp/src/tools.rs` → 0 命中；`grep -n "undeclared" mcp/src/diff.rs` → 多处。
-- **最小修复方向**：在描述里补上 `undeclared`（以及它与 `nichlink.grafts` 的
+- **最小修复方向**：在描述里补上 `undeclared`（以及它与 `xirang.grafts` 的
   `NOT declared by the host entry`／`unkept plans N` 同判这一点）。
 - **复核手段**：`grep -c undeclared mcp/src/tools.rs` ≥1；
-  `cargo test -p nichlink-mcp --offline diff_tests` 全绿。
+  `cargo test -p xirang-mcp --offline diff_tests` 全绿。
 
 ## BR-9 —— 「可移植路径」在同一 crate 里两种拼法
 
@@ -210,15 +210,15 @@
 - **file:line**：`mcp/src/index.rs:155-159`（`replace(std::path::MAIN_SEPARATOR, "/")`）、
   `mcp/src/preview.rs:85`（`replace('\\', "/")`）、`mcp/src/converge_trace.rs:246`（`replace('\\', "/")`）
 - **现象**：`index.rs` 只折平台分隔符（Unix 上不动反斜杠），`preview.rs`/`converge_trace.rs` 无条件把 `\`
-  折成 `/`。在 Unix 上一个名字里含反斜杠的文件（合法字节）会被 `nichlink.inspect` 报成 `a\b.rs`、
+  折成 `/`。在 Unix 上一个名字里含反斜杠的文件（合法字节）会被 `xirang.inspect` 报成 `a\b.rs`、
   被 `apply` 的 declaration 锚点报成 `a/b.rs`——同一个桥对同一个文件给出两种拼法。
 - **判据**：三处 `[代码]`；内核已有唯一实现 `portable_path`
   （`core/src/registry_core/declaration/source_location.rs:33-39`，公开地址是
-  `nichlink::declaration::portable_path`），本 crate 没有用。
+  `xirang::declaration::portable_path`），本 crate 没有用。
 - **最小修复方向**：三处改调它（或收一个 `mcp::portable_path` 助手转发），
   使「跨平台拼法」只有一份规则。
 - **复核手段**：`grep -rn "replace('\\\\\\\\', \"/\")" mcp/src` 应为 0（除共享助手本身）；
-  `cargo test -p nichlink-mcp --offline` 全绿。
+  `cargo test -p xirang-mcp --offline` 全绿。
 
 ## BR-10 —— 三份 `tokens()`、两份 `blank()`，以及两个语义不同的 `requires` 解析器
 
@@ -250,32 +250,32 @@
 - **判据**：`grep -rn "^mod tests {" mcp/src` → `index.rs:219`、`tools.rs:409`；其余 16 个模块是 `#[path]`。
 - **最小修复方向**：把 `index.rs` 的内联测试移到 `mcp/src/index_tests.rs`，把 `tools.rs` 的内联两条
   并入 `tools_tests.rs`，让「一个源文件一个 `<name>_tests.rs`」成为唯一挂法（顺带让 `tools.rs` 只剩目录与分派）。
-- **复核手段**：`grep -rn "^mod tests {" mcp/src` 为 0；`cargo test -p nichlink-mcp --offline` 测试数与改前一致。
+- **复核手段**：`grep -rn "^mod tests {" mcp/src` 为 0；`cargo test -p xirang-mcp --offline` 测试数与改前一致。
 
 ## BR-12 —— 目录顺序 ≠ 分派顺序，且没有钉子保证两张名单齐全
 
 - **严重度**：MINOR　**类别**：责任/阅读顺序 + 缺钉子
 - **file:line**：`mcp/src/tools.rs:58-272`（catalog）vs `mcp/src/tools.rs:293-317`（`tool_call` 的 `match`）
-- **现象**：catalog 里 `nichlink.apply` 排第 6、分派里排最后；catalog 里 `grafts` 在 `impact` 之前，
+- **现象**：catalog 里 `xirang.apply` 排第 6、分派里排最后；catalog 里 `grafts` 在 `impact` 之前，
   分派里相反。两张名单必须逐名比对才能确认齐全（本次比对结果：**17 个工具两处都在**，见「查了、干净」），
   而 `tools_tests.rs:40-98` 只抽查了 6 个名字。「新增一个工具却漏了分派臂」会静默变成
   `unknown tool \`name\``（`:317`），「有分派臂没有目录项」则永不可达。
-- **判据**：两张名单的 `[代码]` 逐项比对（本报告已完成）；`grep -c "nichlink\." mcp/src/tools.rs` 的分布见上。
+- **判据**：两张名单的 `[代码]` 逐项比对（本报告已完成）；`grep -c "xirang\." mcp/src/tools.rs` 的分布见上。
 - **最小修复方向**：分派臂按 catalog 同序排列（`apply` 回到第 6 位）；补一条钉子：遍历 `tools()` 的每个
   `name` 调一次 `tool_call`，断言回复的文本不是 `unknown tool`。
 - **复核手段**：新钉子（如 `tools_tests::every_listed_tool_is_dispatched`）在补臂前对缺失项应红。
 
-## BR-13 —— `--help` 在七个子命令里有四种下场；裸 `nichlink` 退出 0
+## BR-13 —— `--help` 在七个子命令里有四种下场；裸 `xirang` 退出 0
 
 - **严重度**：MINOR　**类别**：CLI 一致性 / 用法错误语义
 - **file:line**：`cli/src/lib.rs:139-142`（顶层认 `--help`/`-h`/`help`）、`cli/src/commands/studio.rs:33-36`（认 `-h`/`--help`，打印 `USAGE`）、
   `cli/src/commands/check.rs:34`、`cli/src/explain.rs:58`、`cli/src/grafts.rs:43`、`cli/src/commands/snippets.rs:50`（`unexpected argument '--help'`）、
   `cli/src/commands/new.rs:52-57`（以 `-` 开头一律拒绝并给 `usage:`）、`cli/src/commands/build.rs:17-27`（把 `--help` 原样交给 `cargo build`）
-- **现象**：`nichlink check --help` / `explain` / `grafts` / `snippets` → 报错、stderr、退出 1；
-  `nichlink studio --help` → 打印完整 `USAGE`、退出 0；`nichlink new --help` → 拒绝并给一行 usage；
-  `nichlink build --help` → 先做注册校验（在不含 `Cargo.toml` 的目录里直接报错），成功后才把 `--help` 交给 cargo。
+- **现象**：`xirang check --help` / `explain` / `grafts` / `snippets` → 报错、stderr、退出 1；
+  `xirang studio --help` → 打印完整 `USAGE`、退出 0；`xirang new --help` → 拒绝并给一行 usage；
+  `xirang build --help` → 先做注册校验（在不含 `Cargo.toml` 的目录里直接报错），成功后才把 `--help` 交给 cargo。
   同一个通用旗标，四种语义。另外 `None | Some("--help") | … => 打印 USAGE; Ok(())`（`lib.rs:139-142`）让
-  **裸调** `nichlink` 也走同一条路：stdout 打印用法、退出 0，shell 管线看见「成功」。
+  **裸调** `xirang` 也走同一条路：stdout 打印用法、退出 0，shell 管线看见「成功」。
 - **判据**：`grep -rn '"--help"\|"-h"' cli/src` 只在 `lib.rs:139`、`studio.rs:33` 出现；
   `cli/src/lib_tests.rs:679` 只钉了 `studio --help`，`:847` 只钉了顶层 `--help`。
 - **最小修复方向**：在 `cli/src/lib.rs` 加一个共享的 `help(out)` 分支，六个子命令的 argv 循环先认
@@ -306,12 +306,12 @@
 - **file:line**：`cli/README.zh-CN.md:13-24`、`cli/README.md:22`（studio 行）、`cli/src/lib.rs:41-53`（`USAGE`）
 - **现象**：`USAGE` 与 `lib.rs:139-152` 的分派都有 **8** 条子命令（new/check/build/snippets/explain/grafts/studio/mcp）。
   `cli/README.md:15-23` 的表有 9 行（explain 两条），`cli/README.zh-CN.md:13-24` 只有 **8** 行——缺
-  `nichlink snippets`。两份 README 的 studio 行都写 `nichlink studio`，而 `USAGE:52` 与
-  `studio.rs:26-41` 都接受一个可选路径（`nichlink studio <path>`，上一轮才修好「丢弃参数」那件事）。
-- **判据**：`[实测]` `grep -c "^| \`nichlink" cli/README.md cli/README.zh-CN.md` → 9 / 8；
-  `grep -o "^| \`nichlink [a-z-]*" cli/README.zh-CN.md` 无 `snippets`。
-- **最小修复方向**：中文表补 `snippets` 行；两份表的 studio 行改成 `nichlink studio [path]`。
-- **复核手段**：`grep -c "^| \`nichlink" cli/README*.md` 两边同数；与 `USAGE` 的八条逐条对照。
+  `xirang snippets`。两份 README 的 studio 行都写 `xirang studio`，而 `USAGE:52` 与
+  `studio.rs:26-41` 都接受一个可选路径（`xirang studio <path>`，上一轮才修好「丢弃参数」那件事）。
+- **判据**：`[实测]` `grep -c "^| \`xirang" cli/README.md cli/README.zh-CN.md` → 9 / 8；
+  `grep -o "^| \`xirang [a-z-]*" cli/README.zh-CN.md` 无 `snippets`。
+- **最小修复方向**：中文表补 `snippets` 行；两份表的 studio 行改成 `xirang studio [path]`。
+- **复核手段**：`grep -c "^| \`xirang" cli/README*.md` 两边同数；与 `USAGE` 的八条逐条对照。
 
 ## BR-16 —— `Instant::now() + timeout` 可 panic（公开字段、无校验）
 
@@ -364,7 +364,7 @@
 ## BR-19 —— 预览副本的临时目录卫生与错误路径泄漏
 
 - **严重度**：MINOR　**类别**：安全/可靠性（本地前提）+ 资源泄漏
-- **file:line**：`mcp/src/preview.rs:21-30`（`std::env::temp_dir().join("nichlink-mcp-preview-{pid}-{seq}")`
+- **file:line**：`mcp/src/preview.rs:21-30`（`std::env::temp_dir().join("xirang-mcp-preview-{pid}-{seq}")`
   + `remove_dir_all` + `create_dir_all`）、`mcp/src/preview.rs:60-64`（`remove_copy`）、
   `mcp/src/apply.rs:139-144`（`diff_package(root, &work)?` 之后才 `remove_copy`）
 - **现象**：目标路径是**可预测**的（pid + 进程内自增），先用 `remove_dir_all` 清掉同名的东西、
@@ -414,10 +414,10 @@
 | 归并 id | 原条目 | 要点与严重度 |
 | --- | --- | --- |
 | `BR-C0.1` | `BR-1` | 两份 mcp README 仍以现在时承诺已被删除的 `unmatched` 桶（过时文档承诺，MAJOR） |
-| `BR-C0.2` | `BR-2` | 同一份 README 里「树 diff 仍待做」与 120 行前的 `nichlink.diff` 段互相矛盾（MAJOR） |
-| `BR-C0.3` | `BR-3` | `nichlink.callgraph` 的 rustdoc/schema 没声明实现会读的 `limit`，回复却叫调用方去 raise 它（MAJOR） |
-| `BR-C0.4` | `BR-7` | `nichlink.usages` 的描述字段清单比输出少五项（MINOR） |
-| `BR-C0.5` | `BR-8` | `nichlink.diff` 的描述漏掉 `undeclared` 桶（MINOR） |
+| `BR-C0.2` | `BR-2` | 同一份 README 里「树 diff 仍待做」与 120 行前的 `xirang.diff` 段互相矛盾（MAJOR） |
+| `BR-C0.3` | `BR-3` | `xirang.callgraph` 的 rustdoc/schema 没声明实现会读的 `limit`，回复却叫调用方去 raise 它（MAJOR） |
+| `BR-C0.4` | `BR-7` | `xirang.usages` 的描述字段清单比输出少五项（MINOR） |
+| `BR-C0.5` | `BR-8` | `xirang.diff` 的描述漏掉 `undeclared` 桶（MINOR） |
 
 `BR-4` 与 `BR-20` 各只有一半属于本轴（`preview.rs` 的目录说明、`process.rs` 的 stdout 线程注释），
 分别在下面 `BR-C2` 与 `BR-C1` 里单列。
@@ -439,13 +439,13 @@
 
 - **严重度**：MAJOR（轴 1）　**类别**：注释与行为不一致
 - **file:line**：`mcp/src/preview.rs:14-20`（模块文档与 `copy_package` 的文档）、`:37-58`（`copy_directory`）；行为证据见 `BR-4`
-- **现象**：两处文档都说副本跳过 `target/` 与 NichLink 自己的运行期目录，并断言
+- **现象**：两处文档都说副本跳过 `target/` 与 XiRang 自己的运行期目录，并断言
   「`target/` is the one directory that can be large」（`target/` 是唯一可能很大的目录）。
-  实际只跳过 `target` 与 `.nichlink`（`:45-47`），`.git` 会被整份复制并参与 diff——
+  实际只跳过 `target` 与 `.xirang`（`:45-47`），`.git` 会被整份复制并参与 diff——
   在本检出上 `.git` 是 9.9 MB，而真实仓库常见 GB 级；这句「唯一」因此是错的，
   也是 `BR-4` 那 36 条虚假 `+ …` 的直接来源。
 - **判据**：`[代码]`：`:45-47` 的跳过条件只有两个名字；`[实测]`：`.git` 9.9 MB、树 46 MB（见 `BR-4`）。
-- **最小修复方向**：改成「跳过构建产物与 VCS/工具目录（当前是 `target/`、`.nichlink/`、以及拟新增的 `.git/`）」，
+- **最小修复方向**：改成「跳过构建产物与 VCS/工具目录（当前是 `target/`、`.xirang/`、以及拟新增的 `.git/`）」，
   或删掉「唯一可能很大」这半句——一句话的断言比一份清单更容易过期。
 - **复核手段**：`grep -n "one directory that can be large" mcp/src/preview.rs` 应为 0；
   `BR-4` 的钉子（夹具含 `.git` 风格二进制文件）同时钉住行为。
@@ -468,12 +468,12 @@
 - **严重度**：MINOR（轴 4：术语/名字一致性）　**类别**：注释错别字（双语两半同错）
 - **file:line**：`cli/src/lib.rs:169`（英文半边）、`cli/src/lib.rs:175`（中文半边）
 - **现象**：`build` 的 argv 规则文档写 “and `nihlink build` hands the rest of its arguments to cargo verbatim”，
-  中文半边同样写 `nihlink build`。可执行的命令名是 `nichlink`；这是本仓唯一一处把产品名拼错的地方
+  中文半边同样写 `nihlink build`。可执行的命令名是 `xirang`；这是本仓唯一一处把产品名拼错的地方
   （`grep -rn nihlink mcp/src cli/src plugin-host/src` 只有这两行）。
 - **判据**：`[实测]`：`grep -rn "nihlink\b" mcp/src cli/src plugin-host/src` → 2 命中（同一 doc 块的两半）。
-- **最小修复方向**：两处改成 `nichlink`。顺带说明：这类错字不会被 `doc_blocks`/`doc_anchors` 门禁抓到
+- **最小修复方向**：两处改成 `xirang`。顺带说明：这类错字不会被 `doc_blocks`/`doc_anchors` 门禁抓到
   （它们管围栏与锚点，不管散文里的产品名），所以属人工复核项。
-- **复核手段**：`grep -rn "nihlink" cli/src` 为 0（`nichlink` 的匹配要用词边界）。
+- **复核手段**：`grep -rn "nihlink" cli/src` 为 0（`xirang` 的匹配要用词边界）。
 
 ### BR-C5 —— 一个桥里 `slot` 有三个含义；同一状态有三种拼法
 
@@ -550,16 +550,16 @@
 
 1. **工具目录与分派齐全**：catalog（`mcp/src/tools.rs:58-272`）与 `tool_call`（`:293-317`）逐名比对，
    17 个工具两处都在，没有「列了没接」或「接了没列」的臂。（顺序问题见 `BR-12`。）
-2. **`register` 侧的转发纪律**：`nichlink.verify` 只把 `limit`/`root` 转发给 `diff`（`verify.rs:71-77`），
+2. **`register` 侧的转发纪律**：`xirang.verify` 只把 `limit`/`root` 转发给 `diff`（`verify.rs:71-77`），
    未声明的键（尤其 `records`）不再改变答案；与 `diff` 真正读取的键集合比对无遗漏。
 3. **`confirm` 是真前置条件**：`delete` 在任何拷贝/写入之前就要求 `confirm: true`（`apply.rs:394-413`），
    且 schema 里声明的正是这个键（`tools.rs:109`）；`apply_tests.rs:397-431` 钉住「缺它即拒且文件未动」。
 4. **预览不碰项目**：预览在一次性副本上跑真操作（`apply.rs:84-88`），`remove_copy` 有 `work != root` 守卫
    （`preview.rs:60-64`），`apply: true` 时 `work == root` 因此不会误删项目；`apply_tests.rs:102-136` 钉住。
 5. **读路径的根约束**：`load_one`/`load_file`/`is_safe_child`（`index.rs:129-174`）都先 `canonicalize` 再比前缀，
-   根外符号链接既不入索引也读不到（`index.rs:303-330` 的 Unix 钉子）；`.nichlink` 回收目录不进索引
+   根外符号链接既不入索引也读不到（`index.rs:303-330` 的 Unix 钉子）；`.xirang` 回收目录不进索引
    （`index.rs:121-125` + `:227-252` 钉子），因此删掉的面不会从备份里继续作答。
-6. **`nichlink.read` 的行号上界**：中心先夹进文件、再用饱和运算（`tools.rs:376-382`），
+6. **`xirang.read` 的行号上界**：中心先夹进文件、再用饱和运算（`tools.rs:376-382`），
    `u64::MAX`/`usize::MAX` 都不再回绕（`tools.rs:430-447` 钉子）。
 7. **wasm 输入上限的「较小者」说法成立**：`check_input_length`（`wasm.rs:330-343`）只管帧宽与配置上限，
    真正的另一道是线性内存——wasmi 1.1.0 的 `Memory::write` 只做 `resolve_memory_mut` 后写入、越界返回 `Err`，
@@ -581,11 +581,11 @@
     stdout/stderr 全程排空、输入在独立线程写、deadline 覆盖整个调用（`:303-409`），
     `fault_matrix.rs` 有六条钉子（超时 vs 崩溃、大于管道缓冲的输出、写完继续写、超限输出、
     不读 stdin 的子进程、1 MiB 输入、stderr 洪泛、环境/工作目录三个旋钮）。
-12. **只读面**：`nichlink.grafts`、`nichlink.registry`、`nichlink.search` 等不写项目；唯一会写项目的是
-    `nichlink.apply`（默认预览），`nichlink.verify` 只写 `target/nichlink/out` 并在描述里声明了该副作用
+12. **只读面**：`xirang.grafts`、`xirang.registry`、`xirang.search` 等不写项目；唯一会写项目的是
+    `xirang.apply`（默认预览），`xirang.verify` 只写 `target/xirang/out` 并在描述里声明了该副作用
     （`tools.rs:264-265`）。
-13. **CLI 的失败语义**：两条二进制都把错误写 stderr 并以 1 退出（`cli/src/bin/nichlink.rs:11-14`、
-    `bin/cargo-nichlink.rs:19-22`）；`check --json` 失败时**先**在 stdout 写出文档再 `Err`
+13. **CLI 的失败语义**：两条二进制都把错误写 stderr 并以 1 退出（`cli/src/bin/xirang.rs:11-14`、
+    `bin/cargo-xirang.rs:19-22`）；`check --json` 失败时**先**在 stdout 写出文档再 `Err`
     （`commands/check.rs:59-74`），`explain`/`grafts` 的解析失败同样先出文档
     （`explain.rs:66-72,84-88`、`grafts.rs:49-70`）——`--json` 的「stdout 恰好一份文档」契约成立。
 14. **`--help` 与实现的子命令集合一致**：`USAGE`（`lib.rs:44-53`）八条与 `run_to`（`:139-152`）八条一一对应，

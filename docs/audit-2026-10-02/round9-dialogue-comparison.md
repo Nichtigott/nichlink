@@ -1,4 +1,4 @@
-# 第九轮 26 题 · 对话层对比（我们 = `nichlink-mcp` vs `codegraph` 1.6.1）
+# 第九轮 26 题 · 对话层对比（我们 = `xirang-mcp` vs `codegraph` 1.6.1）
 
 **这一份回答什么**（维护者原话）：「我要的是**每轮这两个工具具体给了什么信息给 agent**，然后 **agent 到底是如何思考的有什么异同**，
 以及 **agent 为何要在这个时候决定这么做**，这样才能评估出**如何引导 ai 做正确的事情**」。
@@ -7,7 +7,7 @@
 **与已有记录的关系**（不替代，只补充与更正）：
 `docs/audit-2026-10-02/final-26-comparison.md`（整轮 + 逐题判定）· `docs/audit-2026-10-02/per-question-cost.md`（逐题代价 + 三桶）·
 `docs/audit-2026-10-02/cg26-review.md` / `cg26-review-2.md`（cg 侧复核）· `target/round9/review.md`（我们侧复核）。
-**本次新增的可复跑装置**：`tools/nichlink-dialogue-extract.py`（逐题对话渲染）与 `docs/audit-2026-10-02/dialogues/**`（52 份 + 索引）。
+**本次新增的可复跑装置**：`tools/xirang-dialogue-extract.py`（逐题对话渲染）与 `docs/audit-2026-10-02/dialogues/**`（52 份 + 索引）。
 
 ---
 
@@ -46,7 +46,7 @@
 
 ### 1.1 `h1-supply-chain` 的逐题读数被前缀误报吃掉了（已修）
 
-`tools/nichlink-per-question-cost.py` 原版用子串判题号（`trees/<id>`），而 **`trees/h1` 是 `trees/h1-supply-chain` 的前缀** ⇒
+`tools/xirang-per-question-cost.py` 原版用子串判题号（`trees/<id>`），而 **`trees/h1` 是 `trees/h1-supply-chain` 的前缀** ⇒
 `h1-supply-chain` 的每一次调用都被同时算作 `h1`（两个题号）⇒ **双双落进"共享桶"**，于是那一道题的逐题读数**凭空变成 0**。
 
 | | 旧表（`per-question-cost.md`） | 更正后 |
@@ -149,7 +149,7 @@ cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; for s in "Entry::new" … "w
 口径内正确（不是缺陷）。**cg 逐题桶合计**：**87 步 / 127,386 tok / 274,470 字符 / 22,043,904**
 （我们 105 步 / 94,116 / 169,766 / 21,015,680 ⇒ 上下文 **0.95×** ✓ · 输出 **0.74×** ✓ · 推理 **0.62×** ✓）。
 
-**四道 hardbug 的"理想路径 vs 实际"**（出题台 `tools/nichlink-mcp-hardbug plan` 给的理想调用数）：
+**四道 hardbug 的"理想路径 vs 实际"**（出题台 `tools/xirang-mcp-hardbug plan` 给的理想调用数）：
 
 | 题 | 理想 | 我们实际 | codegraph 实际 | 我们多用在哪 |
 | --- | --- | --- | --- | --- |
@@ -311,7 +311,7 @@ agent 为此多花 2 次调用（`search --literal` + `read`）去推翻它；�
 1. `consistency --parent` 的 `outlier` 行**补上离群对象的文件**；
 2. `callgraph` 的 `limit` **不要把"族里不一致的那些定义"截掉**；
 3. `adopted`/`conformance` 的 `next` 行只指向"本条还没判过"的问题，并把 `lapsed` 的**两枚指纹**印出来；
-4. `why` 的 `wiring` 行**给行号**；`scope`/`pruning` 的"run `nichlink check`"文案与 `check` 实际产出对齐；
+4. `why` 的 `wiring` 行**给行号**；`scope`/`pruning` 的"run `xirang check`"文案与 `check` 实际产出对齐；
 5. `check --census` 的**分支明细行默认保留**（`CENSUS_SAMPLE = 5` 的抽样会把唯一那句判据顶掉）。
 
 

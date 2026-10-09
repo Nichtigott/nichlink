@@ -7,9 +7,9 @@
 ## 0. 方法与证据基线
 
 - 全程 `read` 逐个文件（`file:line` 均为本人读过的行号），结构性问题用 `codegraph_explore` 交叉核对内核侧规则：`core/src/registry_core/source/source.rs`、`core/src/registry_core/plugin/catalog/catalog.rs`、`core/src/registry_core/authoring/face_field.rs`、`plugin-host/src/admission.rs`。
-- 亲自通读的 Studio 文件：`lib.rs`、`main.rs`、`bin/nichlink-dev.rs`、`studio.rs`、`terminal.rs`；`app/{app,lifecycle,keyboard,keyboard_overlay,interaction,pointer,mutations,writers,support,namespace,hot_zones,trace,graft,navigation,call_tree_queries,search_queries,graph_queries,source_index,tests}.rs` + `app/overlay/*`（7）+ `app/state/*`（8）；`ui/{ui,panels,overlay,status,mark,forms}.rs` + `ui/forms/*`（6）+ `ui/graph{,/nodes,/data,/node_graph}.rs` + `ui/search{,/query,/results,/detail}.rs`；`tests/launch.rs`、`tests/project.rs`（全文）、`tests/{call_tree,evidence,forms,graph,fixtures,source,edit,trace_ingest,navigation}.rs`（各组头部/全部用例名，逐条判读的用例另在文内点名）。
+- 亲自通读的 Studio 文件：`lib.rs`、`main.rs`、`bin/xirang-dev.rs`、`studio.rs`、`terminal.rs`；`app/{app,lifecycle,keyboard,keyboard_overlay,interaction,pointer,mutations,writers,support,namespace,hot_zones,trace,graft,navigation,call_tree_queries,search_queries,graph_queries,source_index,tests}.rs` + `app/overlay/*`（7）+ `app/state/*`（8）；`ui/{ui,panels,overlay,status,mark,forms}.rs` + `ui/forms/*`（6）+ `ui/graph{,/nodes,/data,/node_graph}.rs` + `ui/search{,/query,/results,/detail}.rs`；`tests/launch.rs`、`tests/project.rs`（全文）、`tests/{call_tree,evidence,forms,graph,fixtures,source,edit,trace_ingest,navigation}.rs`（各组头部/全部用例名，逐条判读的用例另在文内点名）。
 - 验证命令（`--offline`）：
-  - `cargo test -p nichlink-studio --offline --all-features` → 通过（tail：lib 91 passed / `nichlink-dev` 7 passed / `launch` 4 passed，0 failed）。**默认特性下夹具测试被跳过**，因此用 `--all-features` 才覆盖 `prototype-fixtures` 那一半。
+  - `cargo test -p xirang-studio --offline --all-features` → 通过（tail：lib 91 passed / `xirang-dev` 7 passed / `launch` 4 passed，0 failed）。**默认特性下夹具测试被跳过**，因此用 `--all-features` 才覆盖 `prototype-fixtures` 那一半。
   - 四条门禁基线（fmt / `cargo test --workspace` 740 passed / clippy / `--check-table`）由 executor 实测全绿并已转达，本报告不再自证，也不据此推断任何结论。
   - captain 转达 `studio/tests/fixtures/node-editor` 的 5 个源文件在工作树里没有 `mod` 声明属**设计如此**（夹具从不编译）：我独立核实了该事实，并且**没有**把它记为挂载缺陷；它作为“存在方式”的设计问题另记为 S-30。
 
@@ -26,7 +26,7 @@
   - `contains_record` 只对 `source == "official"` 调用（`mutations.rs:299` 的 `if source == "official" && ...`），`user` 来源完全绕过。
   - 而 `PluginCatalog::parse` 把「身份五元组 `(source, framework, package, version, crate_name)` 重复」判为**硬错误**：`core/src/registry_core/plugin/catalog/catalog.rs:192-207`（checksum/mode 不在身份元组里），内核自己的用例 `catalog.rs:325-332` 正是用 `sha256:a` / `sha256:b` 这一对证明它会失败（`duplicates package identity`）。
   - 触发路径是界面上两个可编辑字段（`plugin_field::CHECKSUM`、`plugin_field::MODE`）：同一个 user 插件改 checksum、或只按一次 Enter 把 mode 从 `extension` 切到 `replacement`，再按两次 `s`，`mutations.rs:333` 成功、`mutations.rs:347` 报 “Plugin selected”。
-- 判据：`.nichlink/plugins/{official,user}.lock` 是**宿主工件**。宿主的准入读它：`plugin-host/src/admission.rs:57-82` 把两份锁拼起来解析，失败即 `HostError::Policy("invalid plugin lock under …")`——插件面此后完全不可用，Studio 自己的下一次 `submit_plugin` 也会在 `mutations.rs:265-271` 报 “invalid lock”，而界面没有任何手段修回来（只能手改文件）。写入方在**写的那一刻**没有把解析器会拒绝的输入挡掉，且报告为成功。
+- 判据：`.xirang/plugins/{official,user}.lock` 是**宿主工件**。宿主的准入读它：`plugin-host/src/admission.rs:57-82` 把两份锁拼起来解析，失败即 `HostError::Policy("invalid plugin lock under …")`——插件面此后完全不可用，Studio 自己的下一次 `submit_plugin` 也会在 `mutations.rs:265-271` 报 “invalid lock”，而界面没有任何手段修回来（只能手改文件）。写入方在**写的那一刻**没有把解析器会拒绝的输入挡掉，且报告为成功。
 - 最小修复方向：把「追加一条记录」交回内核唯一的解析/校验入口——例如新增 `PluginCatalog::push_record`/`append_record`，内部先跑 `parse` 的同一套身份检查（复用 `accounts_for` 的身份五元组），或写入前先 `PluginCatalog::parse(format!("{existing}{record}\n"))` 并要求 `Ok`；`submit_plugin` 只组合候选串、不再自己决定什么是合法锁。
 - 复核手段：新增一条 Studio 级测试（结构与 `app/tests/forms.rs:154-216` 同形）：先写入一条 user 记录，再以「同 framework/package/version/crate、不同 checksum」提交 → 断言第二次被拒绝且锁文件字节未变；再加一个 `mode: extension → replacement` 的用例。内核侧已有 `plugin_lock_parser_rejects_ambiguous_duplicate_identity` 作为不变量锚点。
 
@@ -73,7 +73,7 @@
 - 现象：`submit_graft` 先 `self.open_editor_file(path.clone(), 1)`（`graft.rs:128`），紧接着**无条件**`self.event = match &state.declaration { … }`（`graft.rs:129-158`）。而 `open_editor_file`（`support.rs:459-465`）在路径不是文件时会写 `self.event = "Editor failed: source file not found at …"`。
 - 判据：错误消息被成功横幅覆盖，且 `editor_request` 保持 `None`，用户既看不到失败也不知道没打开编辑器；`event` 是本界面唯一的反馈通道（`status.rs:6-33`）。
 - 最小修复方向：把编辑器结果纳入 match（或在 `open_editor_file` 返回 `Result`），失败时不做覆盖。
-- 复核手段：测试——构造一个 plan 路径不可用（例如把 `.nichlink/external-grafts/<sel>/` 变成同名文件）后调 `submit_graft`，断言 `app.event` 里出现编辑器失败而不是 “External graft plan created”。
+- 复核手段：测试——构造一个 plan 路径不可用（例如把 `.xirang/external-grafts/<sel>/` 变成同名文件）后调 `submit_graft`，断言 `app.event` 里出现编辑器失败而不是 “External graft plan created”。
 
 ### S-08 · MAJOR · 逻辑/写盘闸门 · `app/mutations.rs:320`
 
@@ -82,12 +82,12 @@
 - 最小修复方向：按行判断（`entry_text.lines().any(|line| line.trim() == format!("use {crate_name} as _;"))`），或干脆把入口写入也交给内核/执行面里唯一的写入器。
 - 复核手段：测试——入口文件里放 `// use demo_plugin as _;`，提交后断言：要么报“入口已声明但未生效”，要么真的补写一行；两者都不可以是“Plugin selected”且入口不含未注释的 use。
 
-### S-09 · MINOR · 一致性 · `app/navigation.rs:79-85` vs `bin/nichlink-dev.rs:273-276`
+### S-09 · MINOR · 一致性 · `app/navigation.rs:79-85` vs `bin/xirang-dev.rs:273-276`
 
-- 现象：`source_stamp()` 的“相关文件”集合只认 `Cargo.toml | Cargo.lock | official.lock`（`navigation.rs:83`），而 `nichlink-dev` 的 watcher 认 `build.rs | official.lock | user.lock`（`nichlink-dev.rs:275`，并且有用例 `nichlink-dev.rs:382-403` 专门钉 `user.lock`）。
-- 判据：两个执行面对“插件目录里什么算源码变更”给出不同答案。用户来源的插件若 crate 锚点已存在（`mutations.rs:320` 命中），`submit_plugin` 只追加 `user.lock`——此时 `poll_hot_reload`（`lifecycle.rs:108-117`）看不到戳变化，界面不刷新，而 `nichlink-dev` 会重启 Studio。两边应同源。
+- 现象：`source_stamp()` 的“相关文件”集合只认 `Cargo.toml | Cargo.lock | official.lock`（`navigation.rs:83`），而 `xirang-dev` 的 watcher 认 `build.rs | official.lock | user.lock`（`xirang-dev.rs:275`，并且有用例 `xirang-dev.rs:382-403` 专门钉 `user.lock`）。
+- 判据：两个执行面对“插件目录里什么算源码变更”给出不同答案。用户来源的插件若 crate 锚点已存在（`mutations.rs:320` 命中），`submit_plugin` 只追加 `user.lock`——此时 `poll_hot_reload`（`lifecycle.rs:108-117`）看不到戳变化，界面不刷新，而 `xirang-dev` 会重启 Studio。两边应同源。
 - 最小修复方向：把“哪些文件是 Studio 的相关源码”提到 `lexicon`（或一个共享谓词），`source_stamp` 与 `relevant_event` 都调它。
-- 复核手段：在 `navigation.rs` 的戳函数上写一条单测（只改 `user.lock` 必须改变戳）；或对齐两处清单后把 `nichlink-dev.rs:388-403` 的期望扩到两端。
+- 复核手段：在 `navigation.rs` 的戳函数上写一条单测（只改 `user.lock` 必须改变戳）；或对齐两处清单后把 `xirang-dev.rs:388-403` 的期望扩到两端。
 
 ### S-10 · MINOR · 缓存失效 · `ui/graph/nodes.rs:183-188`、`app/app.rs:123-124`
 
@@ -131,7 +131,7 @@
 - 判据：模块顶注只声明了两件事（“Shared interaction geometry and editor helpers”，`support.rs:1-2`），实际内容的三分之二是 I/O 与进程派生；“支持文件”这个语义下任何东西都能塞。`AGENTS.md` 的 600 行棘轮也说明 509 行已接近上限，下一次添加会撞线。
 - 注释轴：模块文档声明的范围小于实际内容，见 C-04。
 - 最小修复方向：拆 `project.rs`（resolve_project/`resolve_project_from`/`usable`/`manifest_for`）、`cargo_probe.rs`（`cargo_rustc_mir`/`bin_target_names`）、`geometry.rs`（`near_divider`/`resize_*`/`move_selection`/`open_editor_at`），夹具助手移入 `tests.rs` 前导。
-- 复核手段：拆完 `support.rs` 只剩几何；`cargo test -p nichlink-studio --offline` 全绿。
+- 复核手段：拆完 `support.rs` 只剩几何；`cargo test -p xirang-studio --offline` 全绿。
 
 ### S-16 · MINOR · 逻辑/重复工作 · `app/lifecycle.rs:80-88`
 
@@ -177,7 +177,7 @@
 
 ### S-22 · MINOR · 测试夹具重复 · `tests/call_tree.rs:25-35`、`tests/evidence.rs:60-67`、`tests/graph.rs:15-24/66-72/132-138/181-187`
 
-- 现象：“取 node-editor 夹具 → `select_project(...)` → `App::load()`”三行，被写成 `fixture_app()`（call_tree）、`load_fixture()`（evidence）与 graph.rs 里**四处内联**，命名还不一致；命名空间字符串 `"nichlink.fixture.node-editor"` 出现在至少 5 处。
+- 现象：“取 node-editor 夹具 → `select_project(...)` → `App::load()`”三行，被写成 `fixture_app()`（call_tree）、`load_fixture()`（evidence）与 graph.rs 里**四处内联**，命名还不一致；命名空间字符串 `"xirang.fixture.node-editor"` 出现在至少 5 处。
 - 判据：夹具路径与命名空间是同一个契约（`support.rs:484-509` 的 `node_editor_fixture`），散落后改一处命名空间会只改到一部分；这也是 `tests.rs` 前导已经存在的理由。
 - 最小修复方向：把 `fixture_app() -> Option<App>` 放进 `tests.rs` 前导（`#[cfg(feature = "prototype-fixtures")]`），各文件删本地副本。
 - 复核手段：`grep -c 'select_project' src/studio/app/tests/` 应只剩 1 处（trace_ingest/edit 等自建工程除外）。
@@ -187,7 +187,7 @@
 - 现象：562 行一个文件装四件事：项目根/清单/命名空间（`9-212`）、新项目向导（`215-411`）、`resolve_project_from` 纯函数（`419-486`）、MIR target 解析（`488-562`）。其中 `new_project_and_explicit_root_face_compile`（`215-354`）在单测进程里跑 `cargo check --offline`，`mir_target_resolves`（`492-529`）每个用例跑一次 `cargo rustc`，共 4 次（`536-562`）。
 - 判据：单元测试二进制因此依赖外部 `cargo`、真实编译与磁盘 cache；文件本身越过 500 行，`tests/call_tree.rs`（702 行）同理混了 memo/箭头/Enter/鼠标/绘制/无特性行为。另：`app/graft_tests.rs` 是唯一一个不在 `tests/` 下的测试文件（由 `app/graft.rs:352-354` 挂载），位置约定不统一。
 - 最小修复方向：`project.rs` 拆 `project_root.rs` / `new_project.rs` / `mir_target.rs`；把要真编译的用例挪到 `tests/`（集成测试）或 `#[ignore]`/feature 门控；`graft_tests.rs` 迁入 `tests/`。
-- 复核手段：拆分后 `cargo test -p nichlink-studio --offline` 的分组输出；`wc -l` 检查各文件尺寸。
+- 复核手段：拆分后 `cargo test -p xirang-studio --offline` 的分组输出；`wc -l` 检查各文件尺寸。
 
 ### S-24 · MINOR · 错误吞掉 · `app/mutations.rs:259`、`319`
 
@@ -229,7 +229,7 @@
 - 现象：同一个 graft 界面里，**读**走 `with_authoring_context`（回落 `package_root()`，`graft.rs:167/236`），**写**走 `with_selected_project`（拒绝回落，`graft.rs:111/180/200`）。前者解析出的项目可能来自环境变量或当前目录（`support.rs:111-141`）。
 - 判据：`writers.rs:5-16` 把这条区分讲得很清楚（读错树看得见、写错树不可接受），但界面把两者放进同一屏：列表面板显示的是 `package_root()` 下的计划，`d`/`f` 作用的是同一个 selector 却写在 selected root 下。已启动会话里两者相等，所以今天不炸；库调用方/测试/被清空选择的会话下会出现“列表里看得到、删的是另一个项目里的同名计划”。
 - 最小修复方向：屏幕状态的来源与写作用域同源——graft 读也走 `selected_package_root()`（或统一成一个 `with_authoring_project`），不可解析时在屏幕上说明。
-- 复核手段：测试——`clear_project_context()` 后设 `NICH_LINK_PACKAGE_ROOT` 指到工程 A，注册一个 B 上的 graft 界面，断言 `d` 不会移动 A 的记录（或读列表为空/报错）。
+- 复核手段：测试——`clear_project_context()` 后设 `XIRANG_PACKAGE_ROOT` 指到工程 A，注册一个 B 上的 graft 界面，断言 `d` 不会移动 A 的记录（或读列表为空/报错）。
 
 ### S-30 · MINOR（设计/契约，非挂载缺陷）· `studio/tests/fixtures/node-editor/**`、`app/support.rs:497-509`
 
@@ -322,7 +322,7 @@
 - **MIR target 降级链**：链本身正确（`--lib` → 逐个 `--bin` → `--bins`，`support.rs:282-322`），且 `S14` 的两 bin 场景已修；遗留的是 S-25 的两处：cargo stderr 文案判据、`bin_target_names` 未按 package 过滤（`support.rs:296/362-373`）。`tests/project.rs:536-562` 已钉四个形状，缺“工作区根”形状。
 - **查询缓存与树变更后的失效**：三套缓存三种状态——`tree_cache` 按源码戳自失效（`call_tree_queries.rs:82-88`，正确）；`graph_flow` 只按 `flow_key` 失效且从不被清（S-10）；搜索侧根本没有缓存（S-05）。再加上 reload 不重校验 trace/MIR（S-03）与写盘不同步戳（S-27），失效语义分散在四个地方，没有一个“项目变了”的单一入口。
 - **官方记录闸门 `contains_record` vs `contains`**：内核侧规则是一致的、也是对的——身份七字段严格相等 + 三个来源字段作为**记录侧的期望**（`core/src/registry_core/plugin/catalog/catalog.rs:271-301`，`PH-7` 已修）。**问题不在闸门，而在闸门只装在 official 分支上**：user 来源的写入没有任何身份重复检查，于是 S-01 直接从锁的解析不变量旁边走过去。修法应是“写入前先让解析器判定候选锁”，而不是再加一个分支判断。
-- **graft 编辑的写回路径**：`create_external_graft` → `open_editor_file` → 三条事件文案（`graft.rs:111-161`），写回只有一条路径且经 `with_selected_project`，没有“写坏宿主源码”的风险（计划写在 `.nichlink/external-grafts/`，`graft.rs:346-350`）。缺陷是消息覆盖（S-07）与读写域不一致（S-29）。
+- **graft 编辑的写回路径**：`create_external_graft` → `open_editor_file` → 三条事件文案（`graft.rs:111-161`），写回只有一条路径且经 `with_selected_project`，没有“写坏宿主源码”的风险（计划写在 `.xirang/external-grafts/`，`graft.rs:346-350`）。缺陷是消息覆盖（S-07）与读写域不一致（S-29）。
 
 ---
 
@@ -340,7 +340,7 @@
 8. **`ui/graph/node_graph.rs`**：纯构建函数（`build` 无 I/O、无 App），`lane_width[&lane]`/`band_y[band]` 的下标与键集合同源（`node_graph.rs:81-103`），空树时 map 为空、闭包不执行；`offsets` 与测试 `every_box_gets_its_own_room`（`node_graph.rs:250-279`）覆盖了重叠回归。
 9. **`ui/forms/graft.rs:193-206`**：`then_some` 提前求值导致 `plans.len()-1` 下溢的 panic 已被修成 `checked_sub`，注释与代码一致（这是我核对的“曾经的 panic”，现已干净）。
 10. **配置与契约**：`state/plugin_field.rs`、`state/new_project_field.rs`、`core/src/registry_core/authoring/face_field.rs` 的稠密性/标签用例都在；`state/state.rs:24-31` 的重导出保持历史路径可解析（`AGENTS.md` 的 shim 规则）。
-11. **测试基线**：`cargo test -p nichlink-studio --offline --all-features` 全绿（lib 91 / dev-bin 7 / launch 4，0 failed），说明本报告里的问题都是**未被测试覆盖**的潜在缺陷，不是破损的树。
+11. **测试基线**：`cargo test -p xirang-studio --offline --all-features` 全绿（lib 91 / dev-bin 7 / launch 4，0 failed），说明本报告里的问题都是**未被测试覆盖**的潜在缺陷，不是破损的树。
 
 ---
 

@@ -1,7 +1,7 @@
 //! Cross-check external graft plans against the host entry's declaration.
 //! 交叉校验外部 graft 计划与宿主入口的声明。
 //!
-//! A plan file under `.nichlink/external-grafts/` is an authoring record: the
+//! A plan file under `.xirang/external-grafts/` is an authoring record: the
 //! build reads `static_graft_plan!` declarations and never opens a plan. When
 //! the two disagree, this check **refuses the build, by name**: a plan whose
 //! target slot no declaration could name is reported with the slot, the plan
@@ -10,7 +10,7 @@
 //! and prints the refusal — and that is the point: a binary whose graft silently
 //! does not happen is exactly what must not leave the build, and the declaration
 //! list is right here to prove it.
-//! `.nichlink/external-grafts/` 下的计划文件是创作记录：构建读的是
+//! `.xirang/external-grafts/` 下的计划文件是创作记录：构建读的是
 //! `static_graft_plan!` 声明，从不打开计划。两者不一致时，**这项检查按名拒绝这次构建**：
 //! 目标槽位没有任何声明可能命名时，拒绝里会给出那个槽位、计划文件与理由，运行就此停下。
 //! 它背后**没有**发布期的剪枝步骤可以兜底——实测：构建以非零退出并打印该拒绝——而这正是要点：
@@ -28,11 +28,11 @@
 use std::fs;
 use std::path::Path;
 
-use nichlink_kernel::lexicon;
-use nichlink_kernel::registry_core::plugin::graft_document::{
+use xirang_kernel::lexicon;
+use xirang_kernel::registry_core::plugin::graft_document::{
     GraftPlanDocument, GraftPlanDocumentError,
 };
-use nichlink_kernel::{BuildDiagnostic, BuildDiagnostics};
+use xirang_kernel::{BuildDiagnostic, BuildDiagnostics};
 
 use super::Node;
 use super::registry_identity::NodeId;
@@ -60,13 +60,13 @@ pub(crate) struct PlannedSlot {
 /// One plan file the build found: its selector directory and the file itself.
 /// 构建找到的一个计划文件：它的选择器目录与文件本身。
 ///
-/// The layout (`.nichlink/external-grafts/<selector>/graft.plan`) is read in one place so the two
+/// The layout (`.xirang/external-grafts/<selector>/graft.plan`) is read in one place so the two
 /// readers below cannot disagree about which files exist.
-/// 版式（`.nichlink/external-grafts/<selector>/graft.plan`）只在一处读取，因此下面两个读取方不会对
+/// 版式（`.xirang/external-grafts/<selector>/graft.plan`）只在一处读取，因此下面两个读取方不会对
 /// "存在哪些文件"给出不同答案。
 fn plan_files(root: &Path) -> Vec<(String, std::path::PathBuf)> {
     let directory = root
-        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::XIRANG_DIR)
         .join(lexicon::EXTERNAL_GRAFT_DIR);
     let Ok(entries) = fs::read_dir(&directory) else {
         return Vec::new();
@@ -123,7 +123,7 @@ pub(crate) fn unsupported_version_errors(root: &Path) -> BuildDiagnostics {
                 ),
             )
             .at(
-                nichlink_kernel::declaration::portable_path(&relative.to_string_lossy()),
+                xirang_kernel::declaration::portable_path(&relative.to_string_lossy()),
                 0,
             ),
         );
@@ -137,10 +137,10 @@ pub(crate) fn unsupported_version_errors(root: &Path) -> BuildDiagnostics {
 /// A directory whose plan is missing or unreadable is skipped here: this check is
 /// about the declaration side, and a plan that does not parse is refused on the
 /// apply path (`run_method::apply_recorded_grafts`) and shown as broken by the
-/// authoring surfaces. `nichlink grafts` lists it too.
+/// authoring surfaces. `xirang grafts` lists it too.
 /// 计划缺失或读不懂的目录在这里被跳过：这项检查管的是声明那一侧，而解析不了的计划会在
 /// 应用路径上被拒绝（`run_method::apply_recorded_grafts`），创作界面也会把它显示为坏
-/// 计划。`nichlink grafts` 同样会列出它。
+/// 计划。`xirang grafts` 同样会列出它。
 pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
     let mut slots = Vec::new();
     for (selector, plan_file) in plan_files(root) {
@@ -160,9 +160,7 @@ pub(crate) fn planned_slots(root: &Path) -> Vec<PlannedSlot> {
             target_path: document.target_path.clone(),
             graft: document.graft.clone(),
             full: document.full,
-            plan_file: nichlink_kernel::declaration::portable_path(
-                &relative_plan.to_string_lossy(),
-            ),
+            plan_file: xirang_kernel::declaration::portable_path(&relative_plan.to_string_lossy()),
         });
     }
     slots
@@ -279,7 +277,7 @@ mod tests {
             target_path: target_path.to_owned(),
             graft: "canvas_fast".to_owned(),
             full: true,
-            plan_file: format!(".nichlink/external-grafts/{selector}/graft.plan"),
+            plan_file: format!(".xirang/external-grafts/{selector}/graft.plan"),
         }
     }
 
@@ -394,7 +392,7 @@ mod tests {
         assert!(planned_slots(&root).is_empty());
 
         let plan = root
-            .join(lexicon::NICHLINK_DIR)
+            .join(lexicon::XIRANG_DIR)
             .join(lexicon::EXTERNAL_GRAFT_DIR)
             .join("canvas_graft");
         fs::create_dir_all(&plan).expect("plan directory");
@@ -421,7 +419,7 @@ mod tests {
         assert!(slots[0].full);
         assert_eq!(
             slots[0].plan_file,
-            ".nichlink/external-grafts/canvas_graft/graft.plan"
+            ".xirang/external-grafts/canvas_graft/graft.plan"
         );
 
         fs::remove_dir_all(&root).expect("temporary fixture cleanup");
@@ -440,7 +438,7 @@ mod tests {
     fn a_plan_version_this_build_cannot_read_is_refused_by_name() {
         let root = temporary_directory("graft-plan-version");
         let plan = root
-            .join(lexicon::NICHLINK_DIR)
+            .join(lexicon::XIRANG_DIR)
             .join(lexicon::EXTERNAL_GRAFT_DIR)
             .join("canvas_graft");
         fs::create_dir_all(&plan).expect("plan directory");
@@ -463,7 +461,7 @@ mod tests {
             "{rendered}"
         );
         assert!(
-            rendered.contains(".nichlink/external-grafts/canvas_graft/graft.plan"),
+            rendered.contains(".xirang/external-grafts/canvas_graft/graft.plan"),
             "the refusal points at the artifact: {rendered}"
         );
         assert!(rendered.contains("version `99`"), "{rendered}");
@@ -527,7 +525,7 @@ mod tests {
         assert!(declared[0].expressions.is_some(), "{declared:?}");
 
         let plan = root
-            .join(lexicon::NICHLINK_DIR)
+            .join(lexicon::XIRANG_DIR)
             .join(lexicon::EXTERNAL_GRAFT_DIR)
             .join("canvas_graft");
         fs::create_dir_all(&plan).expect("plan directory");
@@ -554,7 +552,7 @@ mod tests {
     fn removing_the_declaration_brings_the_error_back() {
         let root = temporary_directory("graft-plan-undeclared");
         let plan = root
-            .join(lexicon::NICHLINK_DIR)
+            .join(lexicon::XIRANG_DIR)
             .join(lexicon::EXTERNAL_GRAFT_DIR)
             .join("canvas_graft");
         fs::create_dir_all(&plan).expect("plan directory");
@@ -606,7 +604,7 @@ mod tests {
             .as_nanos();
         let sequence = TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-{label}-{}-{stamp}-{sequence}",
+            "xirang-{label}-{}-{stamp}-{sequence}",
             std::process::id()
         ));
         fs::create_dir_all(&root).expect("temporary directory");

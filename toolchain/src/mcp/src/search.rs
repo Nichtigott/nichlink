@@ -1,22 +1,22 @@
-//! `nichlink.search`: what a name is in the sources, and what the tree says it
+//! `xirang.search`: what a name is in the sources, and what the tree says it
 //! became.
-//! `nichlink.search`：一个名字在源码里是什么，以及树说它变成了什么。
+//! `xirang.search`：一个名字在源码里是什么，以及树说它变成了什么。
 //!
 //! The source index answers "which file or function has this name"; it said
 //! nothing about the registry, which is why an agent used to grep macro names and
-//! reconstruct the tree — the drift `nichlink.registry` exists to remove. A search
+//! reconstruct the tree — the drift `xirang.registry` exists to remove. A search
 //! that stops at source text also cannot say whether the face it found is still
 //! the one the build published, so this page answers both halves in one call: the
 //! faces whose logical path, `kind`, module or `registry_name` match, each annotated
 //! `ok`, `added since build`, `re-identified` or `build unknown`, followed by the
 //! file and function hits exactly as before.
 //! 源码索引回答"哪个文件或函数叫这个名字"；它对注册树一无所知，这正是代理过去靠 grep 宏名、自己
-//! 重建那棵树的原因——而那正是 `nichlink.registry` 要消除的漂移。止步于源码文本的搜索也说不出它找到
+//! 重建那棵树的原因——而那正是 `xirang.registry` 要消除的漂移。止步于源码文本的搜索也说不出它找到
 //! 的面是否仍是构建发布的那一个，因此本页一次回答两半：逻辑路径、`kind`、模块或 `registry_name` 匹配的面，各自
 //! 标注 `ok`、`added since build`、`re-identified` 或 `build unknown`；随后是与此前完全相同的文件与
 //! 函数命中。
 //!
-//! The verdicts come from `crate::mcp::tree_delta`, the rule `nichlink.diff` states, so
+//! The verdicts come from `crate::mcp::tree_delta`, the rule `xirang.diff` states, so
 //! the same face cannot be `added` here and something else there.
 //!
 //! **A root whose identity namespace cannot be learned splits by question.** A **name** query
@@ -26,7 +26,7 @@
 //! with no tree to scan there are no matches to report, and a `no matches` printed by a scan that
 //! never ran cannot be told from a conclusion (round 8, A5: `search --literal "slider"` answered
 //! `no matches` for a string the tree contains, with exit 0, while `grep` found it).
-//! 结论来自 `crate::mcp::tree_delta`，也就是 `nichlink.diff` 说出的那条规则，因此同一个面不可能在这里是
+//! 结论来自 `crate::mcp::tree_delta`，也就是 `xirang.diff` 说出的那条规则，因此同一个面不可能在这里是
 //! `added`、在那里是别的。
 //!
 //! **命名空间学不到的根按问题分成两半。** **名字**查询仍从源码作答，因为文件遍历不需要那个包，并说明树那一
@@ -48,8 +48,8 @@
 use std::path::Path;
 
 use crate::build_method::FaceView;
-use nichlink_kernel::identity::NodeId;
 use serde_json::Value;
+use xirang_kernel::identity::NodeId;
 
 use crate::mcp::protocol::DEFAULT_LIMIT;
 use crate::mcp::source_index::load_sources_matching;
@@ -214,7 +214,7 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
         .get("query")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "nichlink.search requires `query` (one name), `names` (several names), or `literal` \
+            "xirang.search requires `query` (one name), `names` (several names), or `literal` \
              (text)"
                 .to_owned()
         })?
@@ -497,13 +497,13 @@ pub(crate) fn search(root: &Path, arguments: &Value) -> Result<String, String> {
             results.push(format!("  {line}"));
         }
         results.push(
-            "next: pass `path` to select one definition when several match, and `nichlink.affected` \
+            "next: pass `path` to select one definition when several match, and `xirang.affected` \
              with the files you change to see which tests to run"
                 .to_owned(),
         );
         results.push(
             "bounds: static only — dynamic dispatch, function pointers, FFI and runtime branches \
-             need a recorded trace (`nichlink.trace`), and the index covers the files under this \
+             need a recorded trace (`xirang.trace`), and the index covers the files under this \
              root"
                 .to_owned(),
         );
@@ -752,7 +752,7 @@ fn package_tree_lines(
         // 与其余每份报告打印的那一种相同；后面的从句属于这条备注，而不是那个词。
         if built.known && !built.current {
             lines.push(
-                "tree  build stale (run `nichlink check`); the statuses below \
+                "tree  build stale (run `xirang check`); the statuses below \
                  compare against that build"
                     .to_owned(),
             );
@@ -958,7 +958,7 @@ fn record_face_lines(
     let mut answer = vec![RECORD_SOURCE.to_owned()];
     if built.known && !built.current {
         answer.push(
-            "tree  build stale (run `nichlink check`); the statuses below compare against that \
+            "tree  build stale (run `xirang check`); the statuses below compare against that \
              build"
                 .to_owned(),
         );
@@ -975,7 +975,7 @@ fn record_face_line(
     built: &TreeDelta,
 ) -> String {
     let status = if !built.known {
-        "build unknown (run `nichlink check`)".to_owned()
+        "build unknown (run `xirang check`)".to_owned()
     } else {
         let verdict = built.status_of(id, &row.source);
         if let FaceStatus::Reidentified(previous) = verdict {
@@ -1003,7 +1003,7 @@ fn matches_face(face: &FaceView, query: &str) -> bool {
 /// 一条面命中，附上构建的结论。
 fn face_line(face: &FaceView, built: &TreeDelta) -> String {
     let status = if !built.known {
-        "build unknown (run `nichlink check`)".to_owned()
+        "build unknown (run `xirang check`)".to_owned()
     } else {
         let verdict = built.status(face);
         if let FaceStatus::Reidentified(previous) = verdict {

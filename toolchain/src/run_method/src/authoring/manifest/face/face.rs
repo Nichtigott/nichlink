@@ -327,7 +327,7 @@ const FLOW_PROVIDER_STACK_BYTES: usize = 8 * 1024 * 1024;
 fn validate_flow_provider(value: &str) -> Result<(), String> {
     let source = value.to_owned();
     std::thread::Builder::new()
-        .name("nichlink-flow-provider".to_owned())
+        .name("xirang-flow-provider".to_owned())
         .stack_size(FLOW_PROVIDER_STACK_BYTES)
         .spawn(move || {
             render_flow_provider(&source)
@@ -395,7 +395,7 @@ mod flow_provider_nesting_tests {
         let value = nested(100);
         assert_eq!(value.len(), 302, "200 opener bytes + `u8` + 100 closers");
         let verdict = std::thread::Builder::new()
-            .name("nichlink-tiny-stack".to_owned())
+            .name("xirang-tiny-stack".to_owned())
             .stack_size(256 * 1024)
             .spawn(move || manifest_editing("flow_provider", &value))
             .expect("spawn the tiny-stack caller")

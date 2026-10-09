@@ -6,12 +6,12 @@
 
 use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-use nichlink_toolchain::run_method::registry_core::lexicon;
-use nichlink_toolchain::run_method::registry_core::{
+use xirang_toolchain::run_method::registry_core::lexicon;
+use xirang_toolchain::run_method::registry_core::{
     FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
     PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 };
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::run_method::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 
@@ -208,7 +208,7 @@ fn out_of_project_face_declares_its_own_source() {
 
     assert_eq!(face.registry_name, "button_fast");
     assert_eq!(face.source.file, "button_fast/button_fast.rs");
-    assert_eq!(face.namespace, "nichlink-example-control-button-graft");
+    assert_eq!(face.namespace, "xirang-example-control-button-graft");
     assert_eq!(
         external.path_for(face.id).as_deref(),
         Some("root/button_fast")
@@ -317,8 +317,7 @@ fn static_plan_carries_faces_and_the_declared_graft() {
 #[test]
 fn the_authoring_query_sees_the_declared_typed_slots() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let declared =
-        nichlink_toolchain::build_method::declared_grafts(&root).expect("the entry reads");
+    let declared = xirang_toolchain::build_method::declared_grafts(&root).expect("the entry reads");
     assert!(
         declared.entry.ends_with("src/lib.rs"),
         "the file calling host!() is the entry: {}",
@@ -590,7 +589,7 @@ fn plugin_bytes_must_verify_before_they_can_replace_a_face() {
     let checksum = Box::leak(
         format!(
             "sha256:{}",
-            nichlink_toolchain::run_method::registry_core::sha256_hex(payload)
+            xirang_toolchain::run_method::registry_core::sha256_hex(payload)
         )
         .into_boxed_str(),
     );
@@ -642,11 +641,11 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // SAFETY: the authoring root is process-global and only this test reads it.
     // 安全：创作根是进程级的，且只有本测试读取它。
-    unsafe { std::env::set_var("NICH_LINK_PACKAGE_ROOT", &root) };
+    unsafe { std::env::set_var("XIRANG_PACKAGE_ROOT", &root) };
 
     let registry = base_registry();
     let target = control_button::control::object::button::NODE_ID;
-    let plan = nichlink_toolchain::run_method::create_external_graft(
+    let plan = xirang_toolchain::run_method::create_external_graft(
         &registry,
         target,
         "button_graft",
@@ -663,8 +662,8 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
     assert!(text.contains("graft=button_graft"), "{text}");
     assert!(text.contains("full=false"), "{text}");
 
-    // Host source is untouched: the selector lives in `.nichlink`, not in `src/`.
-    // 宿主源码未被改动：选择器只存在于 `.nichlink`，不在 `src/`。
+    // Host source is untouched: the selector lives in `.xirang`, not in `src/`.
+    // 宿主源码未被改动：选择器只存在于 `.xirang`，不在 `src/`。
     let face = std::fs::read_to_string(root.join("src/control/object/button/button.rs"))
         .expect("read the face");
     assert!(
@@ -673,10 +672,10 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
     );
 
     // Only the plan this test created is removed — and the directory that held it only when it is
-    // then empty. The whole `.nichlink` tree also holds an adoption ledger, which this test never
+    // then empty. The whole `.xirang` tree also holds an adoption ledger, which this test never
     // created and must not delete: two independent evaluation arms measured exactly that, and both
     // had to work around it by running the gate first and writing the ledger afterwards.
-    // 只删本测试创建的那份计划——而它所在的目录只在因此为空时才收。整棵 `.nichlink` 里还住着采信台账，
+    // 只删本测试创建的那份计划——而它所在的目录只在因此为空时才收。整棵 `.xirang` 里还住着采信台账，
     // 本测试从未创建它、也绝不该删掉它：两个独立的评测臂都量到这一点，两边都只能靠"先跑门、再落台账"绕开。
     let _ = std::fs::remove_file(&plan_path);
     if let Some(directory) = plan_path.parent() {
@@ -685,10 +684,10 @@ fn studio_graft_flow_writes_a_plan_without_touching_host_source() {
 }
 
 // ---------------------------------------------------------------------------
-// Records. A `.nichlink` record is runtime input: it can move the effective
+// Records. A `.xirang` record is runtime input: it can move the effective
 // tree away from `overlay_static`, while the build-captured typed plan stays
 // exactly what the host declared.
-// 记录。`.nichlink` 记录是运行期输入：它能让有效树偏离 `overlay_static`，而构建
+// 记录。`.xirang` 记录是运行期输入：它能让有效树偏离 `overlay_static`，而构建
 // 捕获的类型化计划仍与宿主声明的一模一样。
 // ---------------------------------------------------------------------------
 
@@ -702,7 +701,7 @@ fn a_record_moves_the_effective_tree_but_not_the_static_plan() {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-control-button-record-{}-{sequence}",
+        "xirang-control-button-record-{}-{sequence}",
         std::process::id()
     ));
     // The directory is the record's selector and must equal the document's

@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 use super::{Publication, derivations, read};
 
@@ -39,7 +39,7 @@ fn fixture(label: &str) -> Fixture {
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let namespace = format!("mcp-published-{label}");
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-published-{label}-{}-{sequence}",
+        "xirang-mcp-published-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -72,10 +72,10 @@ impl Fixture {
         NodeId::from_namespaced_path(&self.namespace, source, kind)
     }
 
-    /// Write one published record file under `target/nichlink/out`.
-    /// 在 `target/nichlink/out` 下写一个已发布记录文件。
+    /// Write one published record file under `target/xirang/out`.
+    /// 在 `target/xirang/out` 下写一个已发布记录文件。
     fn publish(&self, name: &str, text: &str) {
-        let out = self.root.join("target/nichlink/out");
+        let out = self.root.join("target/xirang/out");
         std::fs::create_dir_all(&out).expect("out directory");
         std::fs::write(out.join(name), text).expect("record");
     }
@@ -168,7 +168,7 @@ fn a_published_package_reads_its_scope_and_face_rows() {
     assert!(tree.selected(&tree.faces()[0]) || tree.selected(&tree.faces()[1]));
     assert_eq!(
         tree.freshness(),
-        "build stale (run `nichlink check`)",
+        "build stale (run `xirang check`)",
         "a record with no published fingerprint does not describe these sources"
     );
     assert!(
@@ -191,7 +191,7 @@ fn records_that_do_not_describe_these_sources_are_reported_stale() {
         "the answer names its evidence: {report}"
     );
     assert!(
-        report.contains("build stale (run `nichlink check`)"),
+        report.contains("build stale (run `xirang check`)"),
         "the freshness rule the records already have must be stated: {report}"
     );
     // The note was rewritten on 2026-10-04: it used to say `path`/`kind`/`registry_name`/`parent`
@@ -290,7 +290,7 @@ fn a_merged_answer_names_the_evidence_of_every_member() {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-published-census-{}-{sequence}",
+        "xirang-mcp-published-census-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -548,7 +548,7 @@ fn a_published_answer_and_a_derived_answer_carry_the_same_facts() {
     // acceptance compares against.
     // 同一棵树、记录拿走：读取方推导——正是验收要比对的那条回退路。
     for record in ["pruning_manifest.tsv", "source_scope.tsv"] {
-        std::fs::remove_file(fixture.root.join("target/nichlink/out").join(record))
+        std::fs::remove_file(fixture.root.join("target/xirang/out").join(record))
             .expect("the record is removed");
     }
     let derived = crate::mcp::registry::registry_brief(&fixture.root).expect("the derived answer");

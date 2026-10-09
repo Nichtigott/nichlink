@@ -23,12 +23,12 @@ pub(super) struct PackageTargets {
 /// 针对宿主实际存在的 target 运行 `cargo rustc`，并把 `rustc_args` 透传给该 target。
 ///
 /// MIR inspection passed `--lib` unconditionally, so a binary-only host —
-/// including the default output of `nichlink new` — could not be inspected at
+/// including the default output of `xirang new` — could not be inspected at
 /// all. A library target is preferred; when cargo reports that the package has
 /// none, its binary targets are tried **one at a time**, named from cargo's own
 /// metadata. Cargo decides which targets exist, so a custom `[lib]`/`[[bin]]` path
 /// cannot make the answer wrong.
-/// MIR 检视此前无条件传 `--lib`，因此仅含二进制的宿主——包括 `nichlink new` 的默认
+/// MIR 检视此前无条件传 `--lib`，因此仅含二进制的宿主——包括 `xirang new` 的默认
 /// 产物——完全无法被检视。优先选择库 target；当 cargo 报告该包没有库 target 时，改**逐个**
 /// 尝试它的二进制 target，名字取自 cargo 自己的 metadata。哪些 target 存在由 cargo 决定，因此
 /// 自定义 `[lib]`/`[[bin]]` 路径不会让答案出错。

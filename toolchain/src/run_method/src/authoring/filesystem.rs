@@ -33,7 +33,7 @@ pub(super) fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
         .and_then(|name| name.to_str())
         .unwrap_or("file");
     let temporary = path.with_file_name(format!(
-        ".{name}.nichlink-{}-{sequence}.tmp",
+        ".{name}.xirang-{}-{sequence}.tmp",
         std::process::id()
     ));
     let outcome = create_new(&temporary, contents).and_then(|()| {
@@ -57,7 +57,7 @@ mod tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-atomic-{label}-{}-{sequence}",
+            "xirang-atomic-{label}-{}-{sequence}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);
@@ -73,7 +73,7 @@ mod tests {
         let root = fixture("sibling");
         let target = root.join("face.rs");
         fs::write(&target, "old").expect("target");
-        let neighbour = root.join("face.nichlink.tmp");
+        let neighbour = root.join("face.xirang.tmp");
         fs::write(&neighbour, "someone else's bytes").expect("neighbour");
 
         atomic_write(&target, "new").expect("atomic write");
@@ -86,7 +86,7 @@ mod tests {
         let leftovers = fs::read_dir(&root)
             .expect("read the directory")
             .filter_map(Result::ok)
-            .filter(|entry| entry.file_name().to_string_lossy().contains("nichlink-"))
+            .filter(|entry| entry.file_name().to_string_lossy().contains("xirang-"))
             .count();
         assert_eq!(leftovers, 0, "no temporary of our own is left behind");
 

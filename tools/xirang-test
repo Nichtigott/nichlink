@@ -23,8 +23,8 @@ set -eu
 # 保持绿色。本脚本按文件数出写下的 `#[test]` 条目，与所有面列出的名字的并集对比；没有任何面
 # 打印过的名字就是灰的，而灰测试会让整条运行失败。
 #
-# Usage: tools/nichlink-test          # every face, every report; no partial mode
-# 用法：tools/nichlink-test           # 每个面、每份报告；没有部分模式
+# Usage: tools/xirang-test          # every face, every report; no partial mode
+# 用法：tools/xirang-test           # 每个面、每份报告；没有部分模式
 #
 # The cargo invocations carry `--offline`: this checkout is developed offline, and CI
 # (which has a network) is not the caller of this script.
@@ -33,7 +33,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 
-work=target/nichlink-test
+work=target/xirang-test
 rm -rf "$work"
 mkdir -p "$work"
 
@@ -161,7 +161,7 @@ sort -u "$work/feature-faces" -o "$work/feature-faces"
 
 while IFS='|' read -r package features; do
   [ -n "$package" ] || continue
-  short=$(printf '%s' "$package" | sed 's/^nichlink-//')
+  short=$(printf '%s' "$package" | sed 's/^xirang-//')
   run_face "$short+$features" -p "$package" --features "$features"
 done <"$work/feature-faces"
 

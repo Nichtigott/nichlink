@@ -1,6 +1,6 @@
-//! The adoption ledger at `<root>/.nichlink/adopted/entries`: which routes this tree trusts
+//! The adoption ledger at `<root>/.xirang/adopted/entries`: which routes this tree trusts
 //! **provisionally**, and whether the bytes each decision was taken on are still here.
-//! `<root>/.nichlink/adopted/entries` 上的采信台账：这棵树**暂时**采信哪些路线，以及每次决定据以
+//! `<root>/.xirang/adopted/entries` 上的采信台账：这棵树**暂时**采信哪些路线，以及每次决定据以
 //! 做出的那些字节是否还在。
 //!
 //! The maintainer's rule for this surface: 「采信是可以改的松动的，但是要强制人去确认可修改，因为肯定
@@ -15,21 +15,19 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::adoption::{
+use serde_json::Value;
+use xirang_kernel::adoption::{
     AdoptionEntry, AdoptionPrints, AdoptionVerdict, adoption_fingerprint, parse_adoption,
     parse_adoption_prints, state_of,
 };
-use nichlink_kernel::lexicon::{ADOPTION_DIR, ADOPTION_FILE, NICHLINK_DIR};
-use serde_json::Value;
+use xirang_kernel::lexicon::{ADOPTION_DIR, ADOPTION_FILE, XIRANG_DIR};
 
 use crate::mcp::freshness::wall_clock;
 
 /// The ledger path for one package root.
 /// 一个包根的台账路径。
 fn ledger_path(root: &Path) -> PathBuf {
-    root.join(NICHLINK_DIR)
-        .join(ADOPTION_DIR)
-        .join(ADOPTION_FILE)
+    root.join(XIRANG_DIR).join(ADOPTION_DIR).join(ADOPTION_FILE)
 }
 
 /// Read the files a decision rests on, refusing to leave the root.
@@ -566,7 +564,7 @@ fn renew(root: &Path, arguments: &Value, ledger: &Path) -> Result<String, String
         })
         .collect::<Vec<_>>();
     let prints =
-        nichlink_kernel::adoption::render_adoption_prints(&entry.anchor, &entry.at, &per_file);
+        xirang_kernel::adoption::render_adoption_prints(&entry.anchor, &entry.at, &per_file);
     let confirmed = arguments.get("apply").and_then(Value::as_bool) == Some(true)
         && arguments.get("confirm").and_then(Value::as_bool) == Some(true);
     if !confirmed {

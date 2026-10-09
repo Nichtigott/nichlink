@@ -3,14 +3,14 @@
 //! 采信门禁的钉子：没被碰过的租约保持绿、失效的租约是一条发现，而出厂检出里一条都没有。
 
 use super::findings;
-use nichlink_kernel::adoption::adoption_fingerprint;
 use std::path::{Path, PathBuf};
+use xirang_kernel::adoption::adoption_fingerprint;
 
 fn scratch(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-adoption-gate-{label}-{}-{sequence}",
+        "xirang-adoption-gate-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -25,7 +25,7 @@ fn write_fixture(path: &Path, text: &str) {
 fn ledger(root: &Path, source: &str) {
     let fingerprint = adoption_fingerprint(&[("src/lib.rs".to_owned(), source.to_owned())]);
     write_fixture(
-        &root.join(".nichlink/adopted/entries"),
+        &root.join(".xirang/adopted/entries"),
         &format!(
             "root/button|chain+impl|trace run|maintainer|2026-09-29T14:00:00Z|src/lib.rs|{fingerprint}|first adoption\n"
         ),
@@ -59,7 +59,7 @@ fn a_lapsed_lease_names_the_file_and_asks_a_person() {
 #[test]
 fn a_ledger_line_that_does_not_parse_is_a_finding() {
     let root = scratch("unparsable");
-    write_fixture(&root.join(".nichlink/adopted/entries"), "a|b|c\n");
+    write_fixture(&root.join(".xirang/adopted/entries"), "a|b|c\n");
     let found = findings(&root);
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("8 fields"), "{found:?}");

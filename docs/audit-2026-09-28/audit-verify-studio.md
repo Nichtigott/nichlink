@@ -33,7 +33,7 @@
     - `mutations.rs:332-333`：`let line = format!("{record}\n");` + `append_line(&lock, &line)`。
   - `grep -rn "PluginCatalog::parse" studio/src plugin-host/src`（exit 0）：studio 侧只有 `mutations.rs:265`（读既有锁）；宿主的准入读在 `plugin-host/src/admission.rs:76`。**写入方没有任何一处把候选记录交给内核校验。**
   - `sed -n '30,45p' studio/src/studio/app/state/plugin_field.rs`（exit 0）：`LABELS = ["source","framework","package","version","crate","checksum","mode"]` —— 触发所需的 `checksum` 与 `mode` 都是界面上可编辑的行；`overlay/plugin.rs:30` 的 `plugin.field == 0 || plugin.field == 6` 正是 source/mode 的 Enter 切换。
-  - 独立内核锚点（既有测试，非作者脚本）：`cargo test -p nichlink-core --offline --lib catalog::tests` → **exit 0**，`6 passed; 0 failed`，其中
+  - 独立内核锚点（既有测试，非作者脚本）：`cargo test -p xirang-core --offline --lib catalog::tests` → **exit 0**，`6 passed; 0 failed`，其中
     `test registry_core::plugin::catalog::tests::plugin_lock_parser_rejects_ambiguous_duplicate_identity ... ok`。
   - 身份五元组不含 checksum：`core/src/registry_core/plugin/catalog/catalog.rs:192-198` 的 `identity = (source, framework, package, version, crate_name)`。
 - 我的因果链复核（三个独立事实拼起来）：① 同一身份、不同 checksum/mode 的第二条记录能通过 `260` 与 `299`（user 来源连 `299` 都不进）；② 内核把同一身份的第二条记录判为硬错误（既有测试证明）；③ 于是 Studio 报告 “Plugin selected”（`mutations.rs:347`）而宿主准入随后 `plugin-host/src/admission.rs:57-82` 解析失败（两份锁在 `:60-66` 拼接、解析在 `:76`、错误 `HostError::Policy` 在 `:77-80`）。作者这条**成立**，且它是本轮 studio 一路唯一真正破坏工件可用性的路径（失败方向是 fail-closed：插件面不可用、需手改文件，而不是放行未经检查的插件）。
@@ -132,7 +132,7 @@
 
 | id | 结论 | 证据（命令/读数） | 严重度 |
 | --- | --- | --- | --- |
-| S-09 | **部分证实** | `studio/src/studio/app/navigation.rs:79-85` 的目录过滤确实只认 `.rs / Cargo.toml / Cargo.lock / official.lock`（无 `user.lock`）✓；但作者对两处清单的**枚举都不准**：`nichlink-dev.rs:273-276` 的集合是 `Cargo.toml / Cargo.lock / build.rs / official.lock / user.lock`（含 Cargo.toml/Cargo.lock，作者漏写），而 `source_stamp` 在顶层 `stamp_file` 里还额外钉 `build.rs`（`studio/src/studio/app/navigation.rs:24-29`）。结论（user.lock 不对称 → 戳不失效 → 界面不刷新）成立 | 不变 MINOR |
+| S-09 | **部分证实** | `studio/src/studio/app/navigation.rs:79-85` 的目录过滤确实只认 `.rs / Cargo.toml / Cargo.lock / official.lock`（无 `user.lock`）✓；但作者对两处清单的**枚举都不准**：`xirang-dev.rs:273-276` 的集合是 `Cargo.toml / Cargo.lock / build.rs / official.lock / user.lock`（含 Cargo.toml/Cargo.lock，作者漏写），而 `source_stamp` 在顶层 `stamp_file` 里还额外钉 `build.rs`（`studio/src/studio/app/navigation.rs:24-29`）。结论（user.lock 不对称 → 戳不失效 → 界面不刷新）成立 | 不变 MINOR |
 | S-10 | 证实 | `studio/src/studio/ui/graph/nodes.rs:183-194` `flow_key` = `"{focus}:{nodes}:{edges}"`；`grep -n graph_flow` 全仓无清空点（只有 `lifecycle.rs:62` 初始化） | 不变 |
 | S-11 | 证实（附一处表述纠正） | `ui/overlay.rs:8-22` 与 `:30-44` 两段各 15 个赋值、顺序不同；`HotZones` 实际有 **18** 个字段（`hot_zones.rs:15-70`），另 3 个（`tree_area`/`details_area`/`workspace_area`）由 `panels.rs:52,60,61` 每帧设置——“无遗漏”结论成立，但作者写的“全部 15 个 HotZones 字段”不精确 | 不变 |
 | S-12 | 证实 | `plugin_field.rs:33` `COUNT = 7`、`new_project_field.rs:27` `COUNT = 3`；裸数字确实存在：`overlay/plugin.rs:29-30`（`.min(6)`、`== 6`）、`overlay/new_project.rs:28-29`（`.min(2)`、`== 2`）、`pointer.rs:294`（`visible_row == 2`）、`pointer.rs:335`（`== 0 || == 6`） | 不变 |
@@ -188,8 +188,8 @@
 ## 4. 复核手段与自检（我自己的，不复用作者的）
 
 1. 锚点自检：我对本文件里的每一处 `file.rs:NNN` 与每一处 `` `token`（`file.rs:NNN`） `` 配对都跑了一条独立脚本（`python3`：按后缀解析仓库路径 → 检查文件存在、行号 ≤ 总行数 → 再断言配对 token 出现在所引行区间内），结果见交付消息。
-2. 测试基线：`cargo test -p nichlink-studio --offline --all-features` → **exit 0**（`launch` 4 passed / `0 failed`，doc-tests 0）；`cargo test -p nichlink-studio --offline --all-features --lib` → `91 passed; 0 failed` —— 与作者“查了、干净”第 11 项的 91 一致，说明作者的发现确实都不在现有测试覆盖内（不是破损的树）。
-3. 内核锚点：`cargo test -p nichlink-core --offline --lib catalog::tests` → `6 passed; 0 failed`（S-01 依赖的解析器不变量）。
+2. 测试基线：`cargo test -p xirang-studio --offline --all-features` → **exit 0**（`launch` 4 passed / `0 failed`，doc-tests 0）；`cargo test -p xirang-studio --offline --all-features --lib` → `91 passed; 0 failed` —— 与作者“查了、干净”第 11 项的 91 一致，说明作者的发现确实都不在现有测试覆盖内（不是破损的树）。
+3. 内核锚点：`cargo test -p xirang-core --offline --lib catalog::tests` → `6 passed; 0 failed`（S-01 依赖的解析器不变量）。
 4. 我的复核未做任何写入（`git status` 里 studio/ 的改动与本次会话无关；本会话只写本报告）。
 
 ---

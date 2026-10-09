@@ -1,6 +1,6 @@
 # 逐题对话索引（两臂）
 
-口径（与 `tools/nichlink-per-question-cost.py` **逐字同源**，可对账）：
+口径（与 `tools/xirang-per-question-cost.py` **逐字同源**，可对账）：
 **步**＝assistant 步；**输出**＝outputTokens 之和；**推理**＝reasoning 字符数；
 **累计上下文**＝该题各步 cacheRead 之和（不是净增 ✗）；
 **仪器**＝该题逐题日志里的调用数（`logs/<id>.jsonl` 行数 / `logs/<id>.txt` 的 `=== CMD:` 数）

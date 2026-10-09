@@ -1,5 +1,5 @@
-//! `nichlink.read`: one bounded look at a source file, and the file's total.
-//! `nichlink.read`：对一份源码文件的一次有界读取，以及该文件的总行数。
+//! `xirang.read`: one bounded look at a source file, and the file's total.
+//! `xirang.read`：对一份源码文件的一次有界读取，以及该文件的总行数。
 //!
 //! The window was the only shape this tool had, and it was a shape the caller could
 //! not see: `{path, line}` answered with a half-width of 40 — 81 lines at most — and

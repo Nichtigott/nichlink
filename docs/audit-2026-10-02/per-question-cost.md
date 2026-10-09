@@ -7,7 +7,7 @@
 > 整轮合计**不变**（0.940×）。修正后仍为 0 的几题是**真批量**（`for id in …; do ./cg.sh "$id" …; done`，变量 ⇒ 多棵树）⇒ 归共享桶。
 > 详见 `docs/audit-2026-10-02/round9-dialogue-comparison.md` §1.3 与 `per-question-26.md` 末节。
 
-**量器**：`tools/nichlink-per-question-cost.py`（可重跑 ✓）。**归属规则（读会话后定的 ✓）**：
+**量器**：`tools/xirang-per-question-cost.py`（可重跑 ✓）。**归属规则（读会话后定的 ✓）**：
 
 1. **逐题**：命令文本里出现**唯一**一个题号线索 ⇒ 那一步归那道题 ✓。
    线索＝`trees/<id>` · `cd …/trees/<id>` · `--root` · `--manifest-path` · `CARGO_TARGET_DIR=…/<id>` ·

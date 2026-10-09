@@ -115,7 +115,7 @@ visible effect.（因此那两处标注标的是一条任何注册节点都选�
 不成立，但"看得见"也不成立。）
 
 ### 1.5 Plain answer: can a host hand its trace to a separate Studio process today?
-**No.** A `cargo install`ed `nichlink-toolchain` is a different process; the trace
+**No.** A `cargo install`ed `xirang-toolchain` is a different process; the trace
 is an owned, unserialized, private-field value with no writer and no reader.
 Even **in-process** it cannot: `App::new` is private (`studio/src/studio/app/lifecycle.rs:39`),
 `App::load` unconditionally installs the sample (`:57,80-98`), and no API
@@ -146,7 +146,7 @@ be a long-running binary and Studio an `cargo install`ed tool.
 Rejected: **serde/JSON** (would need derives plus `Box::leak` per distinct
 string, §1.3); **existing `CallGraph::to_dot`**
 (`debug_method/src/adapters.rs:89`) as the artifact (it drops locals, values,
-and source locations — exactly the DATA panel's payload); **`NICH_LINK_TRACE`
+and source locations — exactly the DATA panel's payload); **`XIRANG_TRACE`
 as the path** (already the *mode* variable, `call_trace.rs:30-35`,
 `call_evidence.rs:119`); **sockets** (a profiler-shaped commitment).
 
@@ -163,7 +163,7 @@ allows the alternative ("real trace ingest … or permanently label as sample"),
 and 1.0 takes the second branch.
 
 ### 3.1 Artifact format (1.x)
-File `nichlink.trace`, line-oriented `key=value`, mirroring `graft.plan`
+File `xirang.trace`, line-oriented `key=value`, mirroring `graft.plan`
 (`core/.../plugin/graft/document.rs:27,140`); unknown keys and other versions
 are **refused**, not guessed (`document.rs:96-98,180`). Value fields are
 tab-separated and backslash-escaped (`\\`, `\t`, `\n`, `\r`), because
@@ -191,8 +191,8 @@ construction from private `FrameRecord`s), so it **cannot** live in `core`.
 `core` owns only the shared text contracts, exactly as with
 `GRAFT_PLAN_FILE` (`core/.../lexicon/lexicon.rs:76-80`):
 `core/src/registry_core/lexicon/lexicon.rs` gains
-`TRACE_FILE = "nichlink.trace"`, `TRACE_DIR = "traces"`,
-`TRACE_FILE_ENV = "NICH_LINK_TRACE_FILE"`, pinned by the published-value test
+`TRACE_FILE = "xirang.trace"`, `TRACE_DIR = "traces"`,
+`TRACE_FILE_ENV = "XIRANG_TRACE_FILE"`, pinned by the published-value test
 (`lexicon.rs:199-210`). `run_method` is an execution surface and already does
 `std::env` and file I/O (`call_trace.rs:31`, `external_graft/plan.rs:96-127`),
 so the writer belongs there, **not** in `cli`, because a host depends only on
@@ -256,14 +256,14 @@ once after the traced operation:
 ```rust
 let trace = CallTrace::full();
 // … trace.with_at(...), trace.local(...), trace.transform(...) …
-nichlink_toolchain::run_method::write_trace_artifact(
+xirang_toolchain::run_method::write_trace_artifact(
     &trace,
     &trace_artifact_path(package_root()),
     env!("CARGO_PKG_NAME"), // the identity the faces were stamped with
 )?;
 ```
 The namespace is a **parameter**, and that is a correction to this design's own
-first draft: the writer originally stamped it from `NICH_LINK_NAMESPACE` (falling
+first draft: the writer originally stamped it from `XIRANG_NAMESPACE` (falling
 back to the default), which is the *reader's* override. A host's compiled node
 ids live under `env!("CARGO_PKG_NAME")`, and the process cannot read that back —
 Cargo sets it for the build script and for `env!`, not for an installed binary —
@@ -272,40 +272,40 @@ namespace its own ids do not inhabit, and every reader would refuse it. The root
 anchor is derived from the same name (`root_node_id(namespace)`), and the reader
 compares both against what *it* resolved (§3.5), so each end now derives the
 identity from its own authoritative source instead of sharing a fallback chain.
-Host writes it **only** when `NICH_LINK_TRACE` selected a collecting mode
+Host writes it **only** when `XIRANG_TRACE` selected a collecting mode
 (`call_trace.rs:30-35`); under `off` the trace is empty and the host should skip
 the write rather than publish an empty artifact.
 
 ### 3.4 How Studio finds it
-Precedence: (1) `NICH_LINK_TRACE_FILE` (absolute or `package_root()`-relative);
-(2) convention path `package_root()/.nichlink/traces/nichlink.trace`, mirroring
+Precedence: (1) `XIRANG_TRACE_FILE` (absolute or `package_root()`-relative);
+(2) convention path `package_root()/.xirang/traces/xirang.trace`, mirroring
 `external_graft_root()` (`external_graft/plan.rs:26-30`); (3) none → no trace.
 **Decided (2026-09-26) and built:** both ends call `trace_artifact_path`, which
 applies exactly that precedence, so an override cannot move the file for the
 writer and not the reader. A CLI `--trace <path>` flag is deferred and stays
 deferred: it would only move the *reader* (the host still decides where to write),
 so the user would have to type one path into two processes and a mismatch shows up
-as "no trace attached"; `nichlink_toolchain::studio::launch_with` is also published API with
+as "no trace attached"; `xirang_toolchain::studio::launch_with` is also published API with
 three call sites, while the variable costs none. Add the flag when a workflow
 genuinely needs to *name* one artifact rather than point at the convention one,
 and have it share this same resolution function.
 
 ### 3.5 Version / identity check and what Studio shows
-Load once in `App::load` (beside `NICH_LINK_INITIAL_QUERY`, `lifecycle.rs:91-96`),
+Load once in `App::load` (beside `XIRANG_INITIAL_QUERY`, `lifecycle.rs:91-96`),
 into `TraceStatus { Absent, Loaded, Mismatch }`; refuse, do not guess:
 1. `version != TRACE_ARTIFACT_VERSION` → `Mismatch`.
 2. `artifact.namespace != package_namespace()` → `Mismatch`. This was the real
    trap: hosts stamp `env!("CARGO_PKG_NAME")` (`macros/face_registration.rs:45-49`)
    while Studio's scanned snapshot used `authoring_namespace()` = active context,
-   else `NICH_LINK_NAMESPACE`, else `"nichlink.default"`
+   else `XIRANG_NAMESPACE`, else `"xirang.default"`
    (`authoring/validation/validation.rs:56-66`,
    `studio/src/studio/app/support.rs:30-44`), so the defaults differed and an
    unconfigured Studio would draw nothing and blame itself. **Decided and built
    (2026-09-26):** a launched session now adopts its project and takes the
    namespace from `[package] name` in the target manifest, so the two ends agree
-   without the environment; `NICH_LINK_NAMESPACE` still overrides both ends
+   without the environment; `XIRANG_NAMESPACE` still overrides both ends
    verbatim. Pin: `studio::app::tests::project::a_launched_session_authors_under_the_host_crates_package_name`
-   (red before the change: `nichlink.default` against the fixture's `demo-app`).
+   (red before the change: `xirang.default` against the fixture's `demo-app`).
 3. `artifact.root != registry.id()` → `Mismatch`; both are
    `root_node_id(namespace)` (`identity/node_id.rs:93`, `tree/registry.rs:55-68`).
 4. Every frame/local/edge `NodeId` must resolve via `registry.find(node)`; an
@@ -384,7 +384,7 @@ temp project, so it needs no fixture and is not feature-gated:
 2. Record `CallTrace::full()` with `NodeId::from_namespaced_path("ingest-test",
    <real source>, <real kind>)` for a face in the fixture, plus one `local`
    input and one `return_value` output; `write_trace_artifact` to
-   `<root>/.nichlink/traces/nichlink.trace`.
+   `<root>/.xirang/traces/xirang.trace`.
 3. `App::load()`; assert `app.graph_locals(&center)` for that face's node
    returns the recorded values (the call `draw_data_flow_panel` makes,
    `ui/graph/data.rs`).
@@ -422,15 +422,15 @@ the correction:
    surface is deliberately frozen.
 2. **Identity — decided (2026-09-26): yes.** A launched session reads `[package]
    name` from the target `Cargo.toml` and authors under it, so ingest does not
-   require exporting `NICH_LINK_NAMESPACE` and the mismatch path no longer fires
+   require exporting `XIRANG_NAMESPACE` and the mismatch path no longer fires
    by default. Built in `studio/src/studio/app/support.rs` (`namespace_for`,
    `package_name`, `manifest_for`), pinned by
    `studio::app::tests::project::{a_launched_session_authors_under_the_host_crates_package_name,
    the_package_name_comes_from_a_literal_package_key,
    the_namespace_follows_the_manifest_unless_the_environment_names_one}`.
-3. **Writer name — decided (2026-09-26): `NICH_LINK_TRACE_FILE`.** One variable
-   both ends read, matching the existing `NICH_LINK_PACKAGE_ROOT` /
-   `NICH_LINK_HOST_MANIFEST` / `NICH_LINK_NAMESPACE` family. No CLI verb: it would
+3. **Writer name — decided (2026-09-26): `XIRANG_TRACE_FILE`.** One variable
+   both ends read, matching the existing `XIRANG_PACKAGE_ROOT` /
+   `XIRANG_HOST_MANIFEST` / `XIRANG_NAMESPACE` family. No CLI verb: it would
    move only the reader, and the env var already names a file that is not the
    convention one. Built and pinned
    (`run_method/src/runtime/trace/artifact/io.rs`,
@@ -448,14 +448,14 @@ the correction:
    assertion alone does not catch, which is why the assertion is on the bytes.
 5. **Convention path lifetime — decided (2026-09-26): one fixed file, overwritten;
    no history.** The artifact is one *recording*, not the newest of a series, so
-   the name says what kind of thing it is (`nichlink.trace`, like `graft.plan`)
+   the name says what kind of thing it is (`xirang.trace`, like `graft.plan`)
    rather than a recency the system does not enforce. Keeping runs was rejected on
    three measured grounds: §3.5's identity gate refuses an artifact whose nodes no
    longer resolve, so history would mostly be unloadable bytes; CI evidence wants an
    explicit path and the CI artifact store, not the project directory; and the one
    standing comparison need (run N times hunting a flaky value) is served by the
    harness naming each run through the env var
-   (`NICH_LINK_TRACE_FILE=/tmp/run-$i.trace`). A host that wants to keep a run
+   (`XIRANG_TRACE_FILE=/tmp/run-$i.trace`). A host that wants to keep a run
    writes it to a path of its own.
 6. **1.0 label wording — decided (2026-09-26): the honest-label branch, and the
    sample is gone.** With a loader in place the sample could only ever mislead, so

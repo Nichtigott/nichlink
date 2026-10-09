@@ -129,7 +129,7 @@ pub(crate) fn draw_partition(
             format!(
                 "D to remove `{name}` from {} — press y to confirm (the generated package is not \
                  touched; revert it with x first)",
-                nichlink_kernel::lexicon::ADD_CRATES_FILE
+                xirang_kernel::lexicon::ADD_CRATES_FILE
             ),
             Style::default().fg(Color::LightYellow),
         )));

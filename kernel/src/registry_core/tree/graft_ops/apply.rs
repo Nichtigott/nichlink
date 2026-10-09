@@ -81,13 +81,13 @@ impl Registry {
     /// Why the obvious approach is wrong / 显而易见的做法为何不对:
     ///
     /// Two obvious readings both fail. "Let the record always win" lets an
-    /// unreviewed, machine-local `.nichlink/` file re-route shipped behavior and
+    /// unreviewed, machine-local `.xirang/` file re-route shipped behavior and
     /// defeats a linked, compiler-resolved face. "Let the declaration always
     /// win" leaves the record's `graft` with no production reader at all — the
     /// feature is wired but unobservable. Splitting by declaration form keeps the
     /// dynamic-by-name trust the string form already grants
     /// (`resolution.rs::resolve_node`) while refusing to defeat the typed form.
-    /// 两种直觉读法都不成立。“总让记录赢”会让未经审查、机器本地的 `.nichlink/` 文件
+    /// 两种直觉读法都不成立。“总让记录赢”会让未经审查、机器本地的 `.xirang/` 文件
     /// 重新路由已发布行为，并击败已链接、编译器解析过的注册面；“总让声明赢”则让记录的
     /// `graft` 完全没有生产读者——功能接了线却不可观测。按声明形式区分，既保留了字符串
     /// 形式本就授予的“按名字动态解析”的信任（`resolution.rs::resolve_node`），又拒绝

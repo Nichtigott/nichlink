@@ -198,7 +198,7 @@ mod tests {
         assert_ne!(ROOT_NODE_ID, root_node_id("library-a"));
     }
 
-    /// Identities are persisted: `.nichlink/external-grafts/<selector>/graft.plan`
+    /// Identities are persisted: `.xirang/external-grafts/<selector>/graft.plan`
     /// stores a `NodeId` and parses it back, and a mismatch only warns. These
     /// literals are therefore a COMPATIBILITY PIN, not a snapshot. Relational
     /// assertions cannot replace them — swapping the two digest inputs in
@@ -206,7 +206,7 @@ mod tests {
     /// `assert_eq!`/`assert_ne!` together and passes. Only a literal catches it.
     /// Do not edit a literal to make this test green unless the identity format
     /// is being deliberately migrated and every recorded plan is re-derived.
-    /// 身份会被持久化：`.nichlink/external-grafts/<selector>/graft.plan` 存有
+    /// 身份会被持久化：`.xirang/external-grafts/<selector>/graft.plan` 存有
     /// `NodeId` 并在读回时解析，不匹配只会给出警告。因此这些字面量是兼容性钉，而不是
     /// 快照。关系型断言无法取代它们——交换 `from_path` 的两个摘要输入，或翻转它的
     /// `separator` 标志，会让 `assert_eq!`/`assert_ne!` 的两侧一起移动并通过。只有

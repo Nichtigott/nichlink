@@ -1,5 +1,5 @@
-//! `nichlink.graph`: who depends on whom, read from the build's own graph (audit `M7`, P1.3).
-//! `nichlink.graph`：谁依赖谁，读的是构建自己的图（审计 `M7`，P1.3）。
+//! `xirang.graph`: who depends on whom, read from the build's own graph (audit `M7`, P1.3).
+//! `xirang.graph`：谁依赖谁，读的是构建自己的图（审计 `M7`，P1.3）。
 //!
 //! The graph is an **accelerator**, not a verdict: `graph_edges.tsv` is published by the last
 //! finished build, and every answer here opens with the index line, so a reader always sees whether

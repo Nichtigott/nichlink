@@ -36,7 +36,7 @@
 
 ## 4. 门禁（同一批 hash）
 
-`cargo test -p nichlink-plugin-host --offline` **0**（4 passed）；`--features process-tools` **0**（含 fault_matrix 两条钉子）；`cargo test --workspace --offline` **0**（58 个 ok 块、0 FAILED，**未触发那条已知离线环境用例**）；`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**（首跑红在并发在飞的 `studio`：「lifetime may not live long enough」，落定后复跑即绿）；`cargo fmt --all -- --check` **0**（0 行）。
+`cargo test -p xirang-plugin-host --offline` **0**（4 passed）；`--features process-tools` **0**（含 fault_matrix 两条钉子）；`cargo test --workspace --offline` **0**（58 个 ok 块、0 FAILED，**未触发那条已知离线环境用例**）；`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**（首跑红在并发在飞的 `studio`：「lifetime may not live long enough」，落定后复跑即绿）；`cargo fmt --all -- --check` **0**（0 行）。
 
 ## 5. 未覆盖 / 新发现
 

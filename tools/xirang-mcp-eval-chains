@@ -13,7 +13,7 @@
 // 日志是多帧 zstd，单文件解压器只回第一帧（284 字节的会话头），因此按魔数找帧并逐帧解——用 Node，因为
 // `zstdDecompressSync` 在那里。
 //
-// Usage / 用法: nichlink-mcp-eval-chains <session-log> [<session-log> ...]
+// Usage / 用法: xirang-mcp-eval-chains <session-log> [<session-log> ...]
 
 const fs = require("node:fs");
 const zlib = require("node:zlib");
@@ -25,31 +25,31 @@ const ROUNDS = { t1: 1, t2: 1, t3: 2, t4: 2, t5: 3, t6: 3, t7: 4, t8: 4 };
 const PRESET = {
   1: [
     ["run the failing test", /cargo test/],
-    ["locate the function the test names", /nichlink\.(search|callgraph)|codegraph (explore|node|query)/],
-    ["read the guard", /nichlink\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
+    ["locate the function the test names", /xirang\.(search|callgraph)|codegraph (explore|node|query)/],
+    ["read the guard", /xirang\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
     ["fix the comparison", /\bedit\b|\bwrite\b|apply_patch|str_replace/],
-    ["rerun", /cargo test|nichlink\.check/],
+    ["rerun", /cargo test|xirang\.check/],
   ],
   2: [
     ["run the failing test", /cargo test/],
-    ["find where the expected text is produced", /nichlink\.(search|literal)|codegraph (explore|query)|"grep"/],
-    ["read the producer", /nichlink\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
+    ["find where the expected text is produced", /xirang\.(search|literal)|codegraph (explore|query)|"grep"/],
+    ["read the producer", /xirang\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
     ["restore the call", /\bedit\b|\bwrite\b|apply_patch/],
-    ["rerun", /cargo test|nichlink\.check/],
+    ["rerun", /cargo test|xirang\.check/],
   ],
   3: [
     ["run the failing test", /cargo test/],
-    ["read the predicate", /nichlink\.(search|read|inspect)|codegraph (explore|node)|"read"/],
-    ["read the range arithmetic", /nichlink\.(read|callgraph)|codegraph (explore|node)|"read"/],
+    ["read the predicate", /xirang\.(search|read|inspect)|codegraph (explore|node)|"read"/],
+    ["read the range arithmetic", /xirang\.(read|callgraph)|codegraph (explore|node)|"read"/],
     ["restore the half-open bound", /\bedit\b|\bwrite\b|apply_patch/],
-    ["rerun", /cargo test|nichlink\.check/],
+    ["rerun", /cargo test|xirang\.check/],
   ],
   4: [
     ["run the failing test", /cargo test/],
-    ["find the predicate the test names", /nichlink\.(search|literal)|codegraph (explore|query)|"grep"/],
-    ["read the predicate's own doc", /nichlink\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
+    ["find the predicate the test names", /xirang\.(search|literal)|codegraph (explore|query)|"grep"/],
+    ["read the predicate's own doc", /xirang\.(read|inspect|callgraph)|codegraph (explore|node)|"read"/],
     ["restore the meaning", /\bedit\b|\bwrite\b|apply_patch/],
-    ["rerun the whole suite", /cargo test|nichlink\.check/],
+    ["rerun the whole suite", /cargo test|xirang\.check/],
   ],
 };
 
@@ -114,9 +114,9 @@ function purposeOf(call) {
 
 function instrumentCall(name, arguments) {
   if (name !== "bash" && name !== "job_output") {
-    return /^nichlink\.|^codegraph/.test(name) ? name : null;
+    return /^xirang\.|^codegraph/.test(name) ? name : null;
   }
-  if (/nichlink-mcp|nichlink\.[a-z_]+["']?\s*:|initialize.*tools\/call/.test(arguments)) return "nichlink (hand-rolled JSON-RPC)";
+  if (/xirang-mcp|xirang\.[a-z_]+["']?\s*:|initialize.*tools\/call/.test(arguments)) return "xirang (hand-rolled JSON-RPC)";
   if (/\bcodegraph (init|index|status|query|explore|node|callers|callees|impact|affected)\b/.test(arguments)) return "codegraph CLI";
   return null;
 }
@@ -195,7 +195,7 @@ function instrumentFrom(arm, number) {
     mcp,
     (line) =>
       line.includes('"method": "tools/call"') ||
-      /"tool"\s*:\s*"nichlink\./.test(line)
+      /"tool"\s*:\s*"xirang\./.test(line)
   )}`;
 }
 

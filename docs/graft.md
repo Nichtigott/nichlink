@@ -2,7 +2,7 @@
 
 [简体中文](graft.zh-CN.md) | English
 
-This page documents the third graft layer: the `.nichlink/external-grafts/`
+This page documents the third graft layer: the `.xirang/external-grafts/`
 record, how the runtime turns it into an effective tree, and the precedence
 rules and reports that decision produces. The READMEs describe the declaration
 and the application; this file is the reference for the record.
@@ -14,26 +14,26 @@ Three different artifacts meet at a graft, and none of them copies source:
 | Layer | Artifact | Owner | What it does |
 | --- | --- | --- | --- |
 | **Declaration** | `static_graft_plan!` at the host entry | build step | Names the slot so pruning keeps it alive and fills the release-time `StaticPlan`. Removes no code. |
-| **Record** | `.nichlink/external-grafts/<selector>/graft.plan` | Studio (authoring) and the runtime host | The authoring input the runtime can apply over the declaration. Not compiled. |
+| **Record** | `.xirang/external-grafts/<selector>/graft.plan` | Studio (authoring) and the runtime host | The authoring input the runtime can apply over the declaration. Not compiled. |
 | **Application** | `Registry::overlay` / `overlay_static` / `overlay_recorded` | runtime host | Validates and returns a new effective tree, mutating neither the base registry nor the external registry. |
 
-The declaration macro is exported by `nichlink-toolchain`
-(`nichlink_toolchain::run_method::static_graft_plan!`); the kernel only parses the text the
+The declaration macro is exported by `xirang-toolchain`
+(`xirang_toolchain::run_method::static_graft_plan!`); the kernel only parses the text the
 macro stringifies. The application methods live in the kernel
-(`nichlink_kernel::Registry`).
+(`xirang_kernel::Registry`).
 
 None of the three layers copies source — which is the point, and also the limit: a record is
 *runtime* input, so the external implementation has to exist, and be built, for as long as the
-record is in place. **`nichlink.apply {action: "promote"}` is the fourth step**, and it is the one
+record is in place. **`xirang.apply {action: "promote"}` is the fourth step**, and it is the one
 that does copy source: it rewrites the target face's declaration to carry the external
 implementation's fields, retires the `cut(…)` entry that handed the slot over, and moves the record
-directory to `.nichlink/trash/external-grafts/`. Everything else in this document still describes
+directory to `.xirang/trash/external-grafts/`. Everything else in this document still describes
 the **runtime** overlay; landing is how a slot stops needing one.
 
 Three limits come with it, and each one is a refusal rather than a silent approximation:
 
 - **Generated faces only.** The rewrite goes through the authoring executor, which only rewrites
-  files it generated (`// generated-by=NichLink`). A hand-written face file is refused by name —
+  files it generated (`// generated-by=XiRang`). A hand-written face file is refused by name —
   landing it is a code decision, not a field edit.
 - **Host-relative fields do not travel.** `admission` and a registration rule richer than `ANY`
   name paths *inside the declaring crate*; copying them would produce a declaration that compiles
@@ -54,9 +54,9 @@ One entry decides both halves of a graft: pruning keeps the slots it names, and
 the generated `BUILTIN_GRAFT_CUTS` table (plus the `graft_plan.tsv` audit text)
 describes the same set. The build resolves it once, in this order:
 
-1. `NICH_LINK_ENTRY`, when set — a relative path resolves against the package
+1. `XIRANG_ENTRY`, when set — a relative path resolves against the package
    root, an absolute path is used as written. A value that does not name a file
-   **fails the build** (`NICH_LINK_ENTRY names <path>, which is not a file`).
+   **fails the build** (`XIRANG_ENTRY names <path>, which is not a file`).
    Falling back instead is the bug this rule removes: pruning would follow the
    variable while the cut table described `main.rs`, so the runtime could hold a
    table the release never kept, or silently lose a slot declared only in the
@@ -67,17 +67,17 @@ describes the same set. The build resolves it once, in this order:
 4. Cargo's `main.rs`, then `lib.rs`. This step may name no file at all, which is
    a host without an entry, not an error.
 
-The authoring surfaces (`nichlink grafts`, Studio) resolve the entry the same
+The authoring surfaces (`xirang grafts`, Studio) resolve the entry the same
 way, but report a problem as a message instead of failing a build.
 
 ## How a record reaches the overlay
 
 A record is loaded and applied by the ungated runtime API in
-`nichlink-toolchain` (it is deliberately **not** behind the `authoring`
+`xirang-toolchain` (it is deliberately **not** behind the `authoring`
 feature, so a host does not need `syn` merely to read a plan file):
 
 ```rust
-use nichlink_toolchain::run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
+use xirang_toolchain::run_method::{apply_recorded_grafts, Registry, StaticGraftCut};
 
 // `declared` is the build-captured static plan and the arbiter of which slots
 // stay alive; `external` is the linked external registry.
@@ -90,7 +90,7 @@ let overlay = apply_recorded_grafts(
 let effective: Registry = overlay.effective;
 ```
 
-- `graft_record_root(package_root)` is `.nichlink/external-grafts/`;
+- `graft_record_root(package_root)` is `.xirang/external-grafts/`;
 - `load_graft_records(package_root)` returns every plan directory, readable or
   broken (`LoadedGraft`), sorted by selector; a missing directory is an empty
   list, not an error;
@@ -121,7 +121,7 @@ the declaration:
 | The record targets a slot no declaration keeps alive | The record is skipped | `UnkeptSlot` |
 
 Why the split: "the record always wins" would let an unreviewed, machine-local
-`.nichlink/` file re-route shipped behaviour and defeat a linked,
+`.xirang/` file re-route shipped behaviour and defeat a linked,
 compiler-resolved face. "The declaration always wins" would leave the record's
 `graft` with no production reader at all. Splitting by declaration form keeps
 the dynamic-by-name trust the string form already grants while refusing to
@@ -200,7 +200,7 @@ cuts.
 
 The build never applies a plan, so it cannot wait for the runtime to notice a
 pruned slot. It refuses the build instead: when a plan exists whose target slot
-**no** declaration could name, `nichlink-toolchain` emits a build error
+**no** declaration could name, `xirang-toolchain` emits a build error
 (`phase=static-plan`, pointing at the plan file) whose message carries the exact
 clause to paste:
 
@@ -213,11 +213,11 @@ the gate to false, because the gate is the author's business: a record for a slo
 the current feature set compiles out is a configuration, not a mistake. That is
 why the check reads the entry's full declaration list, while the generated cut
 table reads only the enabled subset. The build does not apply the plan;
-`nichlink grafts` exposes the same decision on demand (see below).
+`xirang grafts` exposes the same decision on demand (see below).
 
 ## The record directory is runtime input
 
-`.nichlink/external-grafts/` is **runtime input**, not generated state. Because
+`.xirang/external-grafts/` is **runtime input**, not generated state. Because
 a record may re-route a string-form declaration, a package that does not review
 this directory can have shipped behaviour changed by a machine-local file.
 Review it the way source is reviewed, and keep it out of untrusted checkouts.
@@ -232,16 +232,16 @@ The consequence is easy to miss, so it is stated in all three places: Studio
 warns while you write (see below), the build refuses a plan whose slot no
 declaration can name (see below), and the runtime prints
 `warning: … record skipped` when it applies records. The record is still skipped rather than fatal — one stale record
-must not stop the others — but no path leaves the skip unstated. `nichlink grafts`
+must not stop the others — but no path leaves the skip unstated. `xirang grafts`
 is the read-only way to see the same fact after the fact.
 
 ## Reading the layers from the CLI
 
 | Command | What it reports |
 | --- | --- |
-| `nichlink grafts [path] [--json]` | Every `.nichlink/external-grafts/*/graft.plan`, with selector, target path, graft, `full`, and whether the host entry declares that slot. Read-only. |
-| `nichlink explain <node-id\|logical/path> [--path <dir>] [--json]` | One node's identity, build scope, pruning state, and the declared cuts that name it. |
-| `nichlink explain --overlay [--path <dir>] [--json]` | Every slot with its kept/pruned state and replacement, plus the plan rows. |
+| `xirang grafts [path] [--json]` | Every `.xirang/external-grafts/*/graft.plan`, with selector, target path, graft, `full`, and whether the host entry declares that slot. Read-only. |
+| `xirang explain <node-id\|logical/path> [--path <dir>] [--json]` | One node's identity, build scope, pruning state, and the declared cuts that name it. |
+| `xirang explain --overlay [--path <dir>] [--json]` | Every slot with its kept/pruned state and replacement, plus the plan rows. |
 
 `explain --overlay` is explicitly a **static projection**
 (`"kind": "static-projection"`): the CLI cannot link an arbitrary host's
@@ -281,7 +281,7 @@ same way (both Rust expressions or both strings):
 ```rust
 // String form: names the slot by logical path and the implementation by
 // selector name. Resolved dynamically at overlay time; needs no link.
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -289,7 +289,7 @@ nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
 // external implementation's `NODE_ID`; the external crate must be linked, so a
 // typed declaration is final against a record. A range is `cut(a to b)`; see
 // the "Ranges over siblings" section above.
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
 );

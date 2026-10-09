@@ -38,12 +38,12 @@ fn the_consumer_story_is_the_same_in_the_preview_and_after_the_write() {
     // One plan that targets the face being deepened: this is the consumer the diff exists for.
     // 一条针对"被做深的那个面"的计划：这就是 diff 为之存在的消费方。
     let names = crate::mcp::registry::namespace(&root).expect("the fixture's namespace");
-    let target = nichlink_kernel::identity::NodeId::from_namespaced_path(
+    let target = xirang_kernel::identity::NodeId::from_namespaced_path(
         &names,
         "control/object/button/button.rs",
         "Button",
     );
-    let plan = root.join(".nichlink/external-grafts/swap/graft.plan");
+    let plan = root.join(".xirang/external-grafts/swap/graft.plan");
     std::fs::create_dir_all(plan.parent().expect("plan directory")).expect("plan dir");
     std::fs::write(
         &plan,

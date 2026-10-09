@@ -1,12 +1,12 @@
-//! NichLink Studio executable entry.
-//! NichLink Studio 可执行入口。
+//! XiRang Studio executable entry.
+//! XiRang Studio 可执行入口。
 
 use std::io;
 use std::path::PathBuf;
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("nichlink-toolchain: {error}");
+        eprintln!("xirang-toolchain: {error}");
         std::process::exit(1);
     }
 }
@@ -30,14 +30,14 @@ fn run() -> io::Result<()> {
             )));
         }
     };
-    nichlink_toolchain::studio::launch_with(project)
+    xirang_toolchain::studio::launch_with(project)
 }
 
 /// What the executable accepts.
 /// 该可执行文件接受什么。
 fn usage() -> String {
-    "nichlink-toolchain [PROJECT]
-\n  PROJECT  a NichLink host project directory (defaults to NICH_LINK_PACKAGE_ROOT,
+    "xirang-toolchain [PROJECT]
+\n  PROJECT  a XiRang host project directory (defaults to XIRANG_PACKAGE_ROOT,
 \n           then to the working directory when it holds a Cargo.toml)"
         .to_owned()
 }

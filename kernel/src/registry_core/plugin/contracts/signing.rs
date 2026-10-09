@@ -223,7 +223,7 @@ mod tests {
                 name: "official.signing",
                 crate_name: "official_signing",
                 version: "1.0.0",
-                framework: FrameworkId::new("nichlink.test"),
+                framework: FrameworkId::new("xirang.test"),
                 source: PluginSource::Official,
                 mode: PluginMode::Extension,
                 checksum: "sha256:aa",

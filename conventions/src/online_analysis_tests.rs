@@ -12,7 +12,7 @@ fn synthetic(files: &[(&str, &str)]) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root =
-        std::env::temp_dir().join(format!("nichlink-online-{}-{sequence}", std::process::id()));
+        std::env::temp_dir().join(format!("xirang-online-{}-{sequence}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     for (name, contents) in files {
         let path = root.join("toolchain/src/mcp/src").join(name);

@@ -14,14 +14,14 @@
 
 **工具返回**（逐字）：
 ```
-namespace nichlink-example-control-button
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
+namespace xirang-example-control-button
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
 faces 3
 root/control                             Control        control/control.rs                     fb97ddd5f2b803d1b7f40a776d8a22d9
 root/control/button                      Button         control/object/button/button.rs        ff1c57d9b110ef57eac134a3cb4e46b6
 root/control/slider                      Slider         control/object/slider/slider.rs        bdb4427ce81c9bc51e56bee7667fd2be
 next   `explain {node}` for one face's contract, `check {face}` for whether it builds
-evidence nichlink.registry {} → exit 0
+evidence xirang.registry {} → exit 0
 
 ```
 
@@ -60,14 +60,14 @@ Step 1: `registry` + `consistency {parent: root/control}` (before) + `apply` pre
 
 **工具返回**（逐字）：
 ```
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
-family root/control · member nichlink-example-control-button · 2 member(s)
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
+family root/control · member xirang-example-control-button · 2 member(s)
   button                   0 call(s): none
   slider                   0 call(s): none
 outliers: 0 of 2
 not covered by this comparison: it reads the **derived** tree's sibling set and each sibling's own text, so a convention that lives in a shared helper, in generated code, or in a parent rule is not visible here; and `api` compares the names called, not the units or the arithmetic — an outlier is a place to look, not a defect; and a call written inside a macro body is not read as a call (the kernel's rule), so an object whose whole body is one macro invocation reads as calling nothing
 next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields
-evidence nichlink.consistency {"parent":"root/control"} → exit 0
+evidence xirang.consistency {"parent":"root/control"} → exit 0
 
 ```
 
@@ -93,7 +93,7 @@ Let me apply.
 **工具返回**（逐字）：
 ```
 action preview
-namespace nichlink-example-control-button
+namespace xirang-example-control-button
 fields: module kind preset parts name_zh name_en summary_zh summary_en exports stable_name needs_registry getting_from_other_registry registration_rule admission handle_traits handle_contracts part_traits part_contracts requires provides runtime_checks flow flow_provider — every value is a string; `needs_registry` is the one boolean, and `exports`/`handle_traits`/`requires` are spelled as strings rather than arrays
 would write /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/object/dial/dial.rs
 declaration src/control/object/dial/dial.rs:11
@@ -109,7 +109,7 @@ consequences (static, text-level): 0 in-tree test line(s) name this face
 
 diff:
 + src/control/object/dial/dial.rs
-+// generated-by=NichLink
++// generated-by=XiRang
 +//! Dial registration face.
 +//! Dial 注册面。
 +
@@ -127,7 +127,7 @@ diff:
 +    handle_contracts: [crate::control::ControlHandle],
 +    flow: crate::FlowContract::new(crate::ContractId::new("control.render.v1"), 1, "ControlInput", "ControlFrame"),
 +}
-evidence nichlink.apply {"action":"add","fields":{"exports":"control.render","flow":"control.render.v1|1|ControlInput|ControlFrame","handle_cont… → exit 0
+evidence xirang.apply {"action":"add","fields":{"exports":"control.render","flow":"control.render.v1|1|ControlInput|ControlFrame","handle_cont… → exit 0
 
 ```
 
@@ -159,7 +159,7 @@ Let me first run the fa evidence calls.
 **工具返回**（逐字）：
 ```
 action apply
-namespace nichlink-example-control-button
+namespace xirang-example-control-button
 fields: module kind preset parts name_zh name_en summary_zh summary_en exports stable_name needs_registry getting_from_other_registry registration_rule admission handle_traits handle_contracts part_traits part_contracts requires provides runtime_checks flow flow_provider — every value is a string; `needs_registry` is the one boolean, and `exports`/`handle_traits`/`requires` are spelled as strings rather than arrays
 applied /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/object/dial/dial.rs
 declaration src/control/object/dial/dial.rs:11
@@ -172,7 +172,7 @@ faces 4
 consequences (static, text-level): 0 in-tree test line(s) name this face
   entry plan: 13 `cut(` and 12 `graft(` site(s); this face's name appears at none of them — whether the application ships it is the plan's own business
   not covered: this lists test lines that spell the face's name; a test that counts faces without naming it, or reaches it through another spelling, does not appear here — run the suite before believing either list
-evidence nichlink.apply {"action":"add","apply":true,"fields":{"exports":"control.render","flow":"control.render.v1|1|ControlInput|ControlFrame"… → exit 0
+evidence xirang.apply {"action":"add","apply":true,"fields":{"exports":"control.render","flow":"control.render.v1|1|ControlInput|ControlFrame"… → exit 0
 
 ```
 
@@ -195,15 +195,15 @@ Let me run those.
 
 **工具返回**（逐字）：
 ```
-namespace nichlink-example-control-button
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
+namespace xirang-example-control-button
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
 faces 4
 root/control                             Control        control/control.rs                     fb97ddd5f2b803d1b7f40a776d8a22d9
 root/control/button                      Button         control/object/button/button.rs        ff1c57d9b110ef57eac134a3cb4e46b6
 root/control/dial                        Dial           control/object/dial/dial.rs            e1070833a032e106f9cdd0eff2149bc2
 root/control/slider                      Slider         control/object/slider/slider.rs        bdb4427ce81c9bc51e56bee7667fd2be
 next   `explain {node}` for one face's contract, `check {face}` for whether it builds
-evidence nichlink.registry {} → exit 0
+evidence xirang.registry {} → exit 0
 
 ```
 
@@ -252,7 +252,7 @@ consistency takes `parent` or `specimen`, not both: `parent` compares siblings a
 
 **工具返回**（逐字）：
 ```
-namespace nichlink-example-control-button
+namespace xirang-example-control-button
 node e1070833a032e106f9cdd0eff2149bc2
   path root/control/dial
   kind Dial
@@ -260,11 +260,11 @@ node e1070833a032e106f9cdd0eff2149bc2
   module control::object::dial
   parent fb97ddd5f2b803d1b7f40a776d8a22d9
   registry_name dial
-build stale (run `nichlink check`)
-scope unknown (no source_scope.tsv; run `nichlink check`)
-pruning unknown (no pruning_manifest.tsv; run `nichlink check`)
+build stale (run `xirang check`)
+scope unknown (no source_scope.tsv; run `xirang check`)
+pruning unknown (no pruning_manifest.tsv; run `xirang check`)
 next   `callgraph {function}` for its callers and callees, `read {path, line}` for the body
-evidence nichlink.explain {"node":"root/control/dial"} → exit 0
+evidence xirang.explain {"node":"root/control/dial"} → exit 0
 
 ```
 
@@ -280,7 +280,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/fa
 tree   14 rust file(s), 54 function(s)
 elapsed 24612 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -297,7 +297,7 @@ census: 0 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `outline` (src/lib.rs:87)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 4 of 12 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
+evidence xirang.check {"face":"default","timeout_ms":900000} → exit 0
 
 ```
 
@@ -307,15 +307,15 @@ evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
 
 **工具返回**（逐字）：
 ```
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
-family root/control · member nichlink-example-control-button · 3 member(s)
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
+family root/control · member xirang-example-control-button · 3 member(s)
   button                   0 call(s): none
   dial                     0 call(s): none
   slider                   0 call(s): none
 outliers: 0 of 3
 not covered by this comparison: it reads the **derived** tree's sibling set and each sibling's own text, so a convention that lives in a shared helper, in generated code, or in a parent rule is not visible here; and `api` compares the names called, not the units or the arithmetic — an outlier is a place to look, not a defect; and a call written inside a macro body is not read as a call (the kernel's rule), so an object whose whole body is one macro invocation reads as calling nothing
 next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields
-evidence nichlink.consistency {"parent":"root/control"} → exit 0
+evidence xirang.consistency {"parent":"root/control"} → exit 0
 
 ```
 
@@ -326,7 +326,7 @@ evidence nichlink.consistency {"parent":"root/control"} → exit 0
 **工具返回**（逐字）：
 ```
 no ledger entry names `root/control/dial` in /home/nich/Moirai_N3/nichlink/target/round9/trees/fa — the ledger holds 0 entry(ies), and a specimen comparison is against the entry in force (an adoption is a lease: the newest line wins). `adopted` lists the anchors.
-evidence nichlink.consistency {"specimen":"root/control/dial"} → exit 0
+evidence xirang.consistency {"specimen":"root/control/dial"} → exit 0
 
 ```
 
@@ -740,7 +740,7 @@ But the *shipped* tree (base_registry) has 3 rows. The tool's own note said: "en
 
 So to deliver "a new object similar to the existing ones" properly, I must declare it in the entry plan (lib.rs `static_graft_plan!`) — i.e., add a `cut(...)` for the dial slot with a graft target. Hmm, that requires a graft implementation for dial in the carrier graft crate (`carrier/control-button-graft` — which is outside the tree!).
 
-Wait: `nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }` — the path points to `target/round9/trees/carrier/control-button-graft`. That's the carrier fixture, shared. The graft crate has `button_fast`, `slider_fast`, etc. For a dial slot I'd need a `dial_fast` in the graft crate — but that's outside my tree (`trees/carrier/...`)! Modifying it would affect other trees (fb also depends on it). Hmm, dangerous.
+Wait: `xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }` — the path points to `target/round9/trees/carrier/control-button-graft`. That's the carrier fixture, shared. The graft crate has `button_fast`, `slider_fast`, etc. For a dial slot I'd need a `dial_fast` in the graft crate — but that's outside my tree (`trees/carrier/...`)! Modifying it would affect other trees (fb also depends on it). Hmm, dangerous.
 
 Hmm, wait. Let me re-read: is the scope really "only declared slots"? The test `the_declared_slots_define_the_build_time_scope` (registry.rs) sounds exactly like that. Let me read it to understand the semantics.
 
@@ -760,7 +760,7 @@ Let me read that test.
 <path>/home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/control/object/dial/dial.rs</path>
 <type>file</type>
 <content>
-1: // generated-by=NichLink
+1: // generated-by=XiRang
 2: //! Dial registration face.
 3: //! Dial 注册面。
 4: 
@@ -787,7 +787,7 @@ Let me read that test.
 ```
 So there's no "ships" declaration other than the entry's reachability + cuts. The scope's reachability walk from the entry source is the mechanism.
 
-Let me verify empirically that adding a reference to the dial module in lib.rs selects the face: add the reference, rebuild (cargo test), then read `target/nichlink/out/source_scope.tsv`... wait, OUT_DIR is inside `target/debug/build/<pkg>-<hash>/out/` (the cargo build's OUT_DIR), and also copied to `<root>/target/nichlink/out/`? The `registry` tool said "no published records at <root>/target/nichlink/out" and `check` writes there (`source_scope.tsv` at `<root>/target/nichlink/out/`). Hmm, actually the check log path was `<root>/target/nichlink/out/check-default.log`, and `registry` reads `<root>/target/nichlink/out/source_scope.tsv`.
+Let me verify empirically that adding a reference to the dial module in lib.rs selects the face: add the reference, rebuild (cargo test), then read `target/xirang/out/source_scope.tsv`... wait, OUT_DIR is inside `target/debug/build/<pkg>-<hash>/out/` (the cargo build's OUT_DIR), and also copied to `<root>/target/xirang/out/`? The `registry` tool said "no published records at <root>/target/xirang/out" and `check` writes there (`source_scope.tsv` at `<root>/target/xirang/out/`). Hmm, actually the check log path was `<root>/target/xirang/out/check-default.log`, and `registry` reads `<root>/target/xirang/out/source_scope.tsv`.
 
 So after a `check`, `registry` can read the published scope. Let me do:
 1. Complete dial.rs with the impl.
@@ -863,7 +863,7 @@ I'll use a `pub use` re-export with a doc line, since it's a real public surface
 45: // 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46: //   cut "root/control/button" graft "button_fast"
 47: // The string form still works and needs no link, but tooling cannot complete it.
-48: nichlink_toolchain::runtime::static_graft_plan!(
+48: xirang_toolchain::runtime::static_graft_plan!(
 49:     FRAMEWORK,
 50:     cut(crate::control::object::button::NODE_ID)
 51:         graft(control_button_graft::button_fast::NODE_ID),
@@ -972,7 +972,7 @@ Actually wait. Hmm, if the face isn't mounted it isn't compiled, so the naive ad
 So: complete delivery = add + name from the entry + update the pins. Let me now do it and measure.
 
 Steps:
-1. Edit dial.rs: add `impl ControlHandle for Dial { fn paint(&self) -> ControlFrame { ControlFrame } }` mirroring slider; also import `ControlFrame, ControlHandle` from crate::control. Keep the generated marker line? The file's header says "generated-by=NichLink". If I hand-edit it, the marker stays (the authoring renderer diffs its render against the file to decide edits — if the file's rendered form diverges, a later edit may rewrite it and drop my impl? The `render_path_list`-based renderer rewrites the whole file when editing; so my impl could be lost on a later `apply edit`. That's a real constraint, but for this delivery it's fine; I'll note it.)
+1. Edit dial.rs: add `impl ControlHandle for Dial { fn paint(&self) -> ControlFrame { ControlFrame } }` mirroring slider; also import `ControlFrame, ControlHandle` from crate::control. Keep the generated marker line? The file's header says "generated-by=XiRang". If I hand-edit it, the marker stays (the authoring renderer diffs its render against the file to decide edits — if the file's rendered form diverges, a later edit may rewrite it and drop my impl? The `render_path_list`-based renderer rewrites the whole file when editing; so my impl could be lost on a later `apply edit`. That's a real constraint, but for this delivery it's fine; I'll note it.)
 
 Hmm, careful: will the `impl` block survive a future `apply`? Not my problem now.
 
@@ -1020,8 +1020,8 @@ The file /home/nich/Moirai_N3/nichlink/target/round9/trees/fa/src/lib.rs has bee
 ```
 error[E0432]: unresolved import `crate::control::object::dial`
   --> src/lib.rs:64:33
-error: could not compile `nichlink-example-control-button` (lib test) due to 1 previous error
-error: could not compile `nichlink-example-control-button` (lib) due to 1 previous error
+error: could not compile `xirang-example-control-button` (lib test) due to 1 previous error
+error: could not compile `xirang-example-control-button` (lib) due to 1 previous error
 EXIT=101
 
 ```

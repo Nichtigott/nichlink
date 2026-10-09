@@ -14,7 +14,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-legacy-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-legacy-{suffix}"));
     let control = root.join("src/control/control.rs");
     let rule = root.join("src/control/registry_rule/registry_rule.rs");
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
@@ -46,7 +46,7 @@ fn edit_save_button_writes_changes_and_adopts_the_old_control_scaffold() {
 
     assert!(!app.event.starts_with("Edit failed"), "{}", app.event);
     let source = std::fs::read_to_string(&control).expect("edited control");
-    assert!(source.starts_with("// generated-by=NichLink"));
+    assert!(source.starts_with("// generated-by=XiRang"));
     assert!(source.contains("已保存的摘要。"));
     assert_eq!(
         app.selected_info().map(|info| info.summary.zh.as_str()),
@@ -62,12 +62,12 @@ fn startup_accepts_a_pre_hierarchy_generated_face_without_parent() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-old-face-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-old-face-{suffix}"));
     let source = root.join("src/test/test.rs");
     std::fs::create_dir_all(source.parent().expect("face parent")).expect("create fixture");
     std::fs::write(
         &source,
-        "// generated-by=NichLink\npub struct Test;\ncrate::control_object! { kind: Test, }\n",
+        "// generated-by=XiRang\npub struct Test;\ncrate::control_object! { kind: Test, }\n",
     )
     .expect("write old generated face");
     select_project(root.clone(), root.join("Cargo.toml"), "old-face-test");
@@ -85,7 +85,7 @@ fn editing_module_name_moves_the_face_and_keeps_generated_source_compact() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-rename-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-rename-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create source root");
     select_project(root.clone(), root.join("Cargo.toml"), "rename-test");
 
@@ -232,7 +232,7 @@ fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-trash-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-trash-{suffix}"));
     let control = root.join("src/control/control.rs");
     let rule = root.join("src/control/registry_rule/registry_rule.rs");
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
@@ -276,7 +276,7 @@ fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
         app.event
     );
 
-    let faces = root.join(".nichlink/trash/faces");
+    let faces = root.join(".xirang/trash/faces");
     let entries = std::fs::read_dir(&faces)
         .expect("the trash directory exists")
         .map(|entry| entry.expect("trash entry").path())
@@ -290,13 +290,13 @@ fn a_rewritten_face_keeps_its_previous_text_in_the_trash() {
     // Both sides name the same file, but they are built differently: the test
     // joins the trash directory from one `/`-carrying string, while the product
     // joins its components. Windows therefore spells the same directory
-    // `...\.nichlink\trash\faces\x.rs` on one side and
-    // `...\.nichlink/trash/faces\x.rs` on the other, and a raw `contains`
+    // `...\.xirang\trash\faces\x.rs` on one side and
+    // `...\.xirang/trash/faces\x.rs` on the other, and a raw `contains`
     // compares two spellings of one path. Folding both to the portable form is
     // what the message actually promises: that it names the backup.
     // 两侧命名的是同一个文件，但拼法不同：测试用一条含 `/` 的字符串拼出垃圾目录，
-    // 产品却逐分量拼。于是 Windows 上一侧写成 `...\.nichlink\trash\faces\x.rs`，另一侧
-    // 写成 `...\.nichlink/trash/faces\x.rs`，而裸 `contains` 比较的是同一条路径的两种
+    // 产品却逐分量拼。于是 Windows 上一侧写成 `...\.xirang\trash\faces\x.rs`，另一侧
+    // 写成 `...\.xirang/trash/faces\x.rs`，而裸 `contains` 比较的是同一条路径的两种
     // 拼法。把两边都折叠为可移植形式，才是这条消息真正的承诺：它报出了那份备份。
     assert!(
         portable_path(&app.event).contains(&portable_path(&entries[0].display().to_string())),
@@ -325,7 +325,7 @@ fn delete_moves_the_module_of_the_open_project() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-delete-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-delete-{suffix}"));
     let control = root.join("src/control/control.rs");
     let rule = root.join("src/control/registry_rule/registry_rule.rs");
     std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("create fixture");
@@ -385,7 +385,7 @@ fn delete_refuses_a_face_outside_its_own_directory() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-flat-delete-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-flat-delete-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("create fixture");
     select_project(root.clone(), root.join("Cargo.toml"), "flat-delete-app");
 

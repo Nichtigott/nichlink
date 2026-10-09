@@ -75,8 +75,8 @@ fn a_record_that_does_not_match_its_graph_is_refused() {
     let (root, name) = package("damaged");
     publish(&root, &name);
     let out = crate::mcp::build_evidence::out_dir(&root);
-    let graph = fs::read_to_string(out.join(nichlink_kernel::lexicon::GRAPH_FILE))
-        .expect("the graph reads");
+    let graph =
+        fs::read_to_string(out.join(xirang_kernel::lexicon::GRAPH_FILE)).expect("the graph reads");
     // Cut the last edge out of the body without touching the header: the counts and the digest are
     // what must notice, and a reader that trusted the body would answer "no edge" where the truth is
     // "no such row".
@@ -85,7 +85,7 @@ fn a_record_that_does_not_match_its_graph_is_refused() {
     let mut lines: Vec<&str> = graph.lines().collect();
     let last = lines.pop().expect("a body line");
     fs::write(
-        out.join(nichlink_kernel::lexicon::GRAPH_FILE),
+        out.join(xirang_kernel::lexicon::GRAPH_FILE),
         format!("{}\n", lines.join("\n")),
     )
     .expect("the truncated graph writes");
@@ -115,7 +115,7 @@ fn a_run_that_published_nothing_reads_as_absent() {
         "a tree nothing published has no index"
     );
     let line = super::line(&root, &super::State::Absent);
-    assert!(line.contains("run `nichlink check`"), "{line}");
+    assert!(line.contains("run `xirang check`"), "{line}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -139,7 +139,7 @@ fn an_edit_makes_the_index_behind_and_the_line_says_so() {
                 line.starts_with("index behind: generation 1 covers "),
                 "{line}"
             );
-            assert!(line.contains("run `nichlink check`") || line.contains("a refresh is running"));
+            assert!(line.contains("run `xirang check`") || line.contains("a refresh is running"));
         }
         other => panic!(
             "an edited tree must read as behind, not `{}`",
@@ -172,11 +172,11 @@ fn the_record_stamps_the_namespace_and_old_records_read_as_none() {
     // An older binary wrote no such line: the reader degrades to `None` rather than inventing one.
     // 更早的二进制不写这一行：读者降级成 `None`，而不是编一个。
     let path =
-        crate::mcp::build_evidence::out_dir(&root).join(nichlink_kernel::lexicon::GENERATION_FILE);
+        crate::mcp::build_evidence::out_dir(&root).join(xirang_kernel::lexicon::GENERATION_FILE);
     let text = fs::read_to_string(&path).expect("the record is readable");
     let without: String = text
         .lines()
-        .filter(|line| !line.starts_with(nichlink_kernel::lexicon::GENERATION_NAMESPACE_KEY))
+        .filter(|line| !line.starts_with(xirang_kernel::lexicon::GENERATION_NAMESPACE_KEY))
         .map(|line| format!("{line}\n"))
         .collect();
     fs::write(&path, without).expect("the stamp is removed");

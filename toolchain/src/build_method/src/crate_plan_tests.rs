@@ -18,10 +18,10 @@ fn host(label: &str, files: &[(&str, &str)], declaration: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let parent = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-plan-{label}-{}-{sequence}",
+            "xirang-plan-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&parent);
@@ -39,8 +39,8 @@ fn host(label: &str, files: &[(&str, &str)], declaration: &str) -> PathBuf {
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"host\"\nversion = \"9.9.9\"\nedition = \"2024\"\n\n\
-         [dependencies]\nnichlink-toolchain = { path = \"../toolchain\", features = [\"run\"] }\n\n\
-         [build-dependencies]\nnichlink-toolchain = { path = \"../toolchain\" }\n",
+         [dependencies]\nxirang-toolchain = { path = \"../toolchain\", features = [\"run\"] }\n\n\
+         [build-dependencies]\nxirang-toolchain = { path = \"../toolchain\" }\n",
     )
     .expect("the host manifest");
     root
@@ -80,7 +80,7 @@ fn plan_host(root: &Path) -> Result<Vec<PlannedCrate>, String> {
 
 /// A declaration for one crate claiming `control::object`.
 /// 一份声明：一个 crate 认领 `control::object`。
-const DECLARATION: &str = r#"use nichlink_toolchain::run_method::{Crate, Shape};
+const DECLARATION: &str = r#"use xirang_toolchain::run_method::{Crate, Shape};
 
 pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
@@ -102,7 +102,7 @@ fn a_self_contained_fragment_plans_a_mount_and_its_remap() {
             ),
             (
                 "control/object/button/button.rs",
-                "crate::control_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+                "crate::control_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),\n}\n",
             ),
         ],
         DECLARATION,
@@ -229,7 +229,7 @@ fn the_scaffolds_own_imports_do_not_block_a_partition() {
         &[
             (
                 "panel/panel.rs",
-                "crate::root_object! {\n    kind: Panel,\n    needs_registry: true,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+                "crate::root_object! {\n    kind: Panel,\n    needs_registry: true,\n    parent: crate::root_node_id(crate::XIRANG_NAMESPACE),\n}\n",
             ),
             (
                 // The shape `promote` lands adds `crate::FlowContract` / `crate::ContractId` to a
@@ -266,7 +266,7 @@ fn the_scaffolds_own_imports_do_not_block_a_partition() {
 
 /// The same, for the scaffold-shaped fixture above.
 /// 同上，供上面那个脚手架形状的夹具使用。
-const SCAFFOLD_DECLARATION: &str = r#"use nichlink_toolchain::run_method::{Crate, Shape};
+const SCAFFOLD_DECLARATION: &str = r#"use xirang_toolchain::run_method::{Crate, Shape};
 
 pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
@@ -330,7 +330,7 @@ fn two_subtrees_of_one_crate_may_reference_each_other() {
                 "crate::control_object! {\n    kind: Gauge,\n}\n",
             ),
         ],
-        r#"use nichlink_toolchain::run_method::{Crate, Shape};
+        r#"use xirang_toolchain::run_method::{Crate, Shape};
 
 pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
@@ -427,7 +427,7 @@ fn a_host_hands_its_claims_away_and_a_ghost_hands_nothing_away() {
 /// （审计 `M7`，P3.2）。
 #[test]
 fn an_ancestors_identity_is_reachable_and_its_traits_are_not() {
-    let declaration = r#"use nichlink_toolchain::run_method::{Crate, Shape};
+    let declaration = r#"use xirang_toolchain::run_method::{Crate, Shape};
 
 pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
@@ -516,7 +516,7 @@ fn a_crate_may_claim_more_than_one_subtree() {
                 "crate::root_object! {\n    kind: Panel,\n}\n",
             ),
         ],
-        "use nichlink_toolchain::run_method::{Crate, Shape};\n\npub fn add_crates() -> Shape {\n    Shape::of(\"myapp\", &[\n        Crate::named(\"widgets\").at(&[crate::control::SUBTREE, crate::panel::SUBTREE]),\n    ])\n}\n",
+        "use xirang_toolchain::run_method::{Crate, Shape};\n\npub fn add_crates() -> Shape {\n    Shape::of(\"myapp\", &[\n        Crate::named(\"widgets\").at(&[crate::control::SUBTREE, crate::panel::SUBTREE]),\n    ])\n}\n",
     );
     // The two claims are one crate's, so the fixture names it twice on purpose: what is asserted is
     // that **every** claim's subtree is mounted, not how many entries the declaration used.
@@ -559,7 +559,7 @@ fn a_claim_that_matches_no_published_face_is_refused_by_name() {
         "it says the claim matched nothing: {error}"
     );
     assert!(
-        error.contains("run `nichlink check`"),
+        error.contains("run `xirang check`"),
         "and names the way out: {error}"
     );
 }
@@ -588,7 +588,7 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
     assert!(
         widgets
             .lib_rs
-            .contains("pub const NICHLINK_NAMESPACE: &str = \"myapp\";"),
+            .contains("pub const XIRANG_NAMESPACE: &str = \"myapp\";"),
         "the ghost declares the host's namespace: {}",
         widgets.lib_rs
     );
@@ -612,7 +612,7 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
                 .contains(&format!("{}/Cargo.toml", root.display()))
             && widgets
                 .build_rs
-                .contains("nichlink_toolchain::build_method::run_for"),
+                .contains("xirang_toolchain::build_method::run_for"),
         "the ghost builds the host's manifest: {}",
         widgets.build_rs
     );
@@ -645,7 +645,7 @@ fn a_ghost_is_three_files_and_one_workspace_config() {
     assert!(
         widgets
             .cargo_toml
-            .contains("nichlink-toolchain = { path = \"../../toolchain\", features = [\"run\"] }"),
+            .contains("xirang-toolchain = { path = \"../../toolchain\", features = [\"run\"] }"),
         "the dependencies are the host's: {}",
         widgets.cargo_toml
     );

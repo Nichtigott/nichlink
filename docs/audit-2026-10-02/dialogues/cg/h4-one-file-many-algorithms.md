@@ -45,13 +45,13 @@ Plan for h4: node the 4 files (4 calls) + maybe callees.
 
 Let me also plan the three h-classes: each has host/ (10 object files + lib.rs + control.rs + registry_rule.rs + tests/offsets.rs or shipped.rs) and graft/ (10 files + lib.rs). The classes:
 - h1-supply-chain: "one sibling calls a different family of names than its siblings do" → the symptom: offsets test fails with a total no single widget explains. The defect: one of the host object files (or graft) calls a different family of names (e.g. calls `gauge_fast::…` vs `…::gauge_slow`, or uses the wrong trait method). Let me find it: compare the 10 object files for a family difference, e.g. one file calls `X_fast::new()` while others call something else. Since they're similar, I can look for the odd one out via codegraph (callees of each object) or by reading.
-- h2-claim-unkept: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" → in `host/.nichlink/adopted/entries` (a file listing adopted entries). One sibling file missing exactly one declaration (e.g. missing a `claim!`/`declare!` line), and one ledger entry whose fingerprint no longer matches. Need to read the entries file + the object files.
+- h2-claim-unkept: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" → in `host/.xirang/adopted/entries` (a file listing adopted entries). One sibling file missing exactly one declaration (e.g. missing a `claim!`/`declare!` line), and one ledger entry whose fingerprint no longer matches. Need to read the entries file + the object files.
 - h3-cross-file-chain: "the entry plan never names the new face, so the build-time scope leaves it out of the build" → the entry plan (in host/src/lib.rs or build.rs) doesn't name one face → missing from shipped registry. Compare object list vs entry plan.
 - h4: as above.
 
 These need real reading. Let me do them one at a time, starting with h4 (cheap), then h1-supply-chain, h3, h2.
 
-Then g4 (host tree with crates/, "哪些臂是没有任何执行能进入的" — arms that no execution can enter). g4's tree: crates/... let me look at its layout (14 files, crates/). It's probably a nichlink host with crates.
+Then g4 (host tree with crates/, "哪些臂是没有任何执行能进入的" — arms that no execution can enter). g4's tree: crates/... let me look at its layout (14 files, crates/). It's probably a xirang host with crates.
 
 Let me start h4.
 
@@ -467,7 +467,7 @@ h4:
 - counter-proof: `callers zero_arm` → 1 caller (postable); `callees the_audit...` hmm, for h4: `callees a_receipted_entry_posts` → 0 (tool misses the chained call) so I read the test source instead. Also: if `zero_arm` were correct, the Refuse arm would be reachable from a zero amount — the tests never test amount 0, so green tests say nothing.
 - evidence: node outputs (exit 0); `callers zero_arm` (1 caller); `callees postable` → zero_arm; `callees a_receipted_entry_posts` → 0 (tool gap).
 
-Should I run cargo test for h4 to confirm green (the brief says tests are green)? The class says "cargo test --offline is green". h4's crate `hardbug_algorithms` — does it depend on nichlink-toolchain? Cargo.toml is 44K tree, tests/postable.rs uses only the crate. Running cargo test is cheap (no deps). Let me run it as evidence (it also proves the tests don't cover the zero case). Let me do it and log via nb.sh. Note: it needs a target dir → my probe cargo-target.
+Should I run cargo test for h4 to confirm green (the brief says tests are green)? The class says "cargo test --offline is green". h4's crate `hardbug_algorithms` — does it depend on xirang-toolchain? Cargo.toml is 44K tree, tests/postable.rs uses only the crate. Running cargo test is cheap (no deps). Let me run it as evidence (it also proves the tests don't cover the zero case). Let me do it and log via nb.sh. Note: it needs a target dir → my probe cargo-target.
 
 Also, should I *prove* the defect by running the code? That would require an edit (tree is read-only). Hmm — "反证" can be static. But a neat trick: I can compile a tiny snippet? That would need editing. The tree is read-only per the class brief: "do not edit it, and do not change a test". I could write a test in a *separate* scratch crate that depends on... hmm, path dep on the tree (read-only) — that's allowed (not editing the tree) and gives a runtime proof that `Entry::new("a",0,true).postable() == true`. That's a nice counter-proof but needs a scratch crate + cargo (nonbridge, ~2 calls). Value: strong. Time: small (no deps). 
 

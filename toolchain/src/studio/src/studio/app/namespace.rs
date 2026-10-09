@@ -1,20 +1,20 @@
 //! The identity namespace Studio authors under, from the host manifest.
 //! Studio 创作所用的身份命名空间，读自宿主清单。
 //!
-//! `host!()` defines the host's `crate::NICHLINK_NAMESPACE` from the package name, and every
+//! `host!()` defines the host's `crate::XIRANG_NAMESPACE` from the package name, and every
 //! registration face compiles its identity from that constant (audit `M7`, P3.3); every `NodeId` is a hash over
 //! `(namespace, source path, declared name)`. Studio rebuilds the same tree from
 //! source, so it has to derive the *same* namespace or its ids name nodes the host
 //! never compiled: a recorded trace, a graft record on disk, and the editor's tree
 //! would each live in a different identity domain. Cargo's answer for the adopted
 //! manifest is what makes the two agree without asking the user to export
-//! `NICH_LINK_NAMESPACE`.
-//! `host!()` 用包名定义宿主的 `crate::NICHLINK_NAMESPACE`，而每个注册面的身份都由那个常量算出
+//! `XIRANG_NAMESPACE`.
+//! `host!()` 用包名定义宿主的 `crate::XIRANG_NAMESPACE`，而每个注册面的身份都由那个常量算出
 //! （审计 `M7`，P3.3）；每个
 //! `NodeId` 都是对 `(命名空间, 源码路径, 声明名)` 的散列。Studio 从源码重建同一棵树，因此必须
 //! 推出**同一个**命名空间，否则它的 id 指的是宿主从未编译过的节点：已记录的 trace、落盘的 graft
 //! 记录、编辑器里的树会各处在不同的身份域。Cargo 对已采纳清单的回答，正是让两端在不要求用户
-//! 导出 `NICH_LINK_NAMESPACE` 的情况下取得一致的东西。
+//! 导出 `XIRANG_NAMESPACE` 的情况下取得一致的东西。
 //!
 //! This used to be a literal `[package] name` line scan, and the difference is not
 //! academic: TOML's dotted form (`package.name = "x"`) is the same table with no
@@ -38,13 +38,13 @@ use std::path::{Path, PathBuf};
 /// The manifest a session uses for one project root.
 /// 一个会话为某个项目根使用的清单。
 ///
-/// `NICH_LINK_HOST_MANIFEST` names it explicitly — absolute, relative to the root,
+/// `XIRANG_HOST_MANIFEST` names it explicitly — absolute, relative to the root,
 /// or a directory holding a `Cargo.toml` — and otherwise it is the root's own
 /// `Cargo.toml`.
-/// `NICH_LINK_HOST_MANIFEST` 可以显式指名它——绝对路径、相对根的路径，或一个含 `Cargo.toml`
+/// `XIRANG_HOST_MANIFEST` 可以显式指名它——绝对路径、相对根的路径，或一个含 `Cargo.toml`
 /// 的目录——否则就是根本身的 `Cargo.toml`。
 pub(super) fn manifest_for(root: &Path) -> PathBuf {
-    if let Some(configured) = std::env::var_os("NICH_LINK_HOST_MANIFEST") {
+    if let Some(configured) = std::env::var_os("XIRANG_HOST_MANIFEST") {
         let path = PathBuf::from(configured);
         let path = if path.is_absolute() {
             path
@@ -63,32 +63,32 @@ pub(super) fn manifest_for(root: &Path) -> PathBuf {
 /// The identity namespace one host manifest stands for.
 /// 一份宿主清单所代表的身份命名空间。
 ///
-/// `NICH_LINK_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
+/// `XIRANG_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
 /// is the namespace, because that is what the declaration macros read there — `host!()` defines
-/// `crate::NICHLINK_NAMESPACE` from the package name (audit `M7`, P3.3).
-/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为那里的声明宏读的
-/// 就是它——`host!()` 用包名定义 `crate::NICHLINK_NAMESPACE`（审计 `M7`，P3.3）。
+/// `crate::XIRANG_NAMESPACE` from the package name (audit `M7`, P3.3).
+/// `XIRANG_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为那里的声明宏读的
+/// 就是它——`host!()` 用包名定义 `crate::XIRANG_NAMESPACE`（审计 `M7`，P3.3）。
 ///
 /// What it is **not**: a rule the build side reads. The namespace is baked into the host at compile
 /// time, this surface and the MCP bridge read the override, and the CLI reads none of it — so with
-/// the variable set Studio reports identities that `nichlink explain --json` and the built host do
+/// the variable set Studio reports identities that `xirang explain --json` and the built host do
 /// not use. The variable's documented purpose is a *reader's* override for trace artifacts; whether
 /// it should keep applying to host identity is the maintainer's decision, and saying so is not
 /// optional (audit `S12`).
 /// 它**不是**什么：不是构建侧会读的规则。命名空间在编译期就烤进宿主，本执行面与 MCP 桥读这个覆盖，
-/// 而 CLI 完全不读——因此设置该变量后，Studio 报告的身份正是 `nichlink explain --json` 与已构建宿主
+/// 而 CLI 完全不读——因此设置该变量后，Studio 报告的身份正是 `xirang explain --json` 与已构建宿主
 /// **不用的**那一套。该变量文档化的用途是 trace artifact 的**读取者覆盖**；它是否应继续作用于宿主身份
 /// 由维护者决定，而把这件事说清楚不是可选项（审计 `S12`）。
 ///
 /// The documented default is the last resort here, and that is the deliberate
 /// asymmetry with the MCP bridge's registry query: **authoring creates** a tree, so
 /// for a project nobody has built yet — a virtual workspace root, or a directory
-/// with no manifest — `nichlink.default` is a real answer, and the wizard that
+/// with no manifest — `xirang.default` is a real answer, and the wizard that
 /// scaffolds a new project depends on it. A *query* about an existing tree must not
 /// invent an identity domain, which is why the bridge refuses instead.
 /// 这里把文档化的默认值留作最后兜底，这正是与 MCP 桥的注册树查询之间有意的不对称：**创作是在
 /// 创建**一棵树，因此对一个还没人构建过的项目——虚拟工作区根，或没有清单的目录——
-/// `nichlink.default` 是真实答案，而搭建新项目的向导依赖它。针对已存在树的**查询**则不能凭空
+/// `xirang.default` 是真实答案，而搭建新项目的向导依赖它。针对已存在树的**查询**则不能凭空
 /// 造出身份域，因此桥选择拒绝。
 pub(super) fn namespace_for(manifest: &Path, configured: Option<&str>) -> String {
     // The override half is the shared rule in `build_method`; the fallback is this surface's own

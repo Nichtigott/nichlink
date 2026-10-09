@@ -1,5 +1,5 @@
-//! `nichlink crates`: plan the crate split a host declared, and optionally write it.
-//! `nichlink crates`：规划宿主声明的 crate 拆分，并可选地把它写下来。
+//! `xirang crates`: plan the crate split a host declared, and optionally write it.
+//! `xirang crates`：规划宿主声明的 crate 拆分，并可选地把它写下来。
 //!
 //! The declaration (`add_crates.rs`) is an authoring input, so this is the authoring action's CLI
 //! face: `--check` (the default) prints what would be created and refuses a shape that cannot work,
@@ -98,13 +98,13 @@ pub(crate) fn crates(
         format!(
             "{} has no {}: a host without a declaration is one crate, so there is nothing to plan",
             package_root.display(),
-            nichlink_kernel::lexicon::ADD_CRATES_FILE
+            xirang_kernel::lexicon::ADD_CRATES_FILE
         )
     })
             .map_err(|error| error.to_string())?;
     let out_dir = super::build_out_dir(&package_root);
     let rows = crate::build_method::read_pruning_manifest(&out_dir).map_err(|error| {
-        format!("{error}\nway forward: run `nichlink check` first — the plan reads the faces the build published")
+        format!("{error}\nway forward: run `xirang check` first — the plan reads the faces the build published")
     })
             .map_err(|error| error.to_string())?;
     let faces: Vec<(String, String, crate::build_method::NodeId)> = rows
@@ -437,7 +437,7 @@ fn declaration_edit(
             format!(
                 "wrote {}: {} crate(s) declared",
                 package_root
-                    .join(nichlink_kernel::lexicon::ADD_CRATES_FILE)
+                    .join(xirang_kernel::lexicon::ADD_CRATES_FILE)
                     .display(),
                 view.packages
                     .iter()

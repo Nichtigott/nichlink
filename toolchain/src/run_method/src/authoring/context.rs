@@ -20,7 +20,7 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-pub use nichlink_kernel::authoring::validation::*;
+pub use xirang_kernel::authoring::validation::*;
 
 /// Filesystem and identity scope for one authoring operation.
 /// 单次注册面创作操作使用的文件系统与身份上下文。
@@ -72,9 +72,9 @@ impl AuthoringContext {
 /// the environment, then the documented default.
 /// 本次操作创作所用的命名空间：先活动上下文，再环境变量，最后文档化的默认值。
 ///
-/// The decision itself is `nichlink_kernel::lexicon::resolve_namespace`, shared with
+/// The decision itself is `xirang_kernel::lexicon::resolve_namespace`, shared with
 /// Studio and the MCP bridge; this function only supplies what it reads.
-/// 决策本身是 `nichlink_kernel::lexicon::resolve_namespace`，与 Studio 和 MCP 桥共用；本函数
+/// 决策本身是 `xirang_kernel::lexicon::resolve_namespace`，与 Studio 和 MCP 桥共用；本函数
 /// 只负责提供它读取的东西。
 pub(super) fn authoring_namespace() -> String {
     ACTIVE_CONTEXT
@@ -85,8 +85,8 @@ pub(super) fn authoring_namespace() -> String {
                 .map(|context| context.namespace.clone())
         })
         .unwrap_or_else(|| {
-            nichlink_kernel::lexicon::resolve_namespace(
-                std::env::var(nichlink_kernel::lexicon::NAMESPACE_ENV)
+            xirang_kernel::lexicon::resolve_namespace(
+                std::env::var(xirang_kernel::lexicon::NAMESPACE_ENV)
                     .ok()
                     .as_deref(),
             )
@@ -113,10 +113,9 @@ pub(super) fn package_root() -> PathBuf {
     }) {
         return root;
     }
-    let configured =
-        std::env::var_os(nichlink_kernel::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
+    let configured = std::env::var_os(xirang_kernel::lexicon::PACKAGE_ROOT_ENV).map(PathBuf::from);
     let current = std::env::current_dir().ok();
-    nichlink_kernel::lexicon::resolve_package_root(
+    xirang_kernel::lexicon::resolve_package_root(
         configured.as_deref(),
         current.as_deref(),
         current
@@ -137,30 +136,30 @@ mod tests {
 
     #[test]
     fn nested_authoring_contexts_restore_the_previous_project() {
-        let outer = AuthoringContext::new("/tmp/nichlink-outer", "outer");
-        let inner = AuthoringContext::new("/tmp/nichlink-inner", "inner");
+        let outer = AuthoringContext::new("/tmp/xirang-outer", "outer");
+        let inner = AuthoringContext::new("/tmp/xirang-inner", "inner");
 
         outer.scope(|| {
-            assert_eq!(package_root(), Path::new("/tmp/nichlink-outer"));
+            assert_eq!(package_root(), Path::new("/tmp/xirang-outer"));
             assert_eq!(authoring_namespace(), "outer");
             inner.scope(|| {
-                assert_eq!(package_root(), Path::new("/tmp/nichlink-inner"));
+                assert_eq!(package_root(), Path::new("/tmp/xirang-inner"));
                 assert_eq!(authoring_namespace(), "inner");
             });
-            assert_eq!(package_root(), Path::new("/tmp/nichlink-outer"));
+            assert_eq!(package_root(), Path::new("/tmp/xirang-outer"));
             assert_eq!(authoring_namespace(), "outer");
         });
     }
 
     #[test]
     fn panicking_authoring_context_still_restores_its_parent() {
-        let outer = AuthoringContext::new("/tmp/nichlink-outer", "outer");
-        let inner = AuthoringContext::new("/tmp/nichlink-inner", "inner");
+        let outer = AuthoringContext::new("/tmp/xirang-outer", "outer");
+        let inner = AuthoringContext::new("/tmp/xirang-inner", "inner");
 
         outer.scope(|| {
             let result = std::panic::catch_unwind(|| inner.scope(|| panic!("expected panic")));
             assert!(result.is_err());
-            assert_eq!(package_root(), Path::new("/tmp/nichlink-outer"));
+            assert_eq!(package_root(), Path::new("/tmp/xirang-outer"));
             assert_eq!(authoring_namespace(), "outer");
         });
     }

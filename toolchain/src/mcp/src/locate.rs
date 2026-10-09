@@ -1,5 +1,5 @@
-//! `nichlink.locate`: rank the places a symptom's own words point at, in one call.
-//! `nichlink.locate`：用症状自己的词，一次把"该去看的地方"排好序。
+//! `xirang.locate`: rank the places a symptom's own words point at, in one call.
+//! `xirang.locate`：用症状自己的词，一次把"该去看的地方"排好序。
 //!
 //! The measured failure this answers: an agent holding a symptom (a failing assertion's message, a
 //! runtime error, a description) had no entry that took **words** and returned **places**. It had to

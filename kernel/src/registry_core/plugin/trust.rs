@@ -9,10 +9,10 @@ use std::fmt;
 ///
 /// This is intentionally a checksum and key-fingerprint policy, not a
 /// home-grown signature scheme. Signature verification belongs in the
-/// adapter that loads a plugin; NichLink only decides whether the verified
+/// adapter that loads a plugin; XiRang only decides whether the verified
 /// identity is allowed to enter this registry.
 /// 这里刻意只做摘要和公钥指纹策略，不伪造签名算法。真正的签名校验由加载插件的
-/// adapter 完成，NichLink 只判断已校验身份是否可以进入注册树。
+/// adapter 完成，XiRang 只判断已校验身份是否可以进入注册树。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PluginTrustPolicy {
     /// SHA-256 fingerprints of keys trusted to sign official plugins.
@@ -29,10 +29,10 @@ pub struct PluginTrustPolicy {
 /// Host-provided cryptographic verifier for official plugin signatures.
 /// 由宿主提供的官方插件签名密码学验证器。
 ///
-/// NichLink deliberately does not implement a signature scheme. The host can
+/// XiRang deliberately does not implement a signature scheme. The host can
 /// connect its existing Ed25519, platform keystore, or isolated process
 /// verifier without making the registry depend on that implementation.
-/// NichLink 刻意不实现具体签名算法。宿主可以接入现有的 Ed25519、平台密钥库或
+/// XiRang 刻意不实现具体签名算法。宿主可以接入现有的 Ed25519、平台密钥库或
 /// 隔离进程验证器，而不让注册机依赖这些实现。
 pub trait PluginSignatureVerifier {
     /// Return whether the host accepts this signature over the canonical payload.
@@ -287,7 +287,7 @@ mod tests {
             name: "official.canvas",
             crate_name: "official_canvas",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.default"),
+            framework: FrameworkId::new("xirang.default"),
             source: PluginSource::Official,
             mode: PluginMode::Replacement,
             checksum: DIGEST,
@@ -415,7 +415,7 @@ mod tests {
             name: "official.canvas",
             crate_name: "official_canvas",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.default"),
+            framework: FrameworkId::new("xirang.default"),
             source: PluginSource::Official,
             mode: PluginMode::Extension,
             checksum: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",

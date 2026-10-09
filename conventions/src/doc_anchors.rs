@@ -27,12 +27,12 @@
 //! kinds a document cites by line, the release workflow's tag guard among them. Two kinds
 //! stay out, at a stated price: a `.md` target names prose, so a line number in it carries no
 //! symbol to check, and widening the scan to markdown would sweep the self-references of every
-//! living document; an extensionless script (`tools/nichlink-publish:88`) has no suffix to key
+//! living document; an extensionless script (`tools/xirang-publish:88`) has no suffix to key
 //! on. Both therefore rot silently, and this paragraph is the record.
 //! 覆盖范围，以及它为什么停在这里：扫描以写下路径的后缀为判据，因此它读 Rust 源码、工作区清单与
 //! `.github/workflows/*.yml`——文档按行引用的正是这三类，发布工作流的 tag 守卫也在其中。有两类
 //! 留在外面，代价写明：`.md` 目标命名的是散文，其中的行号没有可供核对的符号，而把扫描扩到
-//! markdown 会扫过每一份活文档的自引用；无扩展名的脚本（`tools/nichlink-publish:88`）没有可作
+//! markdown 会扫过每一份活文档的自引用；无扩展名的脚本（`tools/xirang-publish:88`）没有可作
 //! 判据的后缀。两者因此会静默腐化，而这一段就是那份记录。
 
 use std::fs;

@@ -51,7 +51,7 @@ const MAX_CONVERGE_LINES: usize = 200;
 /// cannot act on is what audit `LGC-LG-43` recorded against `raise \`limit\``.
 /// 这几道上限是常数而不是 `limit`：没有参数能提高它们，因此那句话必须点名这个"没有"，并指向那个
 /// 打印整次运行的工具。调用方无法执行的建议，正是审计 `LGC-LG-43` 记在 `raise \`limit\`` 上的问题。
-const MORE_DETAIL: &str = "no argument raises this per-face cap; `nichlink.trace values: true` prints the run's values and edges";
+const MORE_DETAIL: &str = "no argument raises this per-face cap; `xirang.trace values: true` prints the run's values and edges";
 
 /// Converge from the run that happened rather than from a face name.
 /// 从真正发生过的那次运行收敛，而不是从一个面名收敛。
@@ -196,9 +196,9 @@ pub(crate) fn converge_from_trace_with(
         // What those frames *saw*, not only that they ran: the recorded locals of
         // this file's frames, and the observed edges between them. This is the half
         // an agent needs to form a hypothesis about a cross-file bug, and it is
-        // already in the artifact `nichlink.trace` reads.
+        // already in the artifact `xirang.trace` reads.
         // 那些帧**看见了**什么，而不只是它们跑过：本文件这些帧记录下的局部值，以及它们之间被观察到的
-        // 边。这正是代理对跨文件缺陷形成假设所需要的那一半，而它本来就在 `nichlink.trace` 所读的
+        // 边。这正是代理对跨文件缺陷形成假设所需要的那一半，而它本来就在 `xirang.trace` 所读的
         // artifact 里。
         let locals: Vec<_> = artifact
             .locals
@@ -325,13 +325,13 @@ pub(crate) fn converge_from_trace_with(
                 max_lines,
                 "lines of per-face detail",
                 "lower `limit` so fewer files take the detail, or read the whole run with \
-                 `nichlink.trace values: true`"
+                 `xirang.trace values: true`"
             )
         ));
     }
     output.push_str(&format!(
-        "detail: nichlink.converge node=<path> (one face's constraints) · nichlink.trace ({}) · \
-         nichlink.usages (fields) · nichlink.diff (what changed)\n",
+        "detail: xirang.converge node=<path> (one face's constraints) · xirang.trace ({}) · \
+         xirang.usages (fields) · xirang.diff (what changed)\n",
         path.display()
     ));
     Ok(output)
@@ -363,7 +363,7 @@ struct RanFile {
 /// 前会先被重写到它**最后一个完整的 `src/` 段**之后。没有 `src/` 段的路径原样比较，那正是身份保留其
 /// 前导目录的 `[lib] path` 情形。
 fn matches_file(recorded: &str, identity: &str) -> bool {
-    let normalized = nichlink_kernel::declaration::portable_path(recorded);
+    let normalized = xirang_kernel::declaration::portable_path(recorded);
     let normalized = normalized.strip_prefix("./").unwrap_or(&normalized);
     if normalized == identity {
         return true;

@@ -5,7 +5,7 @@
 /// 供生成的父级专属宏使用的内部声明原语。
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __nichlink_object {
+macro_rules! __xirang_object {
     (collector: $collector:ident, $($tokens:tt)*) => {
         $crate::__control_object! { collector: $collector, $($tokens)* }
     };
@@ -101,7 +101,7 @@ macro_rules! __control_object {
             $(stable_name: $stable_name,)?
             needs_registry: $crate::__face_expr_or!(false; $($needs_registry)?),
             registry_name: $crate::run_method::registry_core::last_path_segment(module_path!()),
-            parent: $crate::__face_expr_or!($crate::run_method::root_node_id(crate::NICHLINK_NAMESPACE); $($parent)?),
+            parent: $crate::__face_expr_or!($crate::run_method::root_node_id(crate::XIRANG_NAMESPACE); $($parent)?),
             getting_from_other_registry: $crate::__face_expr_or!(None; $($getting)?),
             registry_rule_path: $crate::__face_expr_or!($crate::run_method::registry_core::manifest_relative_source(env!("CARGO_MANIFEST_DIR"), file!()); $($rule_path)?),
             // The author's expression wins; an omitted rule on a
@@ -145,14 +145,14 @@ macro_rules! __control_object {
     // reorders tolerantly and reports the exact token it rejects. A well-formed
     // face never reaches this arm, so its expansion is unchanged. The front end is
     // named through `$crate` like every other expansion point: an absolute
-    // `::nichlink_run_method` resolves only while the host keeps that dependency
-    // name, so a renamed dependency (`run = { package = "nichlink-toolchain" }`)
+    // `::xirang_run_method` resolves only while the host keeps that dependency
+    // name, so a renamed dependency (`run = { package = "xirang-toolchain" }`)
     // compiled in field order and failed here with "use of undeclared crate".
     // 上面那条 arm 不接受的声明——字段顺序不同、用 `;` 分隔、漏写分隔符、字段名拼错——
     // 交给前端：它宽容重排，并把被拒绝的那个 token 精确报出来。合法注册面永远不会走到
     // 这里，展开因此保持不变。前端与其它展开点一样经 `$crate` 命名：绝对路径
-    // `::nichlink_run_method` 只在宿主保留了这个依赖名时能解析，因此改了依赖名
-    // （`run = { package = "nichlink-toolchain" }`）的声明会按字段顺序编译通过、却在这里报
+    // `::xirang_run_method` 只在宿主保留了这个依赖名时能解析，因此改了依赖名
+    // （`run = { package = "xirang-toolchain" }`）的声明会按字段顺序编译通过、却在这里报
     // "use of undeclared crate"。
     {
         collector: $collector:ident,

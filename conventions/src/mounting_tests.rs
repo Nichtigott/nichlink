@@ -2,7 +2,7 @@
 //! 模块挂载门禁的测试。
 
 use super::*;
-use crate::shims::{SHIMS, missing_shims, nichlink_reexports};
+use crate::shims::{SHIMS, missing_shims, xirang_reexports};
 use crate::workspace_root;
 
 /// The only `include!` is the generated plan, and no file is named `mod.rs`.
@@ -53,7 +53,7 @@ fn synthetic(files: &[(&str, &str)]) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mounting-{}-{}-{sequence}",
+        "xirang-mounting-{}-{}-{sequence}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -321,7 +321,7 @@ fn a_deleted_shim_is_reported() {
     // Drop the last statement of one file and re-check.
     let (file, contents) = files.last().expect("at least one pinned shim");
     let shortened = contents
-        .rsplit_once("pub use nichlink_kernel::")
+        .rsplit_once("pub use xirang_kernel::")
         .map(|(head, _)| head.to_owned())
         .expect("a pinned statement to remove");
     let path = root.join(file);
@@ -337,9 +337,6 @@ fn a_deleted_shim_is_reported() {
 /// 提取会规范化空白，因此花括号列表被 `rustfmt` 重新折行不会被读成删掉的 shim。
 #[test]
 fn a_reexport_is_recognised_across_line_breaks() {
-    let found = nichlink_reexports("pub use nichlink_kernel::{\n    A,\n    B,\n};\n");
-    assert_eq!(
-        found,
-        vec!["pub use nichlink_kernel::{ A, B, };".to_owned()]
-    );
+    let found = xirang_reexports("pub use xirang_kernel::{\n    A,\n    B,\n};\n");
+    assert_eq!(found, vec!["pub use xirang_kernel::{ A, B, };".to_owned()]);
 }

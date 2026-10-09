@@ -1,8 +1,8 @@
-# NichLink Roadmap
+# XiRang Roadmap
 
 [简体中文](ROADMAP.zh-CN.md) | English
 
-This roadmap covers NichLink itself. NichUI product work, funding, and community operations live in separate notes and are not release milestones for the registry protocol.
+This roadmap covers XiRang itself. NichUI product work, funding, and community operations live in separate notes and are not release milestones for the registry protocol.
 
 ## Current line: 0.1 early production
 
@@ -13,10 +13,10 @@ This roadmap covers NichLink itself. NichUI product work, funding, and community
 - [x] Studio search/inspect/data views and source navigation.
 - [x] MCP bridge — queries plus a previewed authoring write path — and verified Wasm/process plugin adapters.
 - [x] Cross-platform CI, scale audits, symbol audits, and package checks.
-- [x] Kernel/execution-surface split: one pure kernel (`nichlink-kernel`) holding
+- [x] Kernel/execution-surface split: one pure kernel (`xirang-kernel`) holding
   protocol vocabulary and pure methods, with thin surfaces
-  (`nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`,
-  `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`, `nichlink-toolchain`)
+  (`xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`,
+  `xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`, `xirang-toolchain`)
   binding those methods to their own contexts.
 
 0.1 is suitable for experiments and selected internal production use. It does not claim complete static analysis for arbitrary Rust programs.
@@ -49,7 +49,7 @@ Connect MCP and Studio to Registry snapshots, contracts, diagnostics, and live p
 
 ### 7. Validated MCP authoring tools
 
-**Started (2026-09-26):** `nichlink.apply` performs validated `add` / `edit` /
+**Started (2026-09-26):** `xirang.apply` performs validated `add` / `edit` /
 `rename` / `delete` through the same authoring executor Studio uses, previewed on a
 throwaway copy of the package by default, and `edit` reads the face back so a
 partial request keeps every field it did not name. Still to come: `graft` writes,

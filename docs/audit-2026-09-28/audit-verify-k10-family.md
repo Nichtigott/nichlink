@@ -25,11 +25,11 @@
 生产入口的选取是本节的关键。`rule_syntax_for_source` 本身是 `pub(super)`，因此我不去调它、也不读作者的钉子；我调到的是**同一个公开生产路径**：
 
 ```
-nichlink_run_method::generated_snapshots_from(root)        # MCP `nichlink.apply` 预览与 Studio 刷新所用
+xirang_run_method::generated_snapshots_from(root)        # MCP `xirang.apply` 预览与 Studio 刷新所用
   → FaceManifest::parse_source(path)
     → manifest::parse::source(path)                        # run_method/src/authoring/manifest/parse/parse.rs:261
       → rule_syntax_for_source(path)                       # run_method/src/authoring/parse/parse.rs:88
-        → nichlink::authoring::parse::try_rule_syntax_from_text(text)
+        → xirang::authoring::parse::try_rule_syntax_from_text(text)
 ```
 
 三条形状各有一个自建夹具：一个一次性源码根，里面放一份**出厂面文件**（`examples/control-button/src/control/control.rs` 或 studio fixture 的同名文件）作为“真面”，规则文件由探针写入；形状③干脆不写规则文件。这样生产遍历看到的面与它在检出里看到的面同形。
@@ -129,7 +129,7 @@ pub const REGISTRATION_RULE: RegistrationRule =
 1. **`registry_rule_path` 在规则文件不存在时仍被填成“本应在的位置”**（实测 `"src/control/registry_rule/registry_rule.rs"`），而它的字段文档写的是“提供该注册规范的声明所在源码路径”。规则值与生产行为都不受影响；但它会让读该字段的调用方以为存在这样一份文件。低严重度，建议下一轮在字段文档或取值上择一对齐。
 2. **宽容入口在“整段文本没有 `=`”时静默给 `ANY`。** 我最初的探针把表达式本身（而非文件）交给宽容入口，实测 `rule_syntax_from_text("crate::RegistrationRule::new().require_exports(&[\"control.render\"])")` 得到 `"ANY"`。这与作者文档所写的“第一个 `=` 不是初始器时就静默降级”同源，是**已发布 API 的既知损失性**，不是新洞；记在这里因为它正好是同一形状的第二个可复现点。
 3. **整根遍历对两棵出厂树都在“模块路径父级”上停下**（`examples/control-button/src`、`studio/tests/fixtures/node-editor/src` 都是 `invalid parent path`）。与规则读取器无关，但意味着 `generated_snapshots_from` 不能直接用于这两棵树；作者的钉子 `every_shipped_rule_source_still_reads_through_the_production_entry` 与我的探针都因此改为逐面测量。
-4. **单 crate 验证需要点名特性**（本仓准则）：`cargo test -p nichlink-run-method --offline` 在没有 `authoring` 时报 `0 passed` —— 规则/生产路径的钉子一条都不会跑。本文件的门禁因此都带了 `--features authoring`（或走工作区/`--all-features`）。
+4. **单 crate 验证需要点名特性**（本仓准则）：`cargo test -p xirang-run-method --offline` 在没有 `authoring` 时报 `0 passed` —— 规则/生产路径的钉子一条都不会跑。本文件的门禁因此都带了 `--features authoring`（或走工作区/`--all-features`）。
 
 ## 7. 门禁与零改动
 
@@ -137,8 +137,8 @@ pub const REGISTRATION_RULE: RegistrationRule =
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo test -p nichlink-core --offline` | `ok`，lib 目标 `187 passed; 0 failed`（`--features syntax` 时 `246 passed`；规则钉子 6 条在其中） |
-| `cargo test -p nichlink-run-method --offline --features authoring` | `ok`，`parse_tests` 10 条全过（含 `a_malformed_rule_source_is_refused_with_its_context`、`every_shipped_rule_source_still_reads_through_the_production_entry`） |
+| `cargo test -p xirang-core --offline` | `ok`，lib 目标 `187 passed; 0 failed`（`--features syntax` 时 `246 passed`；规则钉子 6 条在其中） |
+| `cargo test -p xirang-run-method --offline --features authoring` | `ok`，`parse_tests` 10 条全过（含 `a_malformed_rule_source_is_refused_with_its_context`、`every_shipped_rule_source_still_reads_through_the_production_entry`） |
 | `cargo test --workspace --offline` | `ok`，无 `FAILED`/`error` 行 |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | `ok`，无告警 |
 | `cargo fmt --all -- --check` | `ok`，无 Diff |

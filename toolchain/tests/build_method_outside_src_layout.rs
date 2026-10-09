@@ -10,13 +10,13 @@
 /// from `host!()`.
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量：声明宏读它（审计 `M7`，P3.3），因此测试
 /// crate 必须提供宿主从 `host!()` 得到的那一行同样的值。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink_kernel::NodeId;
-use nichlink_toolchain::build_method::{check_for, face_views};
+use xirang_kernel::NodeId;
+use xirang_toolchain::build_method::{check_for, face_views};
 
 /// The package name every fixture uses. `check_for` pins the identity namespace
 /// in a process-global first-write-wins cell, so a test that ran under a different
@@ -40,7 +40,7 @@ const NAME: &str = "outside-src";
 fn package(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("nichlink-outside-src-{label}-{sequence}"));
+    let root = std::env::temp_dir().join(format!("xirang-outside-src-{label}-{sequence}"));
     let _ = std::fs::remove_dir_all(&root);
     let face = root.join("host/control/control.rs");
     std::fs::create_dir_all(face.parent().expect("face directory")).expect("package directory");
@@ -63,8 +63,8 @@ fn package(label: &str) -> PathBuf {
     .expect("registration rule");
     std::fs::write(
         &face,
-        "nichlink_toolchain::build_method::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \
-         parent: nichlink_toolchain::build_method::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
+        "xirang_toolchain::build_method::root_object! {\n    kind: Control,\n    needs_registry: true,\n    \
+         parent: xirang_toolchain::build_method::root_node_id(env!(\"CARGO_PKG_NAME\")),\n}\n",
     )
     .expect("face");
     root
@@ -81,7 +81,7 @@ fn package(label: &str) -> PathBuf {
 #[test]
 fn a_library_target_outside_src_keeps_its_identity_prefix() {
     let root = package("outside-src");
-    let out_dir = root.join("target/nichlink/out");
+    let out_dir = root.join("target/xirang/out");
     check_for(&root, &out_dir, NAME).expect("the layout is supported");
 
     let generated = std::fs::read_to_string(out_dir.join("generated_lib.rs")).expect("generated");
@@ -131,7 +131,7 @@ fn the_face_view_reports_the_same_identity_as_the_build() {
 fn a_library_target_that_is_not_a_file_is_refused_by_name() {
     let root = package("outside-src-missing");
     std::fs::remove_file(root.join("host/lib.rs")).expect("remove the target");
-    let out_dir = root.join("target/nichlink/out");
+    let out_dir = root.join("target/xirang/out");
     let diagnostics =
         check_for(&root, &out_dir, NAME).expect_err("a target that is not a file is refused");
     let rendered = diagnostics.render_build_diagnostics();

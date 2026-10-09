@@ -3,7 +3,7 @@
 用途：第七轮的 **22 题 cg 答案与原始日志**在此冻结，供**后续各轮复用**（对照臂本身未变时不再整轮重跑）。
 
 - 工具：codegraph CLI 1.5.0（`$HOME/.local/bin/codegraph`），未升级
-- 题树：由 `tools/nichlink-mcp-eval` 重建（与 `pristine-*` 逐文件 0 行差异 ⇒ 同构）
+- 题树：由 `tools/xirang-mcp-eval` 重建（与 `pristine-*` 逐文件 0 行差异 ⇒ 同构）
 - 日期：2026-10-01T19:04:42+08:00
 
 ## 答案与日志（sha256 前 16 位）

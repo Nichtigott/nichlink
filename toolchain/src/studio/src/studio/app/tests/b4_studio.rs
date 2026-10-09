@@ -18,17 +18,17 @@
 use super::super::{PluginState, plugin_field};
 use super::*;
 
-/// A throwaway project whose `.nichlink/plugins/` is the plugin write target.
-/// 一个一次性工程，其 `.nichlink/plugins/` 是插件写入目标。
+/// A throwaway project whose `.xirang/plugins/` is the plugin write target.
+/// 一个一次性工程，其 `.xirang/plugins/` 是插件写入目标。
 fn temp_plugins(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-b4-studio-{label}-{}",
+        "xirang-b4-studio-{label}-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos()
     ));
-    let plugins = root.join(".nichlink/plugins");
+    let plugins = root.join(".xirang/plugins");
     std::fs::create_dir_all(&plugins).expect("plugin directory");
     select_project(root.clone(), root.join("Cargo.toml"), "plugin-app");
     (root, plugins)
@@ -204,7 +204,7 @@ fn the_inspector_draws_every_row_it_lists() {
 #[test]
 fn a_failed_editor_launch_is_returned_not_only_shown() {
     let mut app = App::load_app();
-    let missing = std::env::temp_dir().join("nichlink-b4-studio-missing-source.rs");
+    let missing = std::env::temp_dir().join("xirang-b4-studio-missing-source.rs");
     let _ = std::fs::remove_file(&missing);
     let failure = app
         .open_editor_file(missing.clone(), 1)
@@ -251,7 +251,7 @@ fn the_plugin_entry_gate_reads_lines_not_substrings() {
     let event = submit_plugin(
         "user",
         [
-            "nichlink.test",
+            "xirang.test",
             "demo-plugin",
             "0.1.0",
             "demo_plugin",

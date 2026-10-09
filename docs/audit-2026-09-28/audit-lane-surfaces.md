@@ -55,7 +55,7 @@
 把载荷写在前、指纹写在最后，且只在 `write_errors.is_empty()` 时发布；删指纹失败上报为诊断而不是 `let _ =`；`write_if_changed` 改成写唯一临时文件后 rename（与 `run_method/src/authoring/filesystem/filesystem.rs:18` 同一模式），这样"文件存在"就等于"文件完整"。
 
 **复核手段**
-把 `out_dir/pruning_manifest.tsv` 的父目录或文件权限改成不可写，跑 `check_for` 或 `nichlink check`，断言：指纹不存在、且 `build_output_is_current` 返回 `false`；再另跑一次，断言 `pruning_manifest.tsv` 不出现半截内容。
+把 `out_dir/pruning_manifest.tsv` 的父目录或文件权限改成不可写，跑 `check_for` 或 `xirang check`，断言：指纹不存在、且 `build_output_is_current` 返回 `false`；再另跑一次，断言 `pruning_manifest.tsv` 不出现半截内容。
 
 ---
 
@@ -95,7 +95,7 @@
 - 该产物的内容是会被别的面报告的（既有的 3p 审计 KN5 就是拿 `function_manifest.tsv` 举例说明错误符号会流进构建产物），所以它不是可以放着不管的死产物。
 
 **最小修复方向**
-调用 `nichlink::source::function_symbols`（它已经处理了标识符边界与 impl 归属），删掉本地扫描；如果确认无人读这份产物，就在同一轮里删掉写入，别留一个会分叉的第二答案。
+调用 `xirang::source::function_symbols`（它已经处理了标识符边界与 impl 归属），删掉本地扫描；如果确认无人读这份产物，就在同一轮里删掉写入，别留一个会分叉的第二答案。
 
 **复核手段**
 对一个含 `// fn fake()` 注释、`let s = "fn fake";`、以及 `impl A { fn b() {} }` 的文件，同时跑内核扫描器与构建期扫描器，断言两者输出一致。
@@ -176,7 +176,7 @@
 
 **判据**
 - 这四个名字是仓库自己的夹具/演示模块名（`grep -rn '"engine"' run_method/src` 只命中这里；`trimmed_core` 同样只在这里）。库代码里的这个启发式对任何其它宿主都是错的：`/data/control/myrepo/src/foo/foo.rs` 会被读成 `myrepo/src/foo/foo.rs`（正确应是 `foo/foo.rs`），而这个值就是 `FaceManifest.values["source"]`，直接决定身份输入与清单里的 `source` 列（`core/src/registry_core/identity/path_text.rs:123` 的 `manifest_relative_source` 是为这件事准备的、不依赖硬编码的规则）。
-- 触发条件是"文件不在 `source_root()` 之下"，而这正是 Studio 打开一个非标准布局工程、或 `NICH_LINK_PACKAGE_ROOT` 指向别处时的情形，不是测试专属路径。
+- 触发条件是"文件不在 `source_root()` 之下"，而这正是 Studio 打开一个非标准布局工程、或 `XIRANG_PACKAGE_ROOT` 指向别处时的情形，不是测试专属路径。
 
 **最小修复方向**
 删掉这份名字清单：路径不在 `source_root()` 下时应当报错（或按 `manifest_relative_source` 的规则折叠 `src/` 前缀），而不是猜一个分量。若确有历史夹具需要兼容，把它作为参数/配置传入，不要写进库的通用路径。
@@ -199,7 +199,7 @@
 **判据**
 - `debug_method/src/collector.rs:8`～`debug_method/src/collector.rs:21` 的 `registrations!` 在非 debug 构建下返回空迭代器，与"`debug` 才收集"这条一致；但没有任何地方说明 `linked` 并不提交。
 - 文档与实现的矛盾在同一份文件里：`run_method/src/macros/face_registration.rs:9` 的承诺 vs `run_method/src/macros/face_registration.rs:168` 的空展开，中间没有"仅 `debug` 会提交"的限定。
-- 该分支的注释只写了"收集归 nichlink-debug 所有"（`run_method/src/macros/face_registration.rs:169`），既没解释为什么 `linked` 什么都不做，也没有把注意力引到"这个名字表达的是'由别处收集'"。
+- 该分支的注释只写了"收集归 xirang-debug 所有"（`run_method/src/macros/face_registration.rs:169`），既没解释为什么 `linked` 什么都不做，也没有把注意力引到"这个名字表达的是'由别处收集'"。
 
 **最小修复方向**
 二选一：(a) 若 `linked` 只是"不收集"的别名，改名（例如 `off` / `none`）并在模块文档里列出每个取值的真实效果；(b) 若 `linked` 本应提交到某个链接段，就在这一支里实现它。无论哪种，`collector: $collector:ident` 的取值集合都应当是编译期可枚举、可拒绝非法名的（现在是任意 ident，写错名字会掉进"没有匹配 arm"的裸 marco 错误）。
@@ -211,11 +211,11 @@
 
 ### S10 · [MINOR] · 一致性／宏卫生 · 前端回退臂用绝对 crate 路径而不是 `$crate`
 
-**file:line** `run_method/src/macros/face_objects.rs:169`（`::nichlink_run_method::face_fields! { … }`），对比同层其它臂的 `$crate::` 写法（`run_method/src/macros/face_objects.rs:10`、`run_method/src/macros/face_external.rs:48`）
+**file:line** `run_method/src/macros/face_objects.rs:169`（`::xirang_run_method::face_fields! { … }`），对比同层其它臂的 `$crate::` 写法（`run_method/src/macros/face_objects.rs:10`、`run_method/src/macros/face_external.rs:48`）
 
-**现象** 只有在"字段顺序不同/用 `;`/漏分隔符/拼错字段"时才会走到的容错回退臂，硬写了 `::nichlink_run_method`。
+**现象** 只有在"字段顺序不同/用 `;`/漏分隔符/拼错字段"时才会走到的容错回退臂，硬写了 `::xirang_run_method`。
 
-**判据** 宿主把依赖改名（`run = { package = "nichlink-run-method", … }`）时，`$crate::` 仍然解析，而绝对路径解析不到；因为这条臂**只**在宽容路径上出现，同一份声明在合法顺序下能编译、换个顺序就报"use of undeclared crate or module `nichlink_run_method`"，错误信息指向宏内部而不是作者的行。仓库其它所有展开点都用 `$crate::`（`run_method/src/macros/face_external.rs:48`、`run_method/src/macros/face_registration.rs:156`），这里是不一致的那一个。
+**判据** 宿主把依赖改名（`run = { package = "xirang-run-method", … }`）时，`$crate::` 仍然解析，而绝对路径解析不到；因为这条臂**只**在宽容路径上出现，同一份声明在合法顺序下能编译、换个顺序就报"use of undeclared crate or module `xirang_run_method`"，错误信息指向宏内部而不是作者的行。仓库其它所有展开点都用 `$crate::`（`run_method/src/macros/face_external.rs:48`、`run_method/src/macros/face_registration.rs:156`），这里是不一致的那一个。
 
 **最小修复方向** 改成 `$crate::face_fields!`。**复核手段** 在 `run_method/tests/face_fields.rs` 的既有宽容用例里，把依赖以别名方式接入（或直接断言生成文本里没有绝对 crate 名）。
 
@@ -269,7 +269,7 @@
 
 **file:line** `run_method/src/authoring/manifest/face/face.rs:144`～`run_method/src/authoring/manifest/face/face.rs:148`
 
-**现象** `let key = if field == "admission" { "admission" } else { field };` 与 `field` 完全等价，没有任何注释解释为什么要有这一步。**判据** `field` 就是 `&str`，两个分支值相同；这个分支只增加读者停顿（读到这里会去找 admission 与其它字段的差异，而差异不存在——真正的差异在上面的校验分支里）。**最小修复方向** 删掉，直接用 `field`；如果它曾是"白名单键归一化"的遗留，把那件事写成一条测试。**复核手段** 删掉后跑 `cargo test -p nichlink-run-method --offline`（authoring 面现有测试覆盖两条入口的字段应用）。
+**现象** `let key = if field == "admission" { "admission" } else { field };` 与 `field` 完全等价，没有任何注释解释为什么要有这一步。**判据** `field` 就是 `&str`，两个分支值相同；这个分支只增加读者停顿（读到这里会去找 admission 与其它字段的差异，而差异不存在——真正的差异在上面的校验分支里）。**最小修复方向** 删掉，直接用 `field`；如果它曾是"白名单键归一化"的遗留，把那件事写成一条测试。**复核手段** 删掉后跑 `cargo test -p xirang-run-method --offline`（authoring 面现有测试覆盖两条入口的字段应用）。
 
 ---
 
@@ -317,7 +317,7 @@
 同一个校验存在两份：内核那份先量嵌套再 `syn::parse_str`，执行面这份直接 `syn::parse_str`。`syn` 是递归下降且没有自己的深度守卫，栈溢出**不是可捕获的 panic**，因此这一支的失败不是"少一条诊断"，而是进程 abort。而且顺序上执行面的这一支先跑：`edit()` 在 `render_source()` 之前执行，而带守卫的 `render_flow_provider` 只在渲染时被调用（`run_method/src/authoring/manifest/face/render.rs:110`），所以守卫没有机会说话。
 
 **判据（实测）**
-我用工作区自己的 `syn` rlib（debug 构建，即编辑器/MCP 调试会话实际链接的那份）构造了最小复现，测的是 `run_method/src/authoring/manifest/face/face.rs:141` 这一行的调用本身（探针代码与二进制在 `/tmp/nichlink-probe-surfaces/`，只读工作区、未改工作区任何文件）：
+我用工作区自己的 `syn` rlib（debug 构建，即编辑器/MCP 调试会话实际链接的那份）构造了最小复现，测的是 `run_method/src/authoring/manifest/face/face.rs:141` 这一行的调用本身（探针代码与二进制在 `/tmp/xirang-probe-surfaces/`，只读工作区、未改工作区任何文件）：
 - 输入形如 `A<A<…>>`（嵌套泛型路径）。8 MiB 栈：深度 200（601 字节）→ 正常返回；深度 300（901 字节）→ `fatal runtime error: stack overflow, aborting`，退出码 134。
 - 256 KiB 栈：深度 100（301 字节）即 abort。
 - 结论：阈值是"几百字节"量级，与内核注释里记的 542 字节同阶；一份手写或代理生成的畸形 `flow_provider` 就能让进程死掉，而不是拿到一条 `Err`。
@@ -327,7 +327,7 @@
 把这一支改成调用内核的 `render_flow_provider`（或先 `guard_nesting` 再 `syn::parse_str`），并让执行面不再保留这份平行的校验；更彻底的做法是把"字段值 → 校验"整族收到内核一处，执行面只调用（这正是 `face_write.rs` 那条"新增字段只接一次线"的注释想达到的状态）。
 
 **复核手段**
-给 `run_method` 加一条测试（`FaceManifest::edit("flow_provider", &deep)`，或走 `edit_module_face` 一个补丁），断言深度 300 的输入返回 `Err` 且进程存活；把 `/tmp/nichlink-probe-surfaces/probe_syn 300 8388608` 作为失败模式的复现命令留在报告里。
+给 `run_method` 加一条测试（`FaceManifest::edit("flow_provider", &deep)`，或走 `edit_module_face` 一个补丁），断言深度 300 的输入返回 `Err` 且进程存活；把 `/tmp/xirang-probe-surfaces/probe_syn 300 8388608` 作为失败模式的复现命令留在报告里。
 
 ---
 
@@ -341,7 +341,7 @@
 
 **现象** 第一个文档块与第二个文档块之间**没有任何条目**，两个块在同一个 `pub(crate) fn splice` 上合并成一段文档：`splice` 的文档里前半段讲"在顶层 `;` 处切分 token 流"，而 `split_semicolons` 本身没有任何文档（它是 `pub(crate)`，`missing_docs` 看不见）。
 
-**判据** 直接读文件即可验证：`macro/src/front_end.rs:26` 起紧接 `macro/src/front_end.rs:37` 的 `pub(crate) fn splice(`，中间没有第三个条目；`macro/src/front_end.rs:57` 的 `pub(crate) fn split_semicolons` 上方是空行，没有 `///`。**最小修复方向** 把第一个文档块移回 `split_semicolons` 正上方。**复核手段** `cargo doc -p nichlink-macro --offline` 或直接 `read` 这一段；若加上 `#![warn(missing_docs)]` 之外的内部文档门禁（conventions 已能扫 doc 注释），这类错位会被自动抓到。
+**判据** 直接读文件即可验证：`macro/src/front_end.rs:26` 起紧接 `macro/src/front_end.rs:37` 的 `pub(crate) fn splice(`，中间没有第三个条目；`macro/src/front_end.rs:57` 的 `pub(crate) fn split_semicolons` 上方是空行，没有 `///`。**最小修复方向** 把第一个文档块移回 `split_semicolons` 正上方。**复核手段** `cargo doc -p xirang-macro --offline` 或直接 `read` 这一段；若加上 `#![warn(missing_docs)]` 之外的内部文档门禁（conventions 已能扫 doc 注释），这类错位会被自动抓到。
 
 ### C2 · [MAJOR] · 同型错位：`collect_rust_sources` 的文档挂在 `StdSourceTree` 上
 
@@ -353,7 +353,7 @@
 
 **file:line** `run_method/src/macros/face_registration.rs:9`～`run_method/src/macros/face_registration.rs:10`（承诺 collector 决定链接段）对比 `run_method/src/macros/face_registration.rs:163`、`run_method/src/macros/face_registration.rs:168`～`run_method/src/macros/face_registration.rs:171`（两个分支什么都不提交）
 
-**现象/判据/修复/复核** 见 S9（那条是行为面，这条是同一处的注释面）。注释还写着"收集由 `nichlink-debug` 持有"（真实的 crate 名是 `nichlink-debug-method`，见 C5）。
+**现象/判据/修复/复核** 见 S9（那条是行为面，这条是同一处的注释面）。注释还写着"收集由 `xirang-debug` 持有"（真实的 crate 名是 `xirang-debug-method`，见 C5）。
 
 ### C4 · [MAJOR] · 编辑器悬停文本与宏契约不符：`parent` 被标成 Required
 
@@ -363,9 +363,9 @@
 
 ### C5 · [MAJOR] · 术语不一致：注释里出现两个不存在的 crate 名
 
-**file:line** `run_method/src/macros/entry.rs:18`、`run_method/src/macros/entry.rs:24`、`run_method/src/macros/entry.rs:63`（`nichlink-build`）；`run_method/src/macros/face_registration.rs:169`～`run_method/src/macros/face_registration.rs:170`（`nichlink-debug`）
+**file:line** `run_method/src/macros/entry.rs:18`、`run_method/src/macros/entry.rs:24`、`run_method/src/macros/entry.rs:63`（`xirang-build`）；`run_method/src/macros/face_registration.rs:169`～`run_method/src/macros/face_registration.rs:170`（`xirang-debug`）
 
-**现象/判据** 真实 crate 名是 `nichlink-build-method` 与 `nichlink-debug-method`（`build_method/Cargo.toml:2`、`debug_method/Cargo.toml:2`），lib 名分别是 `nichlink_build_method`、`nichlink_debug_method`；`AGENTS.md` 的改动规则 4 明确要求 crate 名/目录名/lib 名一致。读注释的人会在仓库里搜不到这两个名字。**最小修复方向** 改成带 `-method` 的全名。**复核手段** `grep -rn 'nichlink-build\b\|nichlink-debug\b' build_method run_method macro debug_method` 归零。
+**现象/判据** 真实 crate 名是 `xirang-build-method` 与 `xirang-debug-method`（`build_method/Cargo.toml:2`、`debug_method/Cargo.toml:2`），lib 名分别是 `xirang_build_method`、`xirang_debug_method`；`AGENTS.md` 的改动规则 4 明确要求 crate 名/目录名/lib 名一致。读注释的人会在仓库里搜不到这两个名字。**最小修复方向** 改成带 `-method` 的全名。**复核手段** `grep -rn 'xirang-build\b\|xirang-debug\b' build_method run_method macro debug_method` 归零。
 
 ### C6 · [MINOR] · 同一个字段集合被三处注释写成三个数
 
@@ -377,7 +377,7 @@
 
 **file:line** `run_method/src/macros/face_objects.rs:62`～`run_method/src/macros/face_objects.rs:87`（中段出现断句："…写另一个、或都不写），因此" 后直接接 "`handle`，所以不带 handle 的自定义 preset/parts 声明会落到这里。"）、`run_method/src/macros/face_objects.rs:120`～`run_method/src/macros/face_objects.rs:130`（同一句"作者写下的表达式优先…"连写两遍）、`run_method/src/macros/face_objects.rs:150`～`run_method/src/macros/face_objects.rs:156`（"只写 kind 的注册面不需要单独的 arm"三种说法）
 
-**现象/判据** 这三处都在讲"以前有哪些 arm、现在删了"的历史，读者要先建立起一个已经不存在的结构才能读懂；其中中文那句已经断成病句（英文侧的对应句是完整的，说明是编辑过程中掉了一句）。这类注释违反"讲为什么/不变量"的取向，变成历史叙述。**最小修复方向** 每处只留一句"为什么现在只有一条 arm"，把"曾经有过哪几条"移到 crate 级文档或 CHANGELOG。**复核手段** 纯阅读面，改后跑 `cargo test -p nichlink-run-method --offline` 保证 `run_method/tests/face_arm_defaults.rs`、`run_method/tests/face_preset_parts.rs` 仍绿。
+**现象/判据** 这三处都在讲"以前有哪些 arm、现在删了"的历史，读者要先建立起一个已经不存在的结构才能读懂；其中中文那句已经断成病句（英文侧的对应句是完整的，说明是编辑过程中掉了一句）。这类注释违反"讲为什么/不变量"的取向，变成历史叙述。**最小修复方向** 每处只留一句"为什么现在只有一条 arm"，把"曾经有过哪几条"移到 crate 级文档或 CHANGELOG。**复核手段** 纯阅读面，改后跑 `cargo test -p xirang-run-method --offline` 保证 `run_method/tests/face_arm_defaults.rs`、`run_method/tests/face_preset_parts.rs` 仍绿。
 
 ### C8 · [MINOR] · 该由名字承担的信息被塞进注释：`write_if_changed` 的文档没说它不原子
 
@@ -398,7 +398,7 @@
 - **`host!()` 与 `include!` 边界**：全仓执行面只有一处 `include!`（`run_method/src/macros/entry.rs:55`），它引入的是 `OUT_DIR/generated_lib.rs`；文件名与 `lexicon::GENERATED_LIB_FILE` 用 `const` 断言钉在一起（`run_method/src/macros/entry.rs:37`～`run_method/src/macros/entry.rs:40`），漂移会变成编译错误而不是静默 include 别的文件。生成侧在 `build_method/src/renderer/pass.rs:37` 起组装。
 - **构建期 IO 失败的"两条调用方"分工**：构建脚本路径 panic 并带原因（`build_method/src/pipeline.rs:196`），结构化路径转成诊断（`build_method/src/pipeline.rs:198`～`build_method/src/pipeline.rs:200`）；布局不可读时也走同一条分工（`build_method/src/pipeline.rs:262`～`build_method/src/pipeline.rs:269`），替代了过去的裸 `expect`（历史在 `build_method/src/pipeline.rs:36`～`build_method/src/pipeline.rs:42` 的注释里）。——除 S2 的"顺序"问题外，错误面本身是完整的。
 - **不可读的注册面文件不会被静默丢掉**：`record_unplaced` 对读不了的文件直接返回（`build_method/src/discovery.rs:156`～`build_method/src/discovery.rs:161`），但发现树的每个节点文件都会在入口解析阶段被读一次，失败会产出 `entry` 诊断（`build_method/src/entry.rs:87`～`build_method/src/entry.rs:96`），所以我最初怀疑的"静默少一个面"不成立。
-- **执行面没有重做内核的纯逻辑（除 S1/S4/S8 点名的三处外）**：布局解析委托给 `source_layout`（`build_method/src/source_layout.rs`）、身份经 `registry_identity` 与 `lexicon`（`build_method/src/identity.rs:7`）、源码遍历把文件系统事实经 `nichlink::source::SourceTree` 注入（`run_method/src/authoring/operations/operations.rs:257`～`run_method/src/authoring/operations/operations.rs:280`）、`mir`/`tree`/`plugin` 全是内核类型的 shim。`run_method/src/lib.rs:29`～`run_method/src/lib.rs:38` 的 glob 与 `authoring` shim 的重叠是**有意保留**并写在注释里的（`run_method/src/lib.rs:30`～`run_method/src/lib.rs:37`）。
+- **执行面没有重做内核的纯逻辑（除 S1/S4/S8 点名的三处外）**：布局解析委托给 `source_layout`（`build_method/src/source_layout.rs`）、身份经 `registry_identity` 与 `lexicon`（`build_method/src/identity.rs:7`）、源码遍历把文件系统事实经 `xirang::source::SourceTree` 注入（`run_method/src/authoring/operations/operations.rs:257`～`run_method/src/authoring/operations/operations.rs:280`）、`mir`/`tree`/`plugin` 全是内核类型的 shim。`run_method/src/lib.rs:29`～`run_method/src/lib.rs:38` 的 glob 与 `authoring` shim 的重叠是**有意保留**并写在注释里的（`run_method/src/lib.rs:30`～`run_method/src/lib.rs:37`）。
 - **trace artifact 的写入/解析契约**：转义与反转义对称（`run_method/src/runtime/trace/artifact/artifact.rs:352`～`run_method/src/runtime/trace/artifact/artifact.rs:364` 对 `run_method/src/runtime/trace/artifact/parse.rs:266`～`run_method/src/runtime/trace/artifact/parse.rs:284`）；未知键与不支持的版本一律拒绝（`run_method/src/runtime/trace/artifact/parse.rs:157`、`run_method/src/runtime/trace/artifact/parse.rs:54`）；重建前检查重复 id、缺失父帧、悬空边（`run_method/src/runtime/trace/artifact/artifact.rs:263`～`run_method/src/runtime/trace/artifact/artifact.rs:290`）；写入是唯一临时文件 + rename（`run_method/src/runtime/trace/artifact/io.rs:117`～`run_method/src/runtime/trace/artifact/io.rs:143`），并会创建自己的输出目录（`run_method/src/runtime/trace/artifact/io.rs:83`～`run_method/src/runtime/trace/artifact/io.rs:89`）；"外来快照拒绝盖章"由读取方把关（`mcp/src/trace.rs:93`、`studio/src/studio/app/trace.rs:108` 在比对 namespace 后拒绝），写入方的 namespace 由宿主编译期身份传入而不是读环境（`run_method/src/runtime/trace/artifact/io.rs:57`～`run_method/src/runtime/trace/artifact/io.rs:70`）。
 - **graft 计划与声明状态的交叉判定**：切口↔注册面的匹配规则只有一份（`build_method/src/graft_view/declared.rs:138` 的 `names_face`），区间性作为数据携带而不是从文本推断（`build_method/src/graft_view/declared.rs:37`、`build_method/src/graft_view/declared.rs:163`）；构建期"没有任何声明能命名这个槽位"用的是计划自己记录的 `target_path` 与目标身份反查出的 module（`build_method/src/graft_plan_check.rs:141`），不依赖 `FaceView.path`（这是 S1 的影响范围没有扩大到"构建拒绝/通过"的原因）。计划目录读不了的条目会被计数成一行而不是消失（`build_method/src/graft_view/plan_rows.rs:120`～`build_method/src/graft_view/plan_rows.rs:133`），这条正是本轮工作树改动钉住的行为（新增 `build_method/src/graft_view/plan_rows_tests.rs:19`）。
 - **authoring 执行器的事务写入模式**：新增面先暂存校验再落盘（`run_method/src/authoring/operations/create.rs:77`～`run_method/src/authoring/operations/create.rs:85`）、`atomic_write` 用唯一临时文件（`run_method/src/authoring/filesystem/filesystem.rs:18`～`run_method/src/authoring/filesystem/filesystem.rs:47`，并有"不删别人的兄弟文件"的测试 `run_method/src/authoring/filesystem/filesystem.rs:72`）、重写前把旧文本留进 trash（`run_method/src/authoring/operations/operations.rs:369`～`run_method/src/authoring/operations/operations.rs:373`、`run_method/src/authoring/operations/trash.rs:48`～`run_method/src/authoring/operations/trash.rs:67`）。脚手架也有明确回滚与措辞（`build_method/src/scaffold/project.rs:245`～`build_method/src/scaffold/project.rs:263`）。
@@ -417,7 +417,7 @@
 3. **`graft_view/` 的内聚**：`declared.rs`（视图类型 + 一条匹配规则）、`matching.rs`（切口→模块映射，但 `build_method/src/graft_view/matching.rs:74`～`build_method/src/graft_view/matching.rs:81` 的 `face_declares_plugin` 是**文件系统读取**）、`plan_rows.rs`（计划目录）、`overlay_rows.rs`（投影）、`query.rs`（读宿主入口，412 行）五块里，只有 `matching.rs` 混了纯映射与 IO：纯的那半（`graft_expression_module`）与 `declared.rs` 的匹配规则是同一族，IO 的那半属于构建的 fs 层。读者找"规则在哪"需要知道要翻两个文件。
 4. **同名不同功能的两条"边界"**：`build_method/src/identity.rs`（模块名 `registry_identity`）与 `build_method/src/node_id.rs`、`build_method/src/syntax.rs`（模块名 `registry_syntax`）与 `build_method/src/static_plan.rs::source_module_path`——从文件列表看不出哪些是内核 shim、哪些是本地实现（只有读 `build_method/src/lib.rs:60`～`build_method/src/lib.rs:63` 的重命名才知道）。建议在 `lib.rs` 的挂载区把"shim"与"本地"分两段。
 5. **公开面与内部面的阅读顺序**：`build_method/src/lib.rs:24`～`build_method/src/lib.rs:75` 按模块名排序挂载，`build_method/src/lib.rs:79`～`build_method/src/lib.rs:94` 是公开白名单，`build_method/src/lib.rs:100`～`build_method/src/lib.rs:132` 是内部再导出，真正的两个入口 `run`/`run_for`/`check_for` 在 `build_method/src/lib.rs:137`～`build_method/src/lib.rs:205`（即文件末尾）。对一个"先读入口再往下钻"的读者，最有价值的 45 行在最后一屏，而 110 行挂载在最前面；`run_method/src/lib.rs` 同样如此（入口宏在 `macros/` 而 crate 根只挂模块）。这是无 `mod.rs` 约定的代价，可在 crate 文档里给一条"先读 `run()`/`host!()`"的导览来补偿。
-6. **包边界候补**：`debug_method` 只有 444 行，却独立成包并拉入 `petgraph` 与 `tracing`（`debug_method/src/adapters.rs:6`～`debug_method/src/adapters.rs:8`）——而它的实质是"运行期证据模型 + 两个适配器"，与 `run_method` 的 trace 面强耦合（`debug_method/src/mir.rs:12` 直接从 `nichlink_run_method` 再导出）。可考虑并入 `run_method` 的一个特性，或把 petgraph/tracing 变成可选依赖；`inventory` 已经用 `#[doc(hidden)] pub use` 透传（`debug_method/src/lib.rs:25`～`debug_method/src/lib.rs:26`），说明这个包已经有一部分是"转发面"。
+6. **包边界候补**：`debug_method` 只有 444 行，却独立成包并拉入 `petgraph` 与 `tracing`（`debug_method/src/adapters.rs:6`～`debug_method/src/adapters.rs:8`）——而它的实质是"运行期证据模型 + 两个适配器"，与 `run_method` 的 trace 面强耦合（`debug_method/src/mir.rs:12` 直接从 `xirang_run_method` 再导出）。可考虑并入 `run_method` 的一个特性，或把 petgraph/tracing 变成可选依赖；`inventory` 已经用 `#[doc(hidden)] pub use` 透传（`debug_method/src/lib.rs:25`～`debug_method/src/lib.rs:26`），说明这个包已经有一部分是"转发面"。
 7. **同一事实的第二个答案清单（架构层要给结论的地方）**：`FaceView` 的父级解析与逻辑路径（S1）、函数符号扫描（S4）、`collect_object_aliases` 为 `needs_registry` 再解析一遍面文件（`build_method/src/renderer/aliases.rs:78`～`build_method/src/renderer/aliases.rs:94`，失败即当 `false`）、`rule_method_strings` 的手写扫描（S11）、迁移期的文本替换（S5）、authoring 的 `source` 回落硬编码（S8）。它们的共同点是"某个已经在内核/构建里算出过的事实，被另一个执行面重新算了一次"。结构上的收敛方向是：**内核只暴露查询，执行面只消费**，每个事实一个出口。
 8. **字段词表有四份**（供命名/边界决策）：`FACE_FIELD_ORDER`（24，宏与语法，`core/src/registry_core/declaration/registration.rs:427`）、`FaceFields` 镜像（24，`run_method/src/macros/face.rs:59`）、authoring 的 `ModuleFaceValues`/两个字段顺序表（23 / 22 / 20，`run_method/src/authoring/operations/face_values.rs:20`、`run_method/src/authoring/operations/face_write.rs:32`、`run_method/src/authoring/operations/face_write.rs:59`）、Studio 表单的 `FACE_FIELD_COUNT`（26，`core/src/registry_core/authoring/face_field.rs:107`）。它们服务的是不同层（宏 / 编辑器 / 表单 / 文件写回），但**没有任何一处声明它们之间的关系**，这正是 C6 的数字各说各话与 S6 的"能编辑但不能写回"得以共存的土壤。
 
@@ -426,6 +426,6 @@
 ## 五、方法与锚点自检
 
 - 阅读方式：对 `build_method/src`、`run_method/src`、`macro/src`、`debug_method/src` 的全部文件按目录逐个 `read`（`renderer/`、`graft_view/`、`scaffold/`、`authoring/`、`runtime/trace/`、`macros/` 为逐行读；`tests/`、`examples/` 为逐文件扫过函数与断言）；另读了四个 counter-part（`core/src/registry_core/tree/query/query.rs`、`core/src/registry_core/source/source.rs`、`core/src/registry_core/declaration/registration.rs`、`core/src/registry_core/authoring/face_field.rs`）以确认"第二份实现"。
-- 探针：`grep -rn` 用于"某个名字在仓库里只出现一次/多份实现"这类清点；`git ls-tree`/`git show` 用于 HEAD 与工作树的行数对照；`~/.cargo/registry` 里的 `inventory-0.3.24/src/lib.rs` 用于核实 `submit!` 与 `collect!` 的边界（结论见第三节）。S19 另跑了一个**实测探针**：用工作区自己的 `syn` rlib 编译一个最小程序，直接复现 `run_method/src/authoring/manifest/face/face.rs:141` 那一行的调用（探针源码与二进制放在 `/tmp/nichlink-probe-surfaces/`，属工作区之外；工作区内除本报告外未新建/改动任何文件）。全部命令只读，`cargo` 仅带 `--offline`。
+- 探针：`grep -rn` 用于"某个名字在仓库里只出现一次/多份实现"这类清点；`git ls-tree`/`git show` 用于 HEAD 与工作树的行数对照；`~/.cargo/registry` 里的 `inventory-0.3.24/src/lib.rs` 用于核实 `submit!` 与 `collect!` 的边界（结论见第三节）。S19 另跑了一个**实测探针**：用工作区自己的 `syn` rlib 编译一个最小程序，直接复现 `run_method/src/authoring/manifest/face/face.rs:141` 那一行的调用（探针源码与二进制放在 `/tmp/xirang-probe-surfaces/`，属工作区之外；工作区内除本报告外未新建/改动任何文件）。全部命令只读，`cargo` 仅带 `--offline`。
 - 锚点自检：本报告每条 `x.rs:NNN` 在写下的同一轮里用 `sed -n`/`grep -n` 打印过该行内容，共提取 326 条，全部文件存在且行号在界内；正文**没有**使用 `` `token`（`x.rs:line`） `` 这种把 token 与行号成对的写法（按 `conventions/src/doc_anchors.rs` 的配对规则实测 0 处），因此不存在"token 与所点行不符"的风险；各条发现里的 token（例如 `parse_pruning_item`、`logical_path`）都单独列在 file:line 旁边而不是塞进括号。行号对应工作树当前内容（`HEAD=cf0c378` + 未提交改动）。
 - 未覆盖/未决：`build_method/src/scaffold/install.rs`（275 行）只做了接口级阅读（脚手架安装路径的回滚由 `project.rs` 那一套覆盖，未见第二套写盘逻辑）；`run_method/examples/scale_audit.rs` 属基准示例，`ceiling` 对环境变量解析失败会静默回落默认值（`run_method/examples/scale_audit.rs:29`～`run_method/examples/scale_audit.rs:34`）——示例允许 `expect`，这条只作为"我看到了"的记账，不计为发现。

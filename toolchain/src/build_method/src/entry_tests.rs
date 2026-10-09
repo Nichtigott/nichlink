@@ -25,10 +25,10 @@ fn fixture(name: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-entry-{name}-{}-{}-{sequence}",
+            "xirang-entry-{name}-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -173,7 +173,7 @@ fn a_configured_entry_that_is_not_a_file_is_a_diagnostic() {
     let diagnostic = errors.iter().next().expect("one diagnostic");
     assert_eq!(diagnostic.phase, "entry");
     assert!(
-        diagnostic.message.contains("NICH_LINK_ENTRY names"),
+        diagnostic.message.contains("XIRANG_ENTRY names"),
         "{}",
         diagnostic.message
     );

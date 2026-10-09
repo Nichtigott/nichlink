@@ -132,7 +132,7 @@ pub fn snippet_targets(config_home: &Path, fuzzy_engines: bool) -> Vec<EditorTar
                 path: root
                     .join("User")
                     .join("snippets")
-                    .join("nichlink-face.code-snippets"),
+                    .join("xirang-face.code-snippets"),
             });
         }
     }
@@ -204,12 +204,12 @@ mod tests {
         let target = nvim_config_dir_in(Path::new("/tmp/cfg"), "nvim").join(NVIM_SNIPPET_FILE);
         assert_eq!(
             target,
-            PathBuf::from("/tmp/cfg/nvim/luasnippets/rust/nichlink-face.lua")
+            PathBuf::from("/tmp/cfg/nvim/luasnippets/rust/xirang-face.lua")
         );
         let blink = nvim_config_dir_in(Path::new("/tmp/cfg"), "nvim").join(BLINK_SNIPPET_FILE);
         assert_eq!(
             blink,
-            PathBuf::from("/tmp/cfg/nvim/snippets/rust/nichlink-face.json")
+            PathBuf::from("/tmp/cfg/nvim/snippets/rust/xirang-face.json")
         );
     }
 
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn auto_targets_follow_the_installed_editors() {
         let root = std::env::temp_dir().join(format!(
-            "nichlink-auto-{}-{}",
+            "xirang-auto-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -237,7 +237,7 @@ mod tests {
                     format!(
                         "{} {}",
                         target.editor.name(),
-                        nichlink_kernel::declaration::portable_path(
+                        xirang_kernel::declaration::portable_path(
                             &target
                                 .path
                                 .strip_prefix(&root)
@@ -253,8 +253,8 @@ mod tests {
         assert_eq!(
             names(false),
             [
-                "vscode Code/User/snippets/nichlink-face.code-snippets",
-                "vscode VSCodium/User/snippets/nichlink-face.code-snippets",
+                "vscode Code/User/snippets/xirang-face.code-snippets",
+                "vscode VSCodium/User/snippets/xirang-face.code-snippets",
             ]
         );
         assert!(has_nvim_config(&root));
@@ -262,10 +262,10 @@ mod tests {
         assert_eq!(
             names(true),
             [
-                "blink nvim/snippets/rust/nichlink-face.json",
-                "nvim nvim/luasnippets/rust/nichlink-face.lua",
-                "vscode Code/User/snippets/nichlink-face.code-snippets",
-                "vscode VSCodium/User/snippets/nichlink-face.code-snippets",
+                "blink nvim/snippets/rust/xirang-face.json",
+                "nvim nvim/luasnippets/rust/xirang-face.lua",
+                "vscode Code/User/snippets/xirang-face.code-snippets",
+                "vscode VSCodium/User/snippets/xirang-face.code-snippets",
             ]
         );
         // No editor at all is reported rather than guessed.

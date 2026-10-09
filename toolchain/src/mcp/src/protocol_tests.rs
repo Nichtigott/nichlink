@@ -187,24 +187,24 @@ fn the_registry_tool_is_listed_and_answers_about_this_package() {
     // 被列出——由目录工具列出，而那是会话需要"广告没点名"的能力时唯一会看的地方。
     assert_eq!(
         names,
-        vec!["nichlink.check", "nichlink.apply", "nichlink_tools"],
+        vec!["xirang.check", "xirang.apply", "xirang_tools"],
         "the advertisement is the two entry points plus the catalogue"
     );
     let catalogue = replies(
         "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\
-         \"params\":{\"name\":\"nichlink_tools\",\"arguments\":{}}}\n",
+         \"params\":{\"name\":\"xirang_tools\",\"arguments\":{}}}\n",
     );
     let listed_all = catalogue[0]["result"]["content"][0]["text"]
         .as_str()
         .expect("a text reply");
     assert!(
-        listed_all.contains("nichlink.registry — "),
+        listed_all.contains("xirang.registry — "),
         "the catalogue tool lists every tool: {listed_all}"
     );
 
     let called = replies(
         "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\
-         \"params\":{\"name\":\"nichlink.registry\",\"arguments\":{}}}\n",
+         \"params\":{\"name\":\"xirang.registry\",\"arguments\":{}}}\n",
     );
     assert_eq!(called.len(), 1, "{called:?}");
     assert_eq!(called[0]["result"]["isError"], false, "{called:?}");
@@ -233,11 +233,11 @@ fn the_apply_tool_is_listed_and_dispatched() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect::<Vec<_>>();
-    assert!(names.contains(&"nichlink.apply"), "{names:?}");
+    assert!(names.contains(&"xirang.apply"), "{names:?}");
 
     let called = replies(
         "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\
-         \"params\":{\"name\":\"nichlink.apply\",\"arguments\":{\"action\":\"graft\"}}}\n",
+         \"params\":{\"name\":\"xirang.apply\",\"arguments\":{\"action\":\"graft\"}}}\n",
     );
     assert_eq!(called.len(), 1, "{called:?}");
     assert_eq!(called[0]["result"]["isError"], true, "{called:?}");
@@ -299,10 +299,10 @@ fn a_frame_that_is_not_utf8_is_answered_and_the_session_continues() {
 /// long guidance page as ~7,000 in `initialize`. Both numbers are what made a session's first
 /// decision expensive, so both get a ceiling — measured on the **wire reply**, because that is the
 /// only shape a client pays for. The full text stays reachable (`--shapes`, `--list <tool>`,
-/// `nichlink_tools`), which is why this is a budget and not a deletion.
+/// `xirang_tools`), which is why this is a budget and not a deletion.
 /// 审计 `W1-1`：目录过去以约 36,000 字符出现在 `tools/list` 回复里，长指引页以约 7,000 出现在
 /// `initialize` 里。两个数字正是让一个会话的第一个决定变贵的东西，因此两者都有上限——量的是**线上回复**，
-/// 因为那是客户端唯一付费的形状。全文仍然够得着（`--shapes`、`--list <tool>`、`nichlink_tools`），
+/// 因为那是客户端唯一付费的形状。全文仍然够得着（`--shapes`、`--list <tool>`、`xirang_tools`），
 /// 这也是它是"预算"而不是"删除"的原因。
 #[test]
 fn the_advertised_frame_and_the_handshake_fit_their_budgets() {

@@ -4,13 +4,13 @@
 //! The bridge used to answer registry questions by re-deriving them: an agent
 //! grepped for macro names and reconstructed the tree itself, which is the drift
 //! the registry exists to remove. The rows here now come from the build's **own
-//! published records** (`<package>/target/nichlink/out`, read through
+//! published records** (`<package>/target/xirang/out`, read through
 //! `build_method`'s readers — `published.rs`), so a workspace-rooted answer costs
 //! the records instead of every member's source walk; the derivation
 //! (`crate::build_method::face_views`) is the fallback for a member that published
 //! nothing, and every answer says which of the two it used.
 //! 本桥过去靠重新推导来回答注册问题：代理 grep 宏名，自己重建那棵树——这正是注册树要消除
-//! 的漂移。这里的行现在来自构建**自己已发布的记录**（`<package>/target/nichlink/out`，经
+//! 的漂移。这里的行现在来自构建**自己已发布的记录**（`<package>/target/xirang/out`，经
 //! `build_method` 的读取器读取——`published.rs`），因此工作区根上的一次答案花的是记录而不是
 //! 每个成员的源码遍历；推导（`crate::build_method::face_views`）是给什么都没发布的成员的回落，
 //! 而每一份答案都会说出自己用的是哪一种。
@@ -18,17 +18,17 @@
 //! What the published rows carry is `node`, `source` and the symbol release
 //! pruning tracks, plus the scope verdict — the record's own columns. `path`,
 //! `kind`, `registry_name` and `parent` are *derived* facts and are not in it, so
-//! an answer built from the record says so and names `nichlink.explain` (the one
+//! an answer built from the record says so and names `xirang.explain` (the one
 //! report that derives a per-face projection) as where to read them.
 //! 已发布的行携带的是 `node`、`source` 与发布剪枝跟踪的符号，外加作用域结论——也就是记录自己的
 //! 列。`path`、`kind`、`registry_name` 与 `parent` 是**推导**出来的事实、不在其中，因此由记录
-//! 构成的答案会说出来，并点名 `nichlink.explain`（唯一推导逐面投影的报告）为读取它们的地方。
+//! 构成的答案会说出来，并点名 `xirang.explain`（唯一推导逐面投影的报告）为读取它们的地方。
 
 use std::path::Path;
 
 use crate::build_method::{FaceView, PruningRow};
-use nichlink_kernel::lexicon;
 use serde_json::Value;
+use xirang_kernel::lexicon;
 
 use crate::mcp::published::{FACES_UNKNOWN, PublishedTree};
 use crate::mcp::workspace::{self, Member, Scope, Tree};
@@ -128,16 +128,16 @@ fn members_and_faces(root: &Path, members: &[Member]) -> String {
         members.len(),
     );
 
-    // The round measured the whole corpus: the trees under test **do not host nichlink**, so on them
+    // The round measured the whole corpus: the trees under test **do not host xirang**, so on them
     // `0 faces` is the answer rather than a defect — and a reader who is not told that asks a
     // face-shaped question about a symbol. Saying it once, before the per-member rows, is the whole
     // fix; it costs one line and removes an inference nobody should have to make.
-    // 那一轮量遍语料：被测的树**不宿主 nichlink**，因此在它们身上 `0 faces` 是答案而不是缺陷 —— 而没被
+    // 那一轮量遍语料：被测的树**不宿主 xirang**，因此在它们身上 `0 faces` 是答案而不是缺陷 —— 而没被
     // 告知这一点的读者会用一个"面"形状的问题去问一个符号。在逐成员行**之前**说一次就是全部修法：一行
     // 的成本，去掉一次本不该由读者做的推断。
-    if !crate::mcp::workspace::hosts_nichlink(root) {
+    if !crate::mcp::workspace::hosts_xirang(root) {
         output.push_str(
-            "note   this tree does not host nichlink (no `build.rs` + `nichlink-toolchain` \
+            "note   this tree does not host xirang (no `build.rs` + `xirang-toolchain` \
              dependency), so it has no registration tree to read and `0 faces` below is the answer \
              rather than a defect. Ask about *symbols*: `search {query}` / `locate {symptom}` / \
              `read {path, line}` / `callgraph {function}`.\n",
@@ -230,22 +230,22 @@ pub(crate) fn registry_body(member: &Member, arguments: &Value) -> Result<String
 /// 与写入路径共用：编辑必须在查询所报告的同一个命名空间之下创作，否则它写下的面会落在宿主从未
 /// 编译过的身份域里。
 ///
-/// `NICH_LINK_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
+/// `XIRANG_NAMESPACE` wins verbatim when it is set, and otherwise the package name Cargo reports
 /// is the namespace, because that is exactly what the declaration macros bake in as
-/// `crate::NICHLINK_NAMESPACE`, which `host!()` defines from the package name (audit `M7`, P3.3).
-/// `NICH_LINK_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为声明宏烤进去的
-/// `crate::NICHLINK_NAMESPACE` 正是它，而 `host!()` 用包名定义它（审计 `M7`，P3.3）。
+/// `crate::XIRANG_NAMESPACE`, which `host!()` defines from the package name (audit `M7`, P3.3).
+/// `XIRANG_NAMESPACE` 一旦设置就原样胜出，否则 Cargo 报告的包名就是命名空间，因为声明宏烤进去的
+/// `crate::XIRANG_NAMESPACE` 正是它，而 `host!()` 用包名定义它（审计 `M7`，P3.3）。
 ///
 /// What this is **not**: a rule every surface reads. Studio reads the same override, the CLI reads
 /// none of it (it always asks Cargo for the package name), and no build-side code reads it either —
 /// the namespace is baked in at compile time. So with the variable set this query reports a
-/// namespace, and `NodeId`s, that `nichlink explain --json` and the built host do not use. The
+/// namespace, and `NodeId`s, that `xirang explain --json` and the built host do not use. The
 /// variable's documented purpose is a *reader's* override for trace artifacts; whether it should
 /// keep applying to host identity is the maintainer's decision, and this note exists so the
 /// divergence is a known one rather than a claim of agreement (audit `S12`).
 /// 这**不是**什么：不是每个执行面都读的规则。Studio 读同一个覆盖，CLI 完全不读（它始终问 Cargo 要
 /// 包名），构建侧也不读——命名空间在编译期就烤好了。因此设置该变量后，这条查询报告的命名空间与
-/// `NodeId`，正是 `nichlink explain --json` 与已构建宿主**不用的**那一套。该变量文档化的用途是 trace
+/// `NodeId`，正是 `xirang explain --json` 与已构建宿主**不用的**那一套。该变量文档化的用途是 trace
 /// artifact 的**读取者覆盖**；它是否应继续作用于宿主身份由维护者决定，而这段注记的存在是为了让这处分歧
 /// 成为已知事项，而不是一句"彼此一致"的声称（审计 `S12`）。
 pub(crate) fn namespace(root: &Path) -> Result<String, String> {
@@ -264,17 +264,17 @@ pub(crate) fn namespace(root: &Path) -> Result<String, String> {
 ///
 /// The documented default is deliberately **not** a fallback here, and the
 /// asymmetry with authoring is the point: authoring *creates* a tree, so
-/// `nichlink.default` is a real answer for a project nobody has built yet, while
+/// `xirang.default` is a real answer for a project nobody has built yet, while
 /// this tool *reports* a tree that already exists. Answering under
-/// `nichlink.default` would publish identities the host never compiled — every
+/// `xirang.default` would publish identities the host never compiled — every
 /// `NodeId` is a hash over the namespace — and an agent would carry them into a
 /// graft record or a trace lookup that cannot resolve. A refusal it can act on
-/// (`set NICH_LINK_NAMESPACE`) beats an identity that is wrong everywhere.
+/// (`set XIRANG_NAMESPACE`) beats an identity that is wrong everywhere.
 /// 这里有意**不**回落到文档化的默认值，而与创作侧的不对称正是关键：创作是在**创建**一棵树，
-/// 对一个还没人构建过的项目，`nichlink.default` 是真实答案；而本工具报告的是**已经存在**的
-/// 树。在 `nichlink.default` 之下作答会发布宿主从未编译过的身份——每个 `NodeId` 都是对命名
+/// 对一个还没人构建过的项目，`xirang.default` 是真实答案；而本工具报告的是**已经存在**的
+/// 树。在 `xirang.default` 之下作答会发布宿主从未编译过的身份——每个 `NodeId` 都是对命名
 /// 空间的散列——而代理会带着它们去做无法解析的 graft 记录或 trace 查找。一个它能据以行动的
-/// 拒绝（`set NICH_LINK_NAMESPACE`）胜过到处都错的身份。
+/// 拒绝（`set XIRANG_NAMESPACE`）胜过到处都错的身份。
 pub(crate) fn namespace_from(configured: Option<&str>, root: &Path) -> Result<String, String> {
     crate::build_method::identity_namespace(configured, &root.join("Cargo.toml")).map_err(|error| {
         format!(
@@ -547,7 +547,7 @@ fn render_published(
         ));
     }
     if rows.is_empty() {
-        output.push_str("no registration face is recorded for this package — the sources may still declare `external_object!` faces, which this package's generated tree deliberately does not contain; `nichlink.search` derives and names them\n");
+        output.push_str("no registration face is recorded for this package — the sources may still declare `external_object!` faces, which this package's generated tree deliberately does not contain; `xirang.search` derives and names them\n");
     }
     output.push_str(PUBLISHED_NOTE);
     output
@@ -598,7 +598,7 @@ const PUBLISHED_NOTE: &str = "note: these are the build's **published** rows. A 
      `owns_registry`) and what its file calls (`calls`); `-` means the declaration named none. \
      `source_hash`, `fields` and `parent_node` are published **in** `pruning_manifest.tsv` and are \
      not reprinted per row. A face added since the build is not in the record at all — that one is \
-     `nichlink.search`'s to derive.\n";
+     `xirang.search`'s to derive.\n";
 
 #[cfg(test)]
 #[path = "registry_tests.rs"]

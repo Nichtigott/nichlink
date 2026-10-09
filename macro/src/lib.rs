@@ -18,13 +18,13 @@
 //! 切分逻辑与构建期读取器共用（`split_face_fields`）：编译器与构建步骤必须对同一份
 //! 声明读出一致的字段，因此两者使用同一个宽容切分器。
 //!
-//! The normalised declaration goes back through `__nichlink_object!`, the
+//! The normalised declaration goes back through `__xirang_object!`, the
 //! exported entry point of the runtime crate, so the collector mode the caller
 //! chose survives the round trip. This front end is only reached when
 //! `__control_object!`'s single arm has already declined the declaration — a
 //! field out of order, `;` separators, a misspelled name — so a well-formed face
 //! expands exactly as it did before.
-//! 归一化后的声明经 `__nichlink_object!`（运行时 crate 的公开入口）回到宏阶梯，
+//! 归一化后的声明经 `__xirang_object!`（运行时 crate 的公开入口）回到宏阶梯，
 //! 调用方选择的 collector 模式因此得以保留。只有当 `__control_object!` 那唯一一条 arm
 //! 不接受时（字段顺序不同、用 `;` 分隔、字段名拼错）才会走到本前端，因此合法注册面的展开
 //! 与从前完全一致。
@@ -45,10 +45,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Delimiter, Group, Ident, Spacing, Span, TokenStream as Tokens, TokenTree};
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
-use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
-use nichlink_kernel::registry_core::syntax::split_face_fields;
+use xirang_kernel::registry_core::declaration::FACE_FIELD_ORDER;
+use xirang_kernel::registry_core::syntax::split_face_fields;
 
 use crate::front_end::{error_at, render, splice, split_mirror_fields, split_semicolons};
 use crate::mirror::{Field, mirror_item, punct};
@@ -132,10 +132,10 @@ pub fn face_rule_or(input: TokenStream) -> TokenStream {
         // resolver would have to name.
         // 用 `let` 而不是 `use`：兜底值是结构体的关联常量，而 `use` 导不进来。const 初始化
         // 器里的 `let` 绑定不需要类型标注，这正是让模板不必说出一个解析器无从命名的类型的原因。
-        let template: Tokens = "{ #[cfg(not(rust_analyzer))] let __nichlink_rule = super::registry_rule::REGISTRATION_RULE; #[cfg(rust_analyzer)] let __nichlink_rule = __NICHLINK_IDE_FALLBACK; __nichlink_rule }"
+        let template: Tokens = "{ #[cfg(not(rust_analyzer))] let __xirang_rule = super::registry_rule::REGISTRATION_RULE; #[cfg(rust_analyzer)] let __xirang_rule = __XIRANG_IDE_FALLBACK; __xirang_rule }"
             .parse()
             .expect("the derived rule template is static");
-        return splice(template, "__NICHLINK_IDE_FALLBACK", &fallback).into();
+        return splice(template, "__XIRANG_IDE_FALLBACK", &fallback).into();
     }
     fallback.into()
 }
@@ -370,7 +370,7 @@ pub(crate) fn normalise(input: Tokens) -> Result<Tokens, Tokens> {
         punct(':', Spacing::Alone),
         TokenTree::Ident(Ident::new(
             match target {
-                Target::Control => "__nichlink_object",
+                Target::Control => "__xirang_object",
                 Target::External => "__external_object",
             },
             Span::call_site(),

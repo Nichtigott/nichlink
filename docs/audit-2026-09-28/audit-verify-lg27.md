@@ -6,7 +6,7 @@
 
 ## 1. 我自己的夹具（t34 当时缺的就是这个）
 
-副本内 `core/tests/t84_probe.rs`：复用我 t34 的 `RegistrationSnapshot` 夹具骨架，新增一个 `with_runtime_checks(...)` 构造器，用**真实的 `nichlink::RuntimeCheckSpec` 枚举值**（`FiniteNumber` / `NonEmptyText` / `CoordinatesInViewport` / `TextLength { min, max }`），3 条用例：
+副本内 `core/tests/t84_probe.rs`：复用我 t34 的 `RegistrationSnapshot` 夹具骨架，新增一个 `with_runtime_checks(...)` 构造器，用**真实的 `xirang::RuntimeCheckSpec` 枚举值**（`FiniteNumber` / `NonEmptyText` / `CoordinatesInViewport` / `TextLength { min, max }`），3 条用例：
 
 | 用例 | 编译期（self） | 作者侧（authored） | 断言 |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@
 | `an_empty_authored_list_keeps_the_compiled_checks` | `[TextLength{2,8}]` | `[]` | 合并后 == `[TextLength{2,8}]`（空＝文件没提） |
 | `the_author_side_has_no_expression_for_clearing_the_compiled_checks` | `[FiniteNumber]` | `[]` | 合并后非空（把"无法清空"作为事实钉住，见 §3） |
 
-修复后的树上 **3 passed**（`cargo test -p nichlink-core --offline --features syntax --test t84_probe`）。
+修复后的树上 **3 passed**（`cargo test -p xirang-core --offline --features syntax --test t84_probe`）。
 
 ## 2. 变异反证（两个方向，都在副本内）
 
@@ -37,7 +37,7 @@ MA 正是这条 finding 的旧形状（源码里对 `runtime_checks` 的编辑�
 
 ## 4. 门禁（同一批 hash）
 
-`cargo test -p nichlink-core --offline` **0**（187 passed）／`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**／`cargo test -p nichlink-conventions --offline` **0**（132 passed）／`cargo fmt --all -- --check` **0**（0 行）。
+`cargo test -p xirang-core --offline` **0**（187 passed）／`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**／`cargo test -p xirang-conventions --offline` **0**（132 passed）／`cargo fmt --all -- --check` **0**（0 行）。
 `cargo test --workspace --offline` 在写作窗口**红**，且**不在我这批**：先是 `studio::app::tests::project_root::a_write_without_a_selected_project_is_refused` 与 `studio::app::tests::graft::…is_refused_not_guessed` 两条（studio 在飞），随后变成 core 自己的 `registry_core::authoring::snapshot::tests::the_rule_path_field_names_the_location_the_rule_would_be_read_from`——而 `core/src/registry_core/authoring/snapshot/snapshot.rs` 的 mtime 与我查看它的时间**只差 1 秒**（23:37:09 改、23:37:10 查），即有人正在编辑它。我本轮没有改任何源码或他人产物；等该文件落定后重跑即可关掉这条。
 
 ## 5. 未覆盖 / 新发现

@@ -1,7 +1,7 @@
 {
   "freeze": "b3cecfa4d2987d77044abe1b9e69f056494ea038",
   "tool": {
-    "path": "tools/nichlink-mcp-hardbug",
+    "path": "tools/xirang-mcp-hardbug",
     "sha256": "98266c8df0c2b0179187e19049c73d9d280fabee5bed9371e3d86c61f840e039"
   },
   "codegraph_snapshot": "target/round7/tools-upstream/v1.6.1/bin/codegraph",

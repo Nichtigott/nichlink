@@ -12,30 +12,30 @@ use crate::registry_core::declaration::FACE_FIELD_ORDER;
 #[test]
 fn the_text_contracts_keep_their_published_values() {
     assert_eq!(GENERATED_LIB_FILE, "generated_lib.rs");
-    assert_eq!(RUN_METHOD_CRATE, "nichlink_toolchain");
+    assert_eq!(RUN_METHOD_CRATE, "xirang_toolchain");
     assert_eq!(FACE_FIELD_PLUGIN, "plugin");
     assert_eq!(FACE_FIELD_COLLECTOR, "collector");
-    assert_eq!(SCOPE_ENV, "NICH_LINK_SCOPE");
-    assert_eq!(ENTRY_ENV, "NICH_LINK_ENTRY");
-    assert_eq!(BUILD_VERBOSE_ENV, "NICH_LINK_BUILD_VERBOSE");
-    assert_eq!(PACKAGE_ROOT_ENV, "NICH_LINK_PACKAGE_ROOT");
-    assert_eq!(NAMESPACE_ENV, "NICH_LINK_NAMESPACE");
-    assert_eq!(DEFAULT_NAMESPACE, "nichlink.default");
-    assert_eq!(NICHLINK_DIR, ".nichlink");
+    assert_eq!(SCOPE_ENV, "XIRANG_SCOPE");
+    assert_eq!(ENTRY_ENV, "XIRANG_ENTRY");
+    assert_eq!(BUILD_VERBOSE_ENV, "XIRANG_BUILD_VERBOSE");
+    assert_eq!(PACKAGE_ROOT_ENV, "XIRANG_PACKAGE_ROOT");
+    assert_eq!(NAMESPACE_ENV, "XIRANG_NAMESPACE");
+    assert_eq!(DEFAULT_NAMESPACE, "xirang.default");
+    assert_eq!(XIRANG_DIR, ".xirang");
     assert_eq!(EXTERNAL_GRAFT_DIR, "external-grafts");
     assert_eq!(GRAFT_PLAN_FILE, "graft.plan");
     assert_eq!(TRACE_DIR, "traces");
-    assert_eq!(TRACE_FILE, "nichlink.trace");
-    assert_eq!(TRACE_FILE_ENV, "NICH_LINK_TRACE_FILE");
-    assert_eq!(TRACE_MODE_ENV, "NICH_LINK_TRACE");
+    assert_eq!(TRACE_FILE, "xirang.trace");
+    assert_eq!(TRACE_FILE_ENV, "XIRANG_TRACE_FILE");
+    assert_eq!(TRACE_MODE_ENV, "XIRANG_TRACE");
     // The worker cap is read by the walk and named here once (audit `T1`); it is a contract for the
     // same reason the entry is: two surfaces read it, and a second literal would drift.
     // 工作线程上限由遍历读取、并在这里只命名一次（审计 `T1`）；它是契约的理由与入口变量相同：有两处读它，
     // 而第二个字面量会漂。
-    assert_eq!(JOBS_ENV, "NICH_LINK_JOBS");
+    assert_eq!(JOBS_ENV, "XIRANG_JOBS");
     assert_eq!(GRAPH_FILE, "graph_edges.tsv");
     assert_eq!(GENERATION_FILE, "graph.generation");
-    assert_eq!(GENERATION_MARKER, "nichlink-build-index");
+    assert_eq!(GENERATION_MARKER, "xirang-build-index");
 }
 
 /// The package-root rule, at each of its three steps and at the boundary a

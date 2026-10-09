@@ -1,6 +1,6 @@
-# NichLink architecture notes
+# XiRang architecture notes
 
-NichLink splits the workspace into one pure kernel and thin execution surfaces.
+XiRang splits the workspace into one pure kernel and thin execution surfaces.
 The rule that decides where new code goes:
 
 **Kernel = protocol vocabulary + pure methods (verbs), no execution.**
@@ -12,10 +12,10 @@ surface that binds kernel methods to its own context.
 
 | Crate | Directory | One-line responsibility |
 | --- | --- | --- |
-| `nichlink-kernel` (lib `nichlink_kernel`) | `kernel/` | Kernel: protocol nouns and pure methods |
-| `nichlink-toolchain` | `toolchain/` | The seven execution surfaces of the old nine-crate layout, now one module each: `build_method` (the `cargo build` method: filesystem / `OUT_DIR`), `run_method` (the `cargo run` method: runtime state instance + trace binding), `call_evidence` (observation evidence), `plugin_host` (wasm/process plugin host execution), `studio` (ratatui authoring/inspection), `mcp` (AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path), `cli` (argv dispatch, cargo subprocesses) |
-| `nichlink-macro` | `macro/` | Compile-time face field front end: accepted order, tolerant separators, diagnostics |
-| `nichlink-conventions` | `conventions/` | Repository-convention gates (`publish = false`: they walk the checkout, so an unpacked copy would have nothing to check) |
+| `xirang-kernel` (lib `xirang_kernel`) | `kernel/` | Kernel: protocol nouns and pure methods |
+| `xirang-toolchain` | `toolchain/` | The seven execution surfaces of the old nine-crate layout, now one module each: `build_method` (the `cargo build` method: filesystem / `OUT_DIR`), `run_method` (the `cargo run` method: runtime state instance + trace binding), `call_evidence` (observation evidence), `plugin_host` (wasm/process plugin host execution), `studio` (ratatui authoring/inspection), `mcp` (AI-agent stdio bridge: source and registry queries, plus the previewed authoring write path), `cli` (argv dispatch, cargo subprocesses) |
+| `xirang-macro` | `macro/` | Compile-time face field front end: accepted order, tolerant separators, diagnostics |
+| `xirang-conventions` | `conventions/` | Repository-convention gates (`publish = false`: they walk the checkout, so an unpacked copy would have nothing to check) |
 
 Feature names intentionally follow each crate's own vocabulary instead of one
 workspace-wide scheme: `kernel` gates the parser as `syntax`, `run_method` gates
@@ -26,20 +26,20 @@ gates test-only fixtures — the source-only host package under
 `toolchain/tests/fixtures/node-editor/` — and is not part of the published surface.
 It is off by default, so the CI job that runs the workspace with
 `--all-features` is the only gate that exercises it; keep that job green.
-`studio` also gates its `nichlink-dev` rebuild supervisor behind the
+`studio` also gates its `xirang-dev` rebuild supervisor behind the
 non-default `dev-supervisor` feature: that binary rebuilds Studio from this
 checkout, so an installed copy could never work, and `required-features` is the
 per-target equivalent of `publish = false` — it is what keeps
-`cargo install nichlink-toolchain` from shipping a tool with nothing to rebuild.
+`cargo install xirang-toolchain` from shipping a tool with nothing to rebuild.
 特性名有意遵循各 crate 自己的词汇，而不是全工作区统一命名：`kernel` 把解析器门控为
 `syntax`，`run_method` 把 authoring 执行器门控为 `authoring`，`studio` 把仅测试用的
 fixture 门控为 `prototype-fixtures`，`plugin-host` 使用 `wasm` / `process-tools`。
 不要为对齐其他 crate 而重命名特性：它们是公开 API。`prototype-fixtures` 只门控测试用
 fixture——`toolchain/tests/fixtures/node-editor/` 下仅源码的宿主包——不属于发布表面。它默认
 关闭，因此只有以 `--all-features` 跑整个工作区的 CI 任务会碰它；保持那个任务常绿。
-`studio` 还把 `nichlink-dev` 重建监督器门控在非默认的 `dev-supervisor` 特性之后：该二进制
+`studio` 还把 `xirang-dev` 重建监督器门控在非默认的 `dev-supervisor` 特性之后：该二进制
 从本检出重建 Studio，安装副本永远做不到，而 `required-features` 就是按 target 的
-`publish = false` 等价物——正是它让 `cargo install nichlink-toolchain` 不会带出一个没有东西可
+`publish = false` 等价物——正是它让 `cargo install xirang-toolchain` 不会带出一个没有东西可
 重建的工具。
 
 A feature that shares a name with a module gates that module, so the sameness is
@@ -48,31 +48,31 @@ parser, `run_method`'s `authoring` gates the authoring executor, and
 `plugin-host`'s `wasm` / `process-tools` name execution backends. The two that are
 not capabilities say so in their own names: `prototype-fixtures` gates the
 checkout-only fixture package under `toolchain/tests/fixtures/node-editor/`, and
-`dev-supervisor` gates the `nichlink-dev` binary that rebuilds this checkout (the
+`dev-supervisor` gates the `xirang-dev` binary that rebuilds this checkout (the
 table above is the whole set — no crate outside `kernel`, `run_method`, `studio` and
 `plugin-host` declares features).
 与模块同名的特性门控的就是那个模块，所以同名是要点而不是撞车：`kernel` 的 `syntax` 门控注册面
 解析器，`run_method` 的 `authoring` 门控 authoring 执行器，`plugin-host` 的 `wasm` /
 `process-tools` 点名的是执行后端。另外两个不是能力，名字里就写明了：
 `prototype-fixtures` 门控 `toolchain/tests/fixtures/node-editor/` 下仅检出可用的夹具包，
-`dev-supervisor` 门控重建本检出的 `nichlink-dev` 二进制（上表就是全集——`kernel`、
+`dev-supervisor` 门控重建本检出的 `xirang-dev` 二进制（上表就是全集——`kernel`、
 `run_method`、`studio`、`plugin-host` 之外没有 crate 声明特性）。
 
-Host usage: `[dependencies] nichlink-toolchain` +
-`[build-dependencies] nichlink-toolchain`; the crate root calls
-`nichlink_toolchain::run_method::host!();` and the thin `build.rs` calls
-`nichlink_toolchain::build_method::run()`. `run_method`'s `entry` module was removed: the
+Host usage: `[dependencies] xirang-toolchain` +
+`[build-dependencies] xirang-toolchain`; the crate root calls
+`xirang_toolchain::run_method::host!();` and the thin `build.rs` calls
+`xirang_toolchain::build_method::run()`. `run_method`'s `entry` module was removed: the
 build-time entry is now `host!()` plus `build.rs`, and `application!(entry = …)`
 remains only as the optional source-scope discovery hint.
-宿主用法：`[dependencies] nichlink-toolchain` +
-`[build-dependencies] nichlink-toolchain`；crate 根部调用
-`nichlink_toolchain::run_method::host!();`，薄 `build.rs` 调用
-`nichlink_toolchain::build_method::run()`。`run_method` 的 `entry` 模块已移除：构建期入口现在是
+宿主用法：`[dependencies] xirang-toolchain` +
+`[build-dependencies] xirang-toolchain`；crate 根部调用
+`xirang_toolchain::run_method::host!();`，薄 `build.rs` 调用
+`xirang_toolchain::build_method::run()`。`run_method` 的 `entry` 模块已移除：构建期入口现在是
 `host!()` 加 `build.rs`，`application!(entry = …)` 仅作为可选的源码范围发现提示保留。
 
 ## Toolchain modules (batch 2: nine crates → three)
 
-`nichlink-toolchain` is one crate with seven modules, each one a former crate:
+`xirang-toolchain` is one crate with seven modules, each one a former crate:
 `build_method`, `run_method`, `call_evidence`, `plugin_host`, `studio`, `mcp`, `cli`.
 `toolchain/src/lib.rs` declares each with `#[path = "<module>/src/lib.rs"] pub mod <module>;`
 and then re-exports every module with a `cfg`-gated `pub use self::<module>::*;`, so a path
@@ -81,7 +81,7 @@ The host-facing pair is on by default — `default = ["build", "run"]` — becau
 host entries are `build_method::run()` and `run_method::host!()`; the optional backends stay behind
 their own features (`wasm`, `process-tools`, `node-graph`, `authoring`, `prototype-fixtures`,
 `dev-supervisor`), so nothing optional is switched on silently. The five bin names are kept
-(`nichlink`, `cargo-nichlink`, `nichlink-mcp`, `nichlink-studio`, `nichlink-dev`), with
+(`xirang`, `cargo-xirang`, `xirang-mcp`, `xirang-studio`, `xirang-dev`), with
 `autobins = false` and a `required-features` entry per target.
 **Macro reachability needs its own audit whenever code moves**: `#[macro_export]` hoists a
 macro to the crate root (a module path will not resolve it); a `macro_export` macro of the
@@ -95,18 +95,18 @@ absolute-path calls from inside an expansion), and the collector probe in-crate 
 *this* crate's registry. Wiring them back is what exposed the branch only they reached: a
 `collector: debug` declaration could not compile (`$crate::submit!`, not
 `$crate::call_evidence::submit!`, now that the macro is hoisted), and the merged crate needed
-`extern crate self as nichlink_toolchain;` for expansions that still carry
-`::nichlink_toolchain::…` paths. `docs/b3-registration-diagnosis.md` keeps the diagnosis for the
+`extern crate self as xirang_toolchain;` for expansions that still carry
+`::xirang_toolchain::…` paths. `docs/b3-registration-diagnosis.md` keeps the diagnosis for the
 record.
-`nichlink-toolchain` 是**一个 crate、七个模块**，每个模块就是原来的一个 crate：
+`xirang-toolchain` 是**一个 crate、七个模块**，每个模块就是原来的一个 crate：
 `build_method`、`runtime`、`call_evidence`、`plugin_host`、`studio`、`mcp`、`cli`。
 `toolchain/src/lib.rs` 用 `#[path = "<module>/src/lib.rs"] pub mod <module>;` 逐个声明，再用
 **cfg 门控的** `pub use self::<module>::*;` 把每个模块重导出，于是各模块自己源码里写成
 `crate::<name>` 的路径在合并之后仍然解析得到。**宿主面两半默认打开**：`default = ["build", "run"]`
 ——因为文档承诺的宿主入口就是 `build_method::run()` 与 `run_method::host!()`；可选后端各自留在自己的
 特性后面（`wasm`、`process-tools`、`node-graph`、`authoring`、`prototype-fixtures`、
-`dev-supervisor`），不会有任何可选能力被静默打开。五个 bin 名全部保留（`nichlink`、
-`cargo-nichlink`、`nichlink-mcp`、`nichlink-studio`、`nichlink-dev`），配 `autobins = false`
+`dev-supervisor`），不会有任何可选能力被静默打开。五个 bin 名全部保留（`xirang`、
+`cargo-xirang`、`xirang-mcp`、`xirang-studio`、`xirang-dev`），配 `autobins = false`
 与逐 target 的 `required-features`。**代码一搬动，宏的可达性就要单独审计**：`#[macro_export]`
 会把宏提升到 crate 根（写模块路径解析不到）；同 crate 的 `macro_export` 宏**不能在宏展开里经
 绝对路径**调用；裸名 `macro_rules!` 调用在**调用点**解析，因此会弄坏外部调用者；私有
@@ -115,8 +115,8 @@ record.
 集成测试（**外部**调用者能到达宽容分支；规则 ② 只禁"同 crate 展开里经绝对路径调用"），采集探针则留在
 crate 内，因为它读的是**本 crate** 的注册表。接回它们才暴露出"只有它们才会走到"的那一支：`collector: debug`
 的声明根本编译不过（宏提升到根之后应是 `$crate::submit!` 而不是 `$crate::call_evidence::submit!`），
-而合并后的 crate 还需要 `extern crate self as nichlink_toolchain;` 才能让展开里那些
-`::nichlink_toolchain::…` 路径解析。诊断按记录留在 `docs/b3-registration-diagnosis.md`。
+而合并后的 crate 还需要 `extern crate self as xirang_toolchain;` 才能让展开里那些
+`::xirang_toolchain::…` 路径解析。诊断按记录留在 `docs/b3-registration-diagnosis.md`。
 
 ## Kernel modules (`kernel/src/registry_core/`)
 
@@ -132,7 +132,7 @@ crate 内，因为它读的是**本 crate** 的注册表。接回它们才暴露
 - `source` — lexical source scanning (functions, spans, calls)
 - `release` — release-time pruning/plan vocabulary
 - `json` — shared JSON string encoding for every artifact this workspace writes (build diagnostics, MIR JSONL, editor snippets)
-- `lexicon` — shared text contracts (generated-entry file name, runtime crate name, environment variables, `.nichlink` paths, the partition's generated-crate
+- `lexicon` — shared text contracts (generated-entry file name, runtime crate name, environment variables, `.xirang` paths, the partition's generated-crate
 directory, scope exemptions)
 
 Module mounting is uniform workspace-wide: a module file is declared by its parent
@@ -163,11 +163,11 @@ gates both rules.
 host code, the build step, and the runtime-check surfaces write as a bare name.
 The kernel's modules also glob into the root, so every other noun is *reachable*
 there as well — that is convenience, not a second contract: the module path
-(`nichlink_kernel::identity::NodeId`) is the official address, and only the curated names
+(`xirang_kernel::identity::NodeId`) is the official address, and only the curated names
 are promised as bare ones.
 `kernel` 的 crate 根部重导出模块层级，外加一份精选词汇——宿主代码、构建步骤与运行期校验面
 会以裸名书写它们。内核各模块也会平铺 glob 到根部，因此其余名词同样**可以**在那里取得——
-那是便利，不是第二份契约：官方地址是模块路径（`nichlink_kernel::identity::NodeId`），只有精选
+那是便利，不是第二份契约：官方地址是模块路径（`xirang_kernel::identity::NodeId`），只有精选
 清单上的名字被承诺为裸名可用。
 
 ## Naming and mounting
@@ -221,11 +221,11 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
 
 | kept | why it is kept, and what is scheduled | source |
 | --- | --- | --- |
-| `kernel/` + `nichlink-kernel` + lib `nichlink_kernel` | **Landed in batch 1**: the old `core/` directory, the `nichlink-core` package and the `nichlink` library are gone (the ambiguity this row registered is why `kernel/` was chosen). The *crate* merge into `nichlink-toolchain` is batch 2, and the published 0.1.x names stay frozen. | `verify.md:62`, `merge-plan.md:38/:53` |
+| `kernel/` + `xirang-kernel` + lib `xirang_kernel` | **Landed in batch 1**: the old `core/` directory, the `xirang-core` package and the `xirang` library are gone (the ambiguity this row registered is why `kernel/` was chosen). The *crate* merge into `xirang-toolchain` is batch 2, and the published 0.1.x names stay frozen. | `verify.md:62`, `merge-plan.md:38/:53` |
 | `toolchain/build_method/`, `toolchain/runtime/`, `toolchain/plugin_host/` | Each crate name is kept and its README says what the word means in this repository; the *module* names `build_method`, `run_method`, `plugin_host` belong to the merge batch. | `verify.md:63-65`, `merge-plan.md:17/:19` |
 | `Registry`, `examples/`, `picture/` | Kept. The public type is the registration-tree root and its doc line limits it to that; `examples/` holds two host packages rather than cargo example targets; `picture/` holds the brand wordmark and Studio screenshots. | `verify.md:66/:67/:79` |
 | `toolchain/call_evidence/` | Kept with no extra action; the crate becomes the `call_evidence` module, so the name disappears in the merge. | `verify.md:77`, `merge-plan.md:42` |
-| bin `nichlink-dev`, feature `dev-supervisor` | Kept; `required-features` is per-target `publish = false`, and both names are already the contract scripts and CI write. | `verify.md:78`, `merge-plan.md:24` |
+| bin `xirang-dev`, feature `dev-supervisor` | Kept; `required-features` is per-target `publish = false`, and both names are already the contract scripts and CI write. | `verify.md:78`, `merge-plan.md:24` |
 | `docs/ROADMAP.md` vs `docs/roadmap-1.0.md` | Kept, and neither may be renamed or exported into one directory on a case-insensitive filesystem: the two names would overwrite each other there. | `verify.md:80` |
 | kernel modules `syntax`, `json`, `release`, `requirements`, `source`, `index`, `host` | Kept and registered here rather than renamed; each one's module doc says which sense it means. | `verify.md:81-83` |
 | feature names | Kept; the table in the Crates section says which module each one gates. | `verify.md:84`, `merge-plan.md:23` |
@@ -236,12 +236,12 @@ JSON 里的 `fix_hint` 是二十条共用的一句模板，**不是**裁定。�
 1. New pure logic goes into a kernel module under `kernel/src/registry_core/<name>/`
    and is registered in `kernel/src/registry_core.rs`.
 2. Execution surfaces keep historical paths through shim re-exports
-   (`pub use nichlink_kernel::tree; pub use nichlink_kernel::tree::*;`) — do not move public
+   (`pub use xirang_kernel::tree; pub use xirang_kernel::tree::*;`) — do not move public
    API paths without updating the shims.
 3. Kernel code must not do I/O, read `std::env`, or depend on process lifetime.
    If it needs such a value, take it as a parameter.
 4. Keep crate names, directory names, and lib names consistent
-   (`nichlink-<x>` / `<x>/` / `nichlink_<x>`); scaffold templates in
+   (`xirang-<x>` / `<x>/` / `xirang_<x>`); scaffold templates in
    `toolchain/build_method/` and CI reference them too.
 
 ## Verify
@@ -251,7 +251,7 @@ cargo fmt --all
 cargo test --workspace --offline
 cargo clippy --workspace --all-targets --offline -- -D warnings
 cargo clippy --workspace --all-targets --offline --all-features -- -D warnings
-tools/nichlink-publish --check-table
+tools/xirang-publish --check-table
 ```
 
 The clippy line has two faces, and they are two different builds: `-D warnings` under the default
@@ -270,10 +270,10 @@ clippy 那一行有**两面**，而它们是**两套不同的构建**：默认�
 `toolchain/src/lib.rs` 与 `toolchain/src/studio/src/lib.rs` 里一直没被看见，直到 2026-09-29；
 提交前两面都要跑。
 
-The last line is the release tables' gate: `tools/nichlink-publish` publishes in a
+The last line is the release tables' gate: `tools/xirang-publish` publishes in a
 hand-maintained dependency order, so it derives the truth from the manifests and
 compares both of its tables against them. It needs no network and no token.
-最后一行是发布表的门禁：`tools/nichlink-publish` 按一份手工维护的依赖顺序发布，因此它从清单
+最后一行是发布表的门禁：`tools/xirang-publish` 按一份手工维护的依赖顺序发布，因此它从清单
 推导事实，并把自己那两张表与清单对比。它不需要网络也不需要 token。
 
 The three `cargo` commands run with `--offline` because this checkout is
@@ -290,7 +290,7 @@ non-default feature, `cargo test -p <crate>` compiles it without that feature an
 them, reporting `0 passed` — which reads like a pass. Measured here: `run_method`'s
 `manifest::face` module (which carries the two nesting-guard pins from audit `LGC-LG-05`) is
 gated behind `authoring` in `toolchain/run_method/src/lib.rs`, so
-`cargo test -p nichlink-toolchain --offline -- manifest::face` prints `0 passed; 0 failed`
+`cargo test -p xirang-toolchain --offline -- manifest::face` prints `0 passed; 0 failed`
 while the same command with `--features authoring` prints that module's pins (`8 passed` when
 this was measured; the count grows with every pin, so treat it as an illustration rather than a
 contract). `kernel` has the same shape, with its parser behind `syntax` (`kernel/src/lib.rs` gates
@@ -299,20 +299,20 @@ against each other, never a quoted total: `0 passed` is the half that stays true
 nothing ran. The workspace command above and CI's `--all-features` job merge features and do
 reach all of them, which is why the workspace run stays the default gate; verifying one crate
 on its own means naming the feature:
-`cargo test -p nichlink-toolchain --offline --features authoring`. Read `0 passed` as
+`cargo test -p xirang-toolchain --offline --features authoring`. Read `0 passed` as
 "nothing ran", not as "nothing failed".
 单个 crate 也可能被"验证"出一个假绿。当一个 crate 的测试门控在非默认特性之后时,
 `cargo test -p <crate>` 会在不带那个特性的情况下编译它,于是一个都不跑,报出 `0 passed`
 ——看起来就像通过了。本检出实测:`run_method` 的 `manifest::face` 模块(审计 `LGC-LG-05`
 那两条嵌套守卫钉子就在其中)门控在 `toolchain/run_method/src/lib.rs` 的 `authoring` 之后,因此
-`cargo test -p nichlink-toolchain --offline -- manifest::face` 打印 `0 passed; 0 failed`,
+`cargo test -p xirang-toolchain --offline -- manifest::face` 打印 `0 passed; 0 failed`,
 而同一条命令加 `--features authoring` 会打印出那个模块的钉子(写下这段时是 `8 passed`;
 这个数每加一条钉子就变,所以只当示意,不当契约)。`kernel` 是同一种形状:解析器门控在 `syntax`
 之后(`kernel/src/lib.rs` 就是那道门),其它非默认特性也以同样的方式把模块挡住——所以请把两次
 运行**对比着读**,不要去引某个总数:`0 passed` 才是恒真的那一半,它只意味着什么都没跑。
 上面的工作区命令与 CI 的 `--all-features` 作业会合并特性,因此覆盖得到它们——这也是工作区
 那条仍是默认门禁的原因;单独验证一个 crate 时请点名特性:
-`cargo test -p nichlink-toolchain --offline --features authoring`。把 `0 passed` 读作
+`cargo test -p xirang-toolchain --offline --features authoring`。把 `0 passed` 读作
 "什么都没跑",而不是"什么都没失败"。
 
 `cargo test --workspace` also runs the gates in the `conventions` crate, so the
@@ -321,7 +321,7 @@ a kernel module file no `mod` declaration names, a deleted execution-surface shi
 re-export, a doc block with only one language (`bilingual`), a crate whose name,
 directory and library name disagree, or a crate name referenced by a scaffold
 template or a CI `-p` that no manifest defines (`naming`), an internal
-`nichlink-*` requirement whose version is not the current workspace version
+`xirang-*` requirement whose version is not the current workspace version
 (`release_version`), a workflow whose upload step can run
 without a tag ref (`release_workflow`), an anchor in a live document that no
 longer points at a line of a `.rs`, `.toml`, `.yml` or `.yaml` file
@@ -346,7 +346,7 @@ skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 失败:`kernel/src` 里出现 I/O、出现 `mod.rs`、出现第二个 `include!`、没有任何 `mod` 声明指名的
 内核模块文件、被删掉的执行面 shim 重导出、只有一种语言的文档块(`bilingual`)、crate 名/目录名/
 库名三者不一致或脚手架模板或 CI `-p` 指名而清单里不存在的 crate 名(`naming`)、内部
-`nichlink-*` 版本要求写着的版本不是当前工作区版本(`release_version`)、上传步骤能在非 tag ref 上
+`xirang-*` 版本要求写着的版本不是当前工作区版本(`release_version`)、上传步骤能在非 tag ref 上
 运行的发布工作流(`release_workflow`)、活文档里不再指向某个 `.rs`、`.toml`、`.yml` 或 `.yaml`
 文件某一行的锚点(`doc_anchors`:扫描以这些后缀触发,读根与各成员的 `Cargo.toml` 以及
 `.github/workflows/*`;`.md` 目标与无扩展名脚本不在覆盖内)、按特性门控的 target 少了
@@ -361,7 +361,7 @@ skips doctests, and the `authoring`-gated `compile_fail` pin only exists under
 `cargo test --workspace --all-features --doc`:`--all-targets` 会跳过 doctest,而门控在
 `authoring` 之后的 `compile_fail` 钉子只在 `--all-features` 下存在。
 
-`tools/nichlink-external-rehearsal` copies the two example hosts outside the
+`tools/xirang-external-rehearsal` copies the two example hosts outside the
 checkout, repoints their `path` dependencies here, detaches them from the
 workspace and builds them from scratch. Every other check builds the examples
 where the workspace's members, relative paths, shared `target/` and shared
@@ -372,18 +372,18 @@ the checkout (one letting the CLI detect this checkout, one told `--path`) and
 runs `cargo test --offline` in each, because a template that names the wrong
 crate compiles nowhere until somebody builds what it writes — which is how five
 mis-anchored paths survived two rename batches.
-`tools/nichlink-publish --verify-consumers` is its counterpart for published
+`tools/xirang-publish --verify-consumers` is its counterpart for published
 crates, and it needs the index.
-`tools/nichlink-external-rehearsal` 把两个示例宿主复制到检出之外，把它们的 `path` 依赖指向
+`tools/xirang-external-rehearsal` 把两个示例宿主复制到检出之外，把它们的 `path` 依赖指向
 这里，让它们脱离工作区并从零构建。其他所有检查都在"工作区成员、相对路径、共享 `target/` 与
 共享 lockfile 恰好都成立"的地方构建示例；只有这一条会在"宿主布局假设只在树内成立"时失败。
 它还有第三条腿，针对**生成出来**的宿主：用本检出的 CLI 在检出之外生成一个二进制项目与一个库
 项目（一条让 CLI 自行探测本检出，一条显式给 `--path`），并各跑一次 `cargo test --offline`
 ——因为一份把 crate 名写错的模板在有人构建它写出的东西之前，在哪里都编译不过，而五处失锚正是
-这样熬过了两个改名批次。`tools/nichlink-publish --verify-consumers` 是它在已发布 crate 上的
+这样熬过了两个改名批次。`tools/xirang-publish --verify-consumers` 是它在已发布 crate 上的
 对应物，那条需要 index。
 
-`tools/nichlink-partition-rehearsal` partitions a host three ways — as a member of a
+`tools/xirang-partition-rehearsal` partitions a host three ways — as a member of a
 workspace, with no workspace above it, and in the publishable release shape — builds each,
 and checks the four facts a partition must not change: the host's own sources byte-identical,
 the same `graft_plan.tsv` in every shape, the same face identities, and a `promote` that still
@@ -391,24 +391,24 @@ lands. A fifth leg builds the **committed** partitioned example (`examples/parti
 because the four legs above build fixtures the script writes itself and nothing in the repository
 would otherwise *be* a partitioned host. Three batches of this feature were verified by hand and every defect it had was found by
 doing the whole thing once; this is that run, as a gate.
-`tools/nichlink-partition-rehearsal` 把宿主分区三次——作为某个工作区的成员、在它之上没有任何工作区、
+`tools/xirang-partition-rehearsal` 把宿主分区三次——作为某个工作区的成员、在它之上没有任何工作区、
 以及写成可发布的形状——各构建一次，并检查拆分绝不能改变的四条事实：宿主自己的源码逐字节相同 · 每个形状里
 同一份 `graft_plan.tsv` · 同样的注册面身份 · 以及 `promote` 仍能落地。这个特性被手工验证了三个批次，
 而它每一个缺陷都是靠把整件事完整做一遍才发现的；本工具就是那次运行，作为一道门禁。
 
-`tools/nichlink-package-audit` checks two different things. Package *contents* —
+`tools/xirang-package-audit` checks two different things. Package *contents* —
 every `src/**/*.rs` module and the declared README must be in the package — are
 verified for all nine crates, because `cargo package --list` needs no
 registry. Packaging itself (building the tarball in isolation) waits for
-each crate's versioned `nichlink-*` dependencies to reach the index, so while the
+each crate's versioned `xirang-*` dependencies to reach the index, so while the
 workspace version is unpublished eight crates are skipped — a state that recurs on
 every version bump, not only before the first publish. A module that cargo does not
 pick up is a crate that compiles locally and nowhere else, which is why the content
 half exists.
-`tools/nichlink-package-audit` 检查两件不同的事。包**内容**——每个 `src/**/*.rs` 模块与
+`tools/xirang-package-audit` 检查两件不同的事。包**内容**——每个 `src/**/*.rs` 模块与
 清单声明的 README 都必须在包里——对九个 crate 全部生效，因为
 `cargo package --list` 不需要 registry。打包本身（从 tarball 隔离构建）要等各 crate 的
-带版本号 `nichlink-*` 依赖进入 index，因此工作区版本尚未发布时会有八个 crate 被跳过——这个
+带版本号 `xirang-*` 依赖进入 index，因此工作区版本尚未发布时会有八个 crate 被跳过——这个
 状态每次推进版本线都会重现，而不只是首次发布之前。cargo 没收进去的模块等于一个只在本地编译得过、
 别处都编译不过的 crate，这正是内容检查存在的原因。
 
@@ -445,7 +445,7 @@ largest files in the tree the ones nothing bounded; an exception that has to be 
 down and then deleted again is `BASELINE`, and a stale entry there fails exactly as a
 newly oversized file does.
 
-`tools/nichlink-test` is the one entry point that runs *every* face: the default
+`tools/xirang-test` is the one entry point that runs *every* face: the default
 `--workspace` run, `--all-features`, an isolated `--no-default-features` run, and one face
 per `required-features` set, read from the member manifests rather than from a list that
 would drift. Each face lists its tests and then really runs them, and the script compares
@@ -469,7 +469,7 @@ app 的 `tests.rs` 加它的 `tests/` 目录，都是同一条规则在 crate �
 豁免让树里最大的文件恰恰没有东西约束；必须写下来、缩回后必须删掉的例外是 `BASELINE`，其中过期的
 条目会像新出现的超标文件一样让门禁失败。
 
-`tools/nichlink-test` 是跑遍**每一个**面的唯一入口：默认的 `--workspace`、`--all-features`、
+`tools/xirang-test` 是跑遍**每一个**面的唯一入口：默认的 `--workspace`、`--all-features`、
 隔离的 `--no-default-features`，以及每个 `required-features` 集合一个面——后者从各成员清单现读，
 而不是从一份会漂移的清单里读。每个面先列出自己的测试、再真跑，而脚本把每个文件写下的 `#[test]`
 条目与这些面列出的名字的并集对比。**灰测试就是缺陷**：任何面都到不了的测试从未跑过一次，而工作区

@@ -12,7 +12,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use crate::build_method::{Node, relative_display};
 
@@ -69,7 +69,7 @@ pub(super) fn render_object_aliases(output: &mut String, src: &Path, nodes: &[No
     for name in names {
         writeln!(
             output,
-            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        {run_method}::__nichlink_object! {{ $($tokens)* }}\n        #[allow(unexpected_cfgs)]\n        #[cfg(rust_analyzer)]\n        {run_method}::face_fields_mirror! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
+            "{vocabulary}\n#[doc(hidden)]\n#[allow(unused_macros)]\n#[rust_analyzer::macro_style(braces)]\nmacro_rules! {name}_object {{\n    ($($tokens:tt)*) => {{\n        {run_method}::__xirang_object! {{ $($tokens)* }}\n        #[allow(unexpected_cfgs)]\n        #[cfg(rust_analyzer)]\n        {run_method}::face_fields_mirror! {{ $($tokens)* }}\n    }}\n}}\n#[allow(unused_imports)]\npub(crate) use {name}_object;\n"
         )
         .unwrap();
     }
@@ -157,7 +157,7 @@ mod tests {
         assert!(output.contains("macro_rules! workspace_object"));
         assert!(output.contains("macro_rules! panel_object"));
         assert!(output.contains("macro_rules! control_object"));
-        assert!(output.contains(&format!("{}::__nichlink_object!", run_method_path())));
+        assert!(output.contains(&format!("{}::__xirang_object!", run_method_path())));
         // An editor inserts the call with round brackets, so the alias matcher
         // must be the delimiter-agnostic token tree and forward it verbatim: a
         // `{ … }` matcher would reject `root_object!( … )` outright.

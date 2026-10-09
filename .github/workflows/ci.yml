@@ -1,4 +1,4 @@
-name: nichlink-ci
+name: xirang-ci
 
 on:
   push:
@@ -44,8 +44,8 @@ jobs:
         # 只在树内成立的布局会在这里失败，而这正是外部路径演练要抓的那类缺陷。它只在一个矩阵
         # 单元上跑，因为它要在全新的 target 目录里重建工作区各 crate。
         env:
-          NICHLINK_REHEARSAL_CARGO_FLAGS: ""
-        run: tools/nichlink-external-rehearsal
+          XIRANG_REHEARSAL_CARGO_FLAGS: ""
+        run: tools/xirang-external-rehearsal
       - name: Partition rehearsal (both shapes)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Partitions a host in both shapes it can be built in — a member of a workspace, and a host with
@@ -60,8 +60,8 @@ jobs:
         # 把整件事完整做一遍才发现的；本步骤就是那次运行，作为一道门禁。它只在一个矩阵单元上跑，因为它要
         # 从零构建三个一次性项目。
         env:
-          NICHLINK_REHEARSAL_CARGO_FLAGS: ""
-        run: tools/nichlink-partition-rehearsal
+          XIRANG_REHEARSAL_CARGO_FLAGS: ""
+        run: tools/xirang-partition-rehearsal
       - name: Graft matrix (root face, overlap, re-partition)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Six shapes only a real host plus a real cargo can answer: a cut on the root face with `full`,
@@ -75,8 +75,8 @@ jobs:
         # （必须发布同一批面）。第六种断言的是某条交接清单里"实测不成立"那行的**反面**：两条相同的字符串切口
         # 被点名，而构建成功。每一种都是先手工量过才写进这里的。
         env:
-          NICHLINK_GRAFT_MATRIX_CARGO_FLAGS: ""
-        run: tools/nichlink-graft-matrix
+          XIRANG_GRAFT_MATRIX_CARGO_FLAGS: ""
+        run: tools/xirang-graft-matrix
       - name: Daily behaviours (a registry face's rule file)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Every row applies one everyday edit to a real host (on its own copy), then runs the real
@@ -90,8 +90,8 @@ jobs:
         # 本步骤为之存在的那个实测缺陷的回归闸门——删掉拥有注册机的面旁边的 `registry_rule.rs` 时，
         # `check` 曾报 `ok`，而 `cargo build` 死于 `error[E0433]: cannot find registry_rule in super`。
         env:
-          NICHLINK_BEHAVIORS_CARGO_FLAGS: ""
-        run: tools/nichlink-daily-behaviors
+          XIRANG_BEHAVIORS_CARGO_FLAGS: ""
+        run: tools/xirang-daily-behaviors
       - name: Real-project size (29 faces, two crates, cuts handed away)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # The maintainer's question in the shape of a test: in a host with real size, do graft and crate
@@ -103,8 +103,8 @@ jobs:
         # 量过：切口留在宿主保留的面上（宿主 2、facade 2）、整棵容器交出去（宿主 0、幽灵 2、facade 2）、
         # 以及未拆分的基线。它同时打印墙上时间，因为拆分的代价也是问题的一部分。
         env:
-          NICHLINK_REAL_PROJECT_CARGO_FLAGS: ""
-        run: tools/nichlink-real-project-test
+          XIRANG_REAL_PROJECT_CARGO_FLAGS: ""
+        run: tools/xirang-real-project-test
       - name: MCP session (mounted over stdio)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # A real client session: initialize, tools/list, then tools/call for every advertised tool. The
@@ -112,30 +112,30 @@ jobs:
         # 真的客户端会话：initialize、tools/list，然后对每个被广告的工具发 tools/call。一次性 `--call`
         # 模式测工具本身；这里测客户端真正接上的协议面。
         env:
-          NICHLINK_MCP_SESSION_CARGO_FLAGS: ""
-        run: tools/nichlink-mcp-session
+          XIRANG_MCP_SESSION_CARGO_FLAGS: ""
+        run: tools/xirang-mcp-session
       - name: Package standalone crates
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
         # Early leftover kept as a core-only smoke check. Packaging
-        # nichlink-toolchain on its own here would need its versioned
-        # dependency on nichlink-kernel to resolve on the index, and an unpublished
+        # xirang-toolchain on its own here would need its versioned
+        # dependency on xirang-kernel to resolve on the index, and an unpublished
         # workspace version does not; the package-audit step below covers every
         # crate and skips that same set.
-        run: cargo package -p nichlink-kernel --locked --allow-dirty
+        run: cargo package -p xirang-kernel --locked --allow-dirty
       - name: Package audit (nine crates, skipping unpublished dependencies)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
-        # Runs tools/nichlink-package-audit beside the core-only package step.
-        # The script verifies every crate whose versioned NichLink dependencies
+        # Runs tools/xirang-package-audit beside the core-only package step.
+        # The script verifies every crate whose versioned XiRang dependencies
         # are already resolvable on crates.io, warns about and skips the ones
         # whose dependency has not been published yet, and exits 0 in both
         # cases. A packaging regression in a crate that could be checked still
         # fails the step: unlike the earlier continue-on-error version, silence
         # no longer hides a failure.
-        # 与仅打包 core 的步骤并列运行 tools/nichlink-package-audit。脚本校验所有
+        # 与仅打包 core 的步骤并列运行 tools/xirang-package-audit。脚本校验所有
         # 版本依赖已能在 crates.io 上解析的 crate；对依赖尚未发布的包给出警告并跳过，
         # 两种情况都以 0 退出。真正可检查的 crate 若打包回归仍会让本步骤失败：与早先
         # 带 continue-on-error 的版本不同，这里不再用容忍掩盖失败。
-        run: tools/nichlink-package-audit
+        run: tools/xirang-package-audit
 
   features:
     # The verify matrix only ever builds each crate's default features, so
@@ -182,34 +182,34 @@ jobs:
         # TUI 是读者真正看到的那一面，而其他步骤都不渲染它：测试后端检查的是缓冲区而不是
         # 终端。每个场景在固定尺寸的面板里驱动真实二进制，抓到的内容必须非空。
         env:
-          NICHLINK_VISUAL_CARGO_FLAGS: ""
+          XIRANG_VISUAL_CARGO_FLAGS: ""
         run: |
           command -v tmux >/dev/null || (sudo apt-get update && sudo apt-get install -y tmux)
-          tools/nichlink-visual home graph tree-demo partition
+          tools/xirang-visual home graph tree-demo partition
           for scene in home graph tree-demo partition; do
             test -s "target/visual/$scene.txt"
           done
       - name: Release tables match the manifests
         # No network: `--check-table` compares the dependency and level tables in
-        # `tools/nichlink-publish` against the manifests that decide the real
+        # `tools/xirang-publish` against the manifests that decide the real
         # publish order. It runs here as well as in the release workflow because
-        # the tables are hand-maintained and rot between releases — `nichlink-toolchain`
-        # grew a direct `nichlink-kernel` requirement while the table still listed
+        # the tables are hand-maintained and rot between releases — `xirang-toolchain`
+        # grew a direct `xirang-kernel` requirement while the table still listed
         # only the other three, and every gate stayed green.
-        # 不需要网络：`--check-table` 把 `tools/nichlink-publish` 里的依赖表与层表同决定真实
+        # 不需要网络：`--check-table` 把 `tools/xirang-publish` 里的依赖表与层表同决定真实
         # 发布顺序的清单对比。它既在这里跑也在发布工作流里跑，因为这两张表是手工维护的、会在
-        # 两次发布之间腐烂——`nichlink-toolchain` 增加了对 `nichlink-kernel` 的直接依赖，而表里仍只列
+        # 两次发布之间腐烂——`xirang-toolchain` 增加了对 `xirang-kernel` 的直接依赖，而表里仍只列
         # 另外三个，所有门禁却都是绿的。
-        run: tools/nichlink-publish --check-table
+        run: tools/xirang-publish --check-table
       - name: Publish dry run
-        # `tools/nichlink-publish` without `--publish` packages every crate whose
+        # `tools/xirang-publish` without `--publish` packages every crate whose
         # versioned dependencies are on the index, waits for the rest, and uploads
         # nothing. It needs a network, which is why it lives in this job and not in
         # the offline local battery.
-        # 不带 `--publish` 的 `tools/nichlink-publish` 会打包所有版本依赖已在 index 上的
+        # 不带 `--publish` 的 `tools/xirang-publish` 会打包所有版本依赖已在 index 上的
         # crate、把其余的报成等待，且不上传任何东西。它需要网络，这正是它在这个任务而不是
         # 离线本地门禁里的原因。
-        run: tools/nichlink-publish
+        run: tools/xirang-publish
       - name: Real crates from the registry (not refused by name)
         # Points the read-only surface at source trees nobody wrote for us. Every rule in this repository
         # is a description of *some* Rust, and a rule that is really a description of *this checkout* can
@@ -225,9 +225,9 @@ jobs:
         # limit of 1024」拒绝，同一个 crate 还有四个文件同样被拒（审计 `M7`，§M7.56）。上一步已经取回
         # 全部依赖，因此它读的 registry 缓存是满的；它在检查前先复制每个 crate，因此缓存不会被写入。
         env:
-          NICHLINK_CARGO_FLAGS: ""
-          NICHLINK_REAL_PROJECTS: "60"
-        run: tools/nichlink-real-projects
+          XIRANG_CARGO_FLAGS: ""
+          XIRANG_REAL_PROJECTS: "60"
+        run: tools/xirang-real-projects
       - name: Real usage (both shapes, judged by attribution)
         # A host that really hands a subtree to another crate, in both partition shapes, with every row read
         # out of a target directory this run created: what each package compiles, what each package emits, and
@@ -242,8 +242,8 @@ jobs:
         # §M7.55）。断言 `rc=0` 的步骤看不见它：两种状态都能构建成功。已用"故意弄坏归属"证明：它会以
         # "audit says 2 cut row(s) while the tree emits 0" 失败。
         env:
-          NICHLINK_REAL_USAGE_CARGO_FLAGS: ""
-        run: tools/nichlink-real-usage
+          XIRANG_REAL_USAGE_CARGO_FLAGS: ""
+        run: tools/xirang-real-usage
       - name: IDE mirror (rust_analyzer cfg)
         # No other step compiles this: the check builds two host examples again
         # under a cfg only an editor uses. A nested face's derived rule path
@@ -253,7 +253,7 @@ jobs:
         # 没有其他步骤会编译它：这项检查用一条只有编辑器才用的 cfg 把两个宿主示例再构建
         # 一遍。嵌套面派生的规则路径在真实模块树里能解析，而 rust-analyzer 需要的 crate 根
         # 影子里解析不了；没有这一步，宿主在编辑器里的视图会腐化，而其余门禁全是绿的。
-        run: cargo test -p nichlink-example-control-button --test ide_mirror -- --ignored
+        run: cargo test -p xirang-example-control-button --test ide_mirror -- --ignored
 
   deny:
     # advisories / licenses / bans are configured in deny.toml.
@@ -271,13 +271,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Release scale and symbol audit
-        run: tools/nichlink-release-audit
+        run: tools/xirang-release-audit
       - name: Scale memory audit
-        run: tools/nichlink-scale-audit
+        run: tools/xirang-scale-audit
 
   process-plugin:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test -p nichlink-toolchain --features process-tools
+      - run: cargo test -p xirang-toolchain --features process-tools

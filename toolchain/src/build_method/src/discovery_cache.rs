@@ -95,7 +95,7 @@ pub(crate) fn update_discovery_cache(
                 }
             },
         );
-    let directory = target.join("nichlink").join("cache");
+    let directory = target.join("xirang").join("cache");
     if fs::create_dir_all(&directory).is_err() {
         return "disabled".to_owned();
     }

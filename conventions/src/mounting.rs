@@ -264,7 +264,7 @@ pub fn mounts(root: &Path) -> Mounts {
     for path in &files {
         let text = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-        let masked = nichlink_kernel::source::mask_non_code(&text);
+        let masked = xirang_kernel::source::mask_non_code(&text);
         let directory = path.parent().unwrap_or(&kernel);
         for declaration in declarations(&text, &masked) {
             mounted
@@ -332,7 +332,7 @@ pub fn findings(root: &Path) -> Findings {
             // 拼法。
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-            let masked = nichlink_kernel::source::mask_non_code(&text);
+            let masked = xirang_kernel::source::mask_non_code(&text);
             let mut from = 0usize;
             while let Some(offset) = masked[from..].find("include") {
                 let at = from + offset;

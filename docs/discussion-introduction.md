@@ -4,11 +4,11 @@
 
 ## 标题
 
-NichLink：面向 Rust 对象图的递归注册与原子嫁接
+XiRang：面向 Rust 对象图的递归注册与原子嫁接
 
 ## 正文
 
-大家好，我正在开源一个 Rust 优先的实验性基础设施：NichLink。
+大家好，我正在开源一个 Rust 优先的实验性基础设施：XiRang。
 
 它解决的不是“如何定义一个 trait”，而是大型对象图中经常被分散处理的几件事：
 
@@ -37,15 +37,15 @@ NodeEditor -> Canvas2D -> WGPU
 
 当前仓库包含：
 
-- `nichlink-kernel`：Registry、合同、admission、graft 和事务；
-- `nichlink-macro`：编译期注册面字段前端（宽容的分隔符与顺序、带 span 的诊断、编辑器镜像）；
-- `nichlink-toolchain`：目录发现、粗修和静态计划；
-- `nichlink-toolchain`：运行期 trace 状态与 `host!`/`trace_call!` 宏；
-- `nichlink-toolchain`：统一命令行入口（`nichlink new/check/build/studio/mcp`）；
-- `nichlink-toolchain`：MIR 候选、CallTrace 和数据流证据；
-- `nichlink-toolchain`：常驻 Ratatui 调试界面；
-- `nichlink-toolchain`：给 AI 使用的紧凑查询入口；
-- `nichlink-toolchain`：Wasm/process 插件适配。
+- `xirang-kernel`：Registry、合同、admission、graft 和事务；
+- `xirang-macro`：编译期注册面字段前端（宽容的分隔符与顺序、带 span 的诊断、编辑器镜像）；
+- `xirang-toolchain`：目录发现、粗修和静态计划；
+- `xirang-toolchain`：运行期 trace 状态与 `host!`/`trace_call!` 宏；
+- `xirang-toolchain`：统一命令行入口（`xirang new/check/build/studio/mcp`）；
+- `xirang-toolchain`：MIR 候选、CallTrace 和数据流证据；
+- `xirang-toolchain`：常驻 Ratatui 调试界面；
+- `xirang-toolchain`：给 AI 使用的紧凑查询入口；
+- `xirang-toolchain`：Wasm/process 插件适配。
 
 我想重点听到三类反馈：
 
@@ -57,5 +57,5 @@ NodeEditor -> Canvas2D -> WGPU
 
 如果你愿意试用，请附上：项目类型、采用前的接线方式、最希望解决的替换或调试问题，以及没有采用的原因。反例和批评同样欢迎。
 
-仓库：<https://github.com/Nichtigott/nichlink>
+仓库：<https://github.com/Nichtigott/xirang>
 路线图：[`ROADMAP.md`](ROADMAP.md)

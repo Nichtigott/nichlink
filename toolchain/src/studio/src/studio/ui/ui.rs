@@ -25,7 +25,7 @@ mod render_cache;
 pub use render_cache::RenderCache;
 #[path = "mark.rs"]
 mod mark;
-use mark::NICH_LINK_MARK;
+use mark::XIRANG_MARK;
 #[path = "overlay.rs"]
 mod overlay;
 use overlay::draw_overlay;
@@ -277,7 +277,7 @@ mod tests {
     fn renders_brand_and_primary_panels_at_wide_size() {
         let output = rendered_text(140, 48);
         assert!(output.contains("NICH LINK"));
-        for row in NICH_LINK_MARK {
+        for row in XIRANG_MARK {
             assert!(output.contains(row), "missing or distorted logo row: {row}");
         }
         assert!(output.contains("REGISTRATION TREE"));

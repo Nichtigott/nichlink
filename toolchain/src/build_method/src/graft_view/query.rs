@@ -45,7 +45,7 @@ pub(crate) struct HostGraftEntries {
 ///
 /// The entry is a parameter, not something this function resolves for itself.
 /// Resolving it here is what let the build disagree with itself:
-/// `NICH_LINK_ENTRY` used to reach pruning while this reader silently took
+/// `XIRANG_ENTRY` used to reach pruning while this reader silently took
 /// `application!`/`main.rs`, so the generated `BUILTIN_GRAFT_CUTS` and the
 /// `graft_plan.tsv` audit text described a different file than the one the
 /// release pruned — a slot declared only in the configured file never reached
@@ -53,7 +53,7 @@ pub(crate) struct HostGraftEntries {
 /// decision that never saw it. `pipeline` resolves the entry once and hands the
 /// same value here and to `SourceScope`.
 /// 入口是参数，而不是本函数自行解析的东西。在这里自行解析正是构建自相矛盾的原因：
-/// `NICH_LINK_ENTRY` 过去只作用于剪枝，而这个读取者静默取 `application!`/`main.rs`，
+/// `XIRANG_ENTRY` 过去只作用于剪枝，而这个读取者静默取 `application!`/`main.rs`，
 /// 于是生成的 `BUILTIN_GRAFT_CUTS` 与 `graft_plan.tsv` 审计文本描述的文件，和发布态
 /// 实际剪枝依据的文件不是同一个——只在被指定文件里声明的槽位永远到不了运行期，而从
 /// 另一个文件保留下来的切口则可能活过一次根本没看到它的剪枝决策。现在 `pipeline`
@@ -222,7 +222,7 @@ mod tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-{name}-{}-{}-{sequence}",
+            "xirang-{name}-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

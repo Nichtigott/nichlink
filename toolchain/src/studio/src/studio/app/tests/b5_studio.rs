@@ -6,7 +6,7 @@
 //! 住在导航之外的源码戳、写入守卫的诚实名字，以及戳与 watcher 的名单镜像。
 //!
 //! covers `app/call_tree_queries.rs`, `app/navigation.rs`, `app/keyboard.rs`,
-//! `app/source_stamp.rs`, `app/write_guard.rs` and `bin/nichlink-dev.rs`.
+//! `app/source_stamp.rs`, `app/write_guard.rs` and `bin/xirang-dev.rs`.
 //! 覆盖上列文件。
 
 /// Only the four arrows ask for a tree step; every other key is refused, not read as
@@ -144,7 +144,7 @@ fn the_write_guard_is_named_for_what_it_holds_and_the_watch_lists_agree() {
         "the old module name is gone"
     );
     let stamp = include_str!("../source_stamp.rs");
-    let watcher = include_str!("../../../../../bin/nichlink-dev.rs");
+    let watcher = include_str!("../../../../../bin/xirang-dev.rs");
     for name in [
         "Cargo.toml",
         "Cargo.lock",

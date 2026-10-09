@@ -118,7 +118,7 @@ static RUNNING: Mutex<BTreeMap<PathBuf, Instant>> = Mutex::new(BTreeMap::new());
 /// Read the graph this root published, refusing a body that does not match its header.
 /// 读取这个根发布的图，并拒绝与头部不符的正文。
 pub(crate) fn read_graph(root: &Path) -> Result<Graph, String> {
-    let path = out_dir(root).join(nichlink_kernel::lexicon::GRAPH_FILE);
+    let path = out_dir(root).join(xirang_kernel::lexicon::GRAPH_FILE);
     let text = std::fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let body_start = text
@@ -153,7 +153,7 @@ pub(crate) fn read_graph(root: &Path) -> Result<Graph, String> {
         .iter()
         .flat_map(|(from, to, _)| [from.as_str(), to.as_str()])
         .collect();
-    let recomputed = nichlink_kernel::identity::NodeId::from_bytes(body.as_bytes()).to_string();
+    let recomputed = xirang_kernel::identity::NodeId::from_bytes(body.as_bytes()).to_string();
     if edges.len() != listed_edges || nodes.len() != listed_nodes || recomputed != digest {
         return Err(format!(
             "{} does not match its header (header: {listed_nodes} node(s) / {listed_edges} \
@@ -172,11 +172,11 @@ pub(crate) fn read_graph(root: &Path) -> Result<Graph, String> {
 /// Read the readiness record, refusing one that is incomplete or that does not match the graph.
 /// 读取就绪记录，并拒绝不完整、或与图对不上的那一份。
 pub(crate) fn read_generation(root: &Path) -> Result<Generation, String> {
-    let path = out_dir(root).join(nichlink_kernel::lexicon::GENERATION_FILE);
+    let path = out_dir(root).join(xirang_kernel::lexicon::GENERATION_FILE);
     let text = std::fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let marker = header_value(&text, "# generation\t");
-    if marker.as_deref() != Some(nichlink_kernel::lexicon::GENERATION_MARKER) {
+    if marker.as_deref() != Some(xirang_kernel::lexicon::GENERATION_MARKER) {
         return Err(format!(
             "{} is not a readiness record (first line says {:?})",
             path.display(),
@@ -200,7 +200,7 @@ pub(crate) fn read_generation(root: &Path) -> Result<Generation, String> {
         })
         .ok_or_else(|| format!("{} has no readable `stamp`", path.display()))?;
     let generation = Generation {
-        namespace: header_value(&text, nichlink_kernel::lexicon::GENERATION_NAMESPACE_KEY),
+        namespace: header_value(&text, xirang_kernel::lexicon::GENERATION_NAMESPACE_KEY),
         generation: number("generation\t")?,
         digest: header_value(&text, "digest\t")
             .ok_or_else(|| format!("{} has no digest", path.display()))?,
@@ -223,7 +223,7 @@ pub(crate) fn read_generation(root: &Path) -> Result<Generation, String> {
             path.display(),
             generation.graph_nodes,
             generation.graph_edges,
-            nichlink_kernel::lexicon::GRAPH_FILE,
+            xirang_kernel::lexicon::GRAPH_FILE,
             graph.nodes,
             graph.edges.len()
         ));
@@ -238,7 +238,7 @@ pub(crate) fn state(root: &Path) -> State {
         Ok(generation) => generation,
         Err(error) => {
             return if out_dir(root)
-                .join(nichlink_kernel::lexicon::GENERATION_FILE)
+                .join(xirang_kernel::lexicon::GENERATION_FILE)
                 .exists()
             {
                 State::Damaged(error)
@@ -375,8 +375,8 @@ pub(crate) fn settle(timeout: std::time::Duration) {
         // 这条日志就是那个信号的终端形态：跑 `--call apply` 的人看到索引还在构建，而不是一个干脆卡住的进程。
         if Instant::now() >= deadline {
             eprintln!(
-                "nichlink: the index refresh has been running for {}s; leaving it unpublished \
-                 (run `nichlink check` to finish it)",
+                "xirang: the index refresh has been running for {}s; leaving it unpublished \
+                 (run `xirang check` to finish it)",
                 busy.as_secs()
             );
             return;
@@ -410,14 +410,14 @@ pub(crate) fn line(root: &Path, state: &State) -> String {
         State::Behind { published } => {
             let running = match running_for(root) {
                 Some(seconds) => format!("a refresh is running ({seconds}s)"),
-                None => "run `nichlink check`".to_owned(),
+                None => "run `xirang check`".to_owned(),
             };
             format!(
                 "index behind: generation {} covers {}; the sources have changed since — {running}",
                 published.generation, published.digest
             )
         }
-        State::Absent => "index not published yet: run `nichlink check`".to_owned(),
+        State::Absent => "index not published yet: run `xirang check`".to_owned(),
         State::Damaged(why) => format!("index damaged: {why}"),
     }
 }

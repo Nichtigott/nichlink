@@ -1,3 +1,3 @@
 fn main() {
-    nichlink_toolchain::build_method::run();
+    xirang_toolchain::build_method::run();
 }

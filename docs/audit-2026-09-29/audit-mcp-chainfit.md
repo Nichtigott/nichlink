@@ -12,12 +12,12 @@ a preset ideal path per bug, and two agent arms measured with the same instrumen
 
 ## 1. Staging / 装置
 
-- `tools/nichlink-mcp-eval` **builds the project** — `ledger`, a small ledger service (account/entry
+- `tools/xirang-mcp-eval` **builds the project** — `ledger`, a small ledger service (account/entry
   model, in-memory store, bucketed index, filter/summary query, report renderer, integration tests;
   10 files) — and **injects one designed bug at a time**. Each bug carries its symptom, its site, the
   **shortcut that must be refused**, and the **preset ideal debug path**: five decisive steps, each
   naming the question it answers.
-  `tools/nichlink-mcp-eval` **编写这个项目**（`ledger`，10 个文件）并**逐个注入设计好的缺陷**。每个缺陷带
+  `tools/xirang-mcp-eval` **编写这个项目**（`ledger`，10 个文件）并**逐个注入设计好的缺陷**。每个缺陷带
   症状、站点、**必须拒绝的捷径**，以及**预设理想调试路径**：五个决定性步骤，每步点名它回答的问题。
 - The four bugs / 四处缺陷: ① `Filter::matches` minimum-amount guard inverted (shortcut: weaken the
   test's floor) ② the call to `write_totals` deleted from `render` (shortcut: inline the totals)
@@ -33,7 +33,7 @@ a preset ideal path per bug, and two agent arms measured with the same instrumen
   weakening tests (`#[ignore]`/`#[allow]`/relaxed assertions).
   八棵树（4 题 × 2 组），同题两份逐字节相同、各自是 git 检出。题面禁止：与别的副本比较、读或运行持有
   真值与预设路径的出题脚本、用 git 历史（注入就在上一个提交里）、以及把测试改松。
-- `tools/nichlink-mcp-eval-chains` (Node) measures from each member's **own session log**: the
+- `tools/xirang-mcp-eval-chains` (Node) measures from each member's **own session log**: the
   multi-frame zstd is decoded frame by frame, rounds are cut at the task claim, and per round it
   reports reasoning characters/blocks, substantive tool calls, and coverage of the preset steps.
   Instrument calls are read from the logs the briefs demanded, never guessed.
@@ -60,7 +60,7 @@ starts a fresh process and hand-rolls JSON-RPC for every call.
 ## 3. The four axes the maintainer named / 维护者点名的四个轴
 
 - **Instruction adherence 指令执行度 — we lose 0/4** ✗. The bridge's `initialize.instructions` says
-  "Use `nichlink.search` before reading source"; the MCP arm's **first source access in all four
+  "Use `xirang.search` before reading source"; the MCP arm's **first source access in all four
   rounds was `read`**, round 4 used `search` **zero** times, and none of its four reports quoted the
   sentence. The codegraph arm, by contrast, treated *its* tool's caveats as authoritative: it named
   the blast-radius/`affected` false negatives in every round and refused to draw conclusions from
@@ -113,7 +113,7 @@ starts a fresh process and hand-rolls JSON-RPC for every call.
 
 ## 6. Queue from this evaluation / 本次评测带出的队列
 
-① Give the bridge a **directly callable command** (`nichlink call <tool> --json …`) so an agent does
+① Give the bridge a **directly callable command** (`xirang call <tool> --json …`) so an agent does
 not hand-roll JSON-RPC. ② `converge`/`callgraph` should return source by default (or let `converge`
 hand over "the deciding line and the doc above it"), and `literal` hits should carry `context`.
 ③ Add an **orphan view** ("defined in this package, zero callers").
@@ -136,7 +136,7 @@ re-verified each by hand before accepting them.
 Independent evidence the audit added, re-checked by the captain: all eight `tests/ledger.rs` files are
 one byte string (`md5 c39b1b4264989855eebf1e3ec4b2946f` × 8 ⇒ no assertion was relaxed), every tree's
 diff is one file and one line, every store has a single commit and a clean status, and the hard
-constraints (`tools/nichlink-mcp-eval`, `git log`/`show`/`HEAD~`/`reflog`, `diff -r`/`cmp`, other
+constraints (`tools/xirang-mcp-eval`, `git log`/`show`/`HEAD~`/`reflog`, `diff -r`/`cmp`, other
 trees' paths) have **zero** hits across all eight reports and both logs.
 
 ## 8. Dissecting the chain: where the +53% actually went / 解剖思维链：那 +53% 花在哪
@@ -175,13 +175,13 @@ hand-rolled client capped it), after which it was carried through **52 further a
 Reading our arm's 25 reasoning blocks in round 1: blocks 0–10 are build the binary, check its
 freshness, **write a Python MCP driver**, debug a hang (`notifications/initialized` without an id), a
 `pkill` that matched its own shell, and the truncated list — including the moment it asked itself
-whether a bridge "oriented at nichlink registration faces" even applies to a plain Rust project.
+whether a bridge "oriented at xirang registration faces" even applies to a plain Rust project.
 The diagnosis then happens in **three blocks** (the guard, its doc, the fix). Codegraph's round 1, same
 brief: block 0 plans, block 2 runs one `explore`, **block 3 names the site**. Same verdict, and the
 entire difference sits in the first third.
 读我们这组第 1 题的 25 个推理块：块 0–10 是构建二进制、核对它新不新、**写一个 Python MCP 驱动**、排查一次挂起
 （`notifications/initialized` 没带 id）、一次把自己的 shell 也匹配上的 `pkill`、以及那份被截断的清单——其中还
-包括它自问"这个面向 nichlink 注册面的桥是否适用于一个普通 Rust 项目"。定罪只用了**三块**（守卫、它的文档、修法）。
+包括它自问"这个面向 xirang 注册面的桥是否适用于一个普通 Rust 项目"。定罪只用了**三块**（守卫、它的文档、修法）。
 codegraph 第 1 题同一份题面：块 0 计划、块 2 一条 `explore`、**块 3 点名病灶**。同样的判定，差别全在前三分之一。
 
 **Why the prose instruction was ignored 4/4 / 那条散文指令为什么 0/4 被无视**
@@ -352,7 +352,7 @@ under `/tmp/mcp-eval2`; round 1's evidence kept untouched under `/tmp/mcp-eval`.
 The maintainer asked for more items, realistic project shapes, and for out-performing codegraph rather
 than matching it. The four injected bugs measure localization speed on a known shape; these six
 measure whether a tool can **answer at all** when the question needs a framework notion or
-cross-member reachability. `tools/nichlink-mcp-eval` gained `scenario-project` / `scenario-inject` /
+cross-member reachability. `tools/xirang-mcp-eval` gained `scenario-project` / `scenario-inject` /
 `scenario-plan` / `scenario-check` / `scenario-probe`; the project is a two-crate workspace
 (`ledger-core` + `ledger-report`) with a feature-gated module, a cross-crate caller, a zero-caller
 definition, a two-site chain and a contract whose one uncovered cell no test exercises.
@@ -546,7 +546,7 @@ definition line of every tree-defined callee ✓ · `callgraph` adds `also here`
 definitions ✓ · **`check` now ends with a whole-tree census** (respelled constants, unreferenced
 constants, the entry plan's static counts, and a sentence saying what it does **not** cover) ✓ · the
 flow table names the adoption ledger and where it lives ✓ · a zero-caller answer at a member root says
-the other members are invisible ✓ · the example's Studio test no longer deletes the whole `.nichlink`
+the other members are invisible ✓ · the example's Studio test no longer deletes the whole `.xirang`
 (it now removes only the plan it created) ✓.
 **每一条都有实测来源与真树冒烟** ✓；最后一条由五族的 c **两个臂独立发现** ✓（我们那臂只能把台账写在最后一次
 跑门之后 ✓，它那臂按原 sha256 逐字节还原后追加 ✓）。
@@ -560,7 +560,7 @@ and the confounds above mean the 93:302 gap is **not** by itself proof of a bett
 **装置**：26 棵树在 `/tmp/round5` —— 四道注入缺陷 `r1`–`r4`（每臂一棵）、八个情景关卡 `s1`–`s8`（两臂共用只读树）、
 五族 `a`–`e`（每臂一棵），**每臂 17 个样本**。题面与题面级硬约束在 `/tmp/round5/BRIEF.md`，判分口径在
 `/tmp/round5/AUDIT-BRIEF.md`；`pristine-1..4` 由出题器新生成，专供四题的逐字还原。
-队 `nichlink-round5` 共 **27 个任务**：原计划 35 个，被 `agent_teams_create` 的 inline plan 上限（**32 条**）压成 27
+队 `xirang-round5` 共 **27 个任务**：原计划 35 个，被 `agent_teams_create` 的 inline plan 上限（**32 条**）压成 27
 ——八关两两合并成每臂 4 条，逐样本的日志与交付文件仍然分开。**上一轮会话就是死在哪一步**：35 条任务的完整题面
 一次塞进工具调用（约 100 KB），模型吐出不合法 JSON（`MALFORMED_RESPONSE`），队没建起来。
 

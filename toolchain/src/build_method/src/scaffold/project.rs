@@ -1,5 +1,5 @@
-//! Project scaffolding for new NichLink host crates.
-//! 新 NichLink 宿主 crate 的项目脚手架。
+//! Project scaffolding for new XiRang host crates.
+//! 新 XiRang 宿主 crate 的项目脚手架。
 //!
 //! Renders the manifest, build script, and source entry of a new host, and
 //! injects the editor snippets so the first field an author writes is one pick
@@ -10,14 +10,14 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::snippets::{Editor, write_editor_snippets};
 
-const NICHLINK_REPOSITORY: &str = "https://github.com/Nichtigott/nichlink";
+const XIRANG_REPOSITORY: &str = "https://github.com/Nichtigott/xirang";
 
-/// What `nichlink new` scaffolds: a binary host or a library host.
-/// `nichlink new` 生成的宿主类型：二进制宿主或库宿主。
+/// What `xirang new` scaffolds: a binary host or a library host.
+/// `xirang new` 生成的宿主类型：二进制宿主或库宿主。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectKind {
     /// A host whose entry is `src/main.rs`.
@@ -46,22 +46,22 @@ impl std::fmt::Display for ProjectKind {
     }
 }
 
-/// Where a generated manifest sources the NichLink crates from.
-/// 生成清单中 NichLink crate 的依赖来源。
+/// Where a generated manifest sources the XiRang crates from.
+/// 生成清单中 XiRang crate 的依赖来源。
 #[derive(Clone, Debug)]
 pub enum DependencySource {
-    /// Path dependencies into a local NichLink checkout.
-    /// 指向本地 NichLink checkout 的 path 依赖。
+    /// Path dependencies into a local XiRang checkout.
+    /// 指向本地 XiRang checkout 的 path 依赖。
     Local {
         /// The checkout the generated manifest points at.
         /// 生成清单指向的检出目录。
         workspace: PathBuf,
     },
-    /// The published release, by version requirement alone — what `cargo add nichlink-toolchain`
+    /// The published release, by version requirement alone — what `cargo add xirang-toolchain`
     /// would write. It needs neither this checkout's paths nor a git remote, so a project generated
     /// this way builds offline from a warm registry cache; that is why it, and not `Git`, is the
     /// fallback for a tool that is not running inside a checkout.
-    /// 只按版本要求指向**已发布**的那一版——`cargo add nichlink-toolchain` 会写下的东西。它既不需要本
+    /// 只按版本要求指向**已发布**的那一版——`cargo add xirang-toolchain` 会写下的东西。它既不需要本
     /// 检出的路径、也不需要 git 远端，因此这样生成的项目能靠一份已预热的注册表缓存**离线**构建；这正是不在
     /// 检出内运行的工具回落到这里、而不是回落到 `Git` 的原因。
     Registry,
@@ -82,9 +82,9 @@ pub enum DependencySource {
 }
 
 /// Detect the dependency source for a running tool binary: path dependencies
-/// when the binary lives inside a NichLink checkout's own target directory;
+/// when the binary lives inside a XiRang checkout's own target directory;
 /// the published release otherwise.
-/// 根据运行中的工具二进制位置检测依赖来源：位于 NichLink checkout 自身
+/// 根据运行中的工具二进制位置检测依赖来源：位于 XiRang checkout 自身
 /// target 目录内时使用 path 依赖，否则使用已发布的那一版。
 ///
 /// The fallback used to be `Git`, which made every installed copy write a manifest that needs the
@@ -111,11 +111,11 @@ pub fn detected_source(tool_manifest_dir: &Path, current_exe: &Path) -> Dependen
 ///
 /// Detection answers "am I running from a checkout", and that question has no answer on a machine
 /// where this tool was installed — which is exactly the machine whose generated project could not
-/// build offline (`cargo build --offline` → `no matching package named nichlink-toolchain`, because
+/// build offline (`cargo build --offline` → `no matching package named xirang-toolchain`, because
 /// the release is unpublished). Naming the checkout makes that machine able to generate a project
 /// that **does** build locally, which is the point of the spelling.
 /// 检测回答的是"我是不是从检出里跑的"，而这个问题在**装出来的**工具上没有答案——而那正是生成项目无法
-/// 离线构建的那台机器（`cargo build --offline` → `no matching package named nichlink-toolchain`，
+/// 离线构建的那台机器（`cargo build --offline` → `no matching package named xirang-toolchain`，
 /// 因为那一版还没发布）。**点名检出**让那台机器也能生成**本地确实能构建**的项目，而这正是这个拼写的目的。
 ///
 /// A named directory must look like a checkout: `kernel/` and `toolchain/` beside each other. That
@@ -137,7 +137,7 @@ fn named_checkout(
         });
     }
     Err(format!(
-        "`path` is `{named}`, which does not look like a NichLink checkout: `kernel/` and \
+        "`path` is `{named}`, which does not look like a XiRang checkout: `kernel/` and \
          `toolchain/` are not both inside it. Point it at a checkout (the directory holding both), \
          or use `dependency: \"registry\"` for the published release. Nothing was created"
     ))
@@ -190,7 +190,7 @@ pub fn requested_source(
             // quietly handing back a published release would be a different project.
             // 不回落到 `registry`：调用方要的是**本检出**的 crate，而悄悄换成已发布的那一版会是另一个项目。
             _ => Err(
-                "`dependency: \"path\"` needs this tool to be running from a NichLink checkout \
+                "`dependency: \"path\"` needs this tool to be running from a XiRang checkout \
                  (a binary under its own `target/`, with `kernel/` and `toolchain/` beside it); this \
                  one is not, so there is no checkout to point at. Use `dependency: \"registry\"` for \
                  the published release. Nothing was created"
@@ -209,7 +209,7 @@ pub fn requested_source(
             Ok(DependencySource::Registry)
         }
         "git" => Ok(DependencySource::Git {
-            url: url.unwrap_or(NICHLINK_REPOSITORY).to_owned(),
+            url: url.unwrap_or(XIRANG_REPOSITORY).to_owned(),
         }),
         other => Err(format!(
             "`dependency` is `path`, `registry` or `git`, not `{other}`: `path` points at the \
@@ -220,9 +220,9 @@ pub fn requested_source(
     }
 }
 
-/// The NichLink release this tool belongs to, as the requirement a generated
+/// The XiRang release this tool belongs to, as the requirement a generated
 /// manifest writes for the crates it depends on.
-/// 本工具所属的 NichLink 发布版本，也就是生成清单为它依赖的 crate 写下的要求。
+/// 本工具所属的 XiRang 发布版本，也就是生成清单为它依赖的 crate 写下的要求。
 ///
 /// A literal here drifts: every scaffolded manifest used to require `0.1.0` forever,
 /// which caret semantics happened to satisfy until the line reached `0.2.0` — at
@@ -251,14 +251,14 @@ const RELEASE_REQUIREMENT: &str = env!("CARGO_PKG_VERSION");
 /// 确定、瞬时，并且不会在气隙机器上挂住——而气隙机器正是这条警告存在的理由。
 pub fn registry_release_present(version: &str, cargo_home: &Path) -> bool {
     // The **index cache** is the decisive one, and that is a measured fact rather than a reading of
-    // cargo's docs: this machine holds `registry/cache/…/nichlink-toolchain-0.2.0.crate` (the release
-    // was published and then deleted) while `registry/index/…/.cache/ni/ch/nichlink-toolchain` does
+    // cargo's docs: this machine holds `registry/cache/…/xirang-toolchain-0.2.0.crate` (the release
+    // was published and then deleted) while `registry/index/…/.cache/ni/ch/xirang-toolchain` does
     // not exist, and `cargo build --offline` on a generated project fails with `no matching package
-    // named nichlink-toolchain found`. An archive without an index entry does not resolve.
+    // named xirang-toolchain found`. An archive without an index entry does not resolve.
     // **索引缓存**才是决定性的那一个，而这是实测事实、不是对 cargo 文档的解读：这台机器上有
-    // `registry/cache/…/nichlink-toolchain-0.2.0.crate`（那一版发布过又被删除），却没有
-    // `registry/index/…/.cache/ni/ch/nichlink-toolchain`，而生成的项目上 `cargo build --offline` 报
-    // `no matching package named nichlink-toolchain found`。**没有索引条目的存档解析不了。**
+    // `registry/cache/…/xirang-toolchain-0.2.0.crate`（那一版发布过又被删除），却没有
+    // `registry/index/…/.cache/ni/ch/xirang-toolchain`，而生成的项目上 `cargo build --offline` 报
+    // `no matching package named xirang-toolchain found`。**没有索引条目的存档解析不了。**
     let wanted = format!("\"vers\":\"{version}\"");
     let indexes = cargo_home.join("registry").join("index");
     let Ok(indexes) = std::fs::read_dir(&indexes) else {
@@ -272,7 +272,7 @@ pub fn registry_release_present(version: &str, cargo_home: &Path) -> bool {
             .join(".cache")
             .join("ni")
             .join("ch")
-            .join("nichlink-toolchain");
+            .join("xirang-toolchain");
         let Ok(text) = std::fs::read(&entry) else {
             continue;
         };
@@ -288,11 +288,11 @@ pub fn registry_release_present(version: &str, cargo_home: &Path) -> bool {
 ///
 /// `Registry` is the right default for a tool that is not inside a checkout — but only for a release
 /// that **is published**. The round that found this measured `cargo build --offline` failing with
-/// `no matching package named nichlink-toolchain` on a freshly generated project, i.e. the first
+/// `no matching package named xirang-toolchain` on a freshly generated project, i.e. the first
 /// impression scenario failing at its first command, silently. The manifest cannot fix itself; the
 /// reply can say what happened, name the check it ran, and give the two ways out.
 /// 对不在检出内的工具，`Registry` 是对的默认值——但只对**已发布**的那一版成立。发现这条缺陷的那一轮实测：
-/// 刚生成的项目上 `cargo build --offline` 报 `no matching package named nichlink-toolchain`，也就是
+/// 刚生成的项目上 `cargo build --offline` 报 `no matching package named xirang-toolchain`，也就是
 /// **第一印象场景在第一条命令上悄悄失败**。清单自己无法补救；回复可以说明发生了什么、点名它做的检查，
 /// 并给出两条出路。
 pub fn offline_source_warning(
@@ -307,10 +307,10 @@ pub fn offline_source_warning(
         return None;
     }
     Some(format!(
-        "offline     nichlink-toolchain {version} is not in the local registry cache \
+        "offline     xirang-toolchain {version} is not in the local registry cache \
          ({}), so `cargo build --offline` here cannot resolve it yet — build once online, or \
          regenerate with `dependency: \"git\"` (`git: \"<url>\"` for another repository), or run \
-         this tool from a NichLink checkout to get `path` dependencies instead",
+         this tool from a XiRang checkout to get `path` dependencies instead",
         cargo_home.display()
     ))
 }
@@ -330,23 +330,23 @@ pub fn dependency_specs(source: &DependencySource) -> (String, String) {
             let build = toml_path(&workspace.join("toolchain"));
             (
                 format!(
-                    "nichlink-toolchain = {{ path = \"{runtime}\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                    "xirang-toolchain = {{ path = \"{runtime}\", version = \"{RELEASE_REQUIREMENT}\" }}"
                 ),
                 format!(
-                    "nichlink-toolchain = {{ path = \"{build}\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                    "xirang-toolchain = {{ path = \"{build}\", version = \"{RELEASE_REQUIREMENT}\" }}"
                 ),
             )
         }
         DependencySource::Registry => (
-            format!("nichlink-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
-            format!("nichlink-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
+            format!("xirang-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
+            format!("xirang-toolchain = {{ version = \"{RELEASE_REQUIREMENT}\" }}"),
         ),
         DependencySource::Git { url } => (
             format!(
-                "nichlink-toolchain = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                "xirang-toolchain = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
             ),
             format!(
-                "nichlink-toolchain = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
+                "xirang-toolchain = {{ git = \"{url}\", branch = \"main\", version = \"{RELEASE_REQUIREMENT}\" }}"
             ),
         ),
     }
@@ -363,16 +363,16 @@ pub fn project_files(
     // A binary host demonstrates the whole runtime-evidence chain, because that is
     // the half nothing else in this workspace does: record under the mode the
     // environment asks for, then write the artifact where every reader looks
-    // (`NICH_LINK_TRACE_FILE`, else `.nichlink/traces/nichlink.trace`). It is inert
+    // (`XIRANG_TRACE_FILE`, else `.xirang/traces/xirang.trace`). It is inert
     // until someone opts in — `CallTrace::runtime()` is `off` in a release build and
     // `errors-only` in a debug one — so the release path collects nothing; the point
     // is that the chain is visible and runnable, not that evidence always exists.
     // 二进制宿主演示整条运行期证据链，因为这是本工作区里别的任何东西都不做的那一半：按环境要求的模式
-    // 记录，再把 artifact 写到所有读取方都看的地方（`NICH_LINK_TRACE_FILE`，否则
-    // `.nichlink/traces/nichlink.trace`）。在有人 opt-in 之前它是惰性的——`CallTrace::runtime()`
+    // 记录，再把 artifact 写到所有读取方都看的地方（`XIRANG_TRACE_FILE`，否则
+    // `.xirang/traces/xirang.trace`）。在有人 opt-in 之前它是惰性的——`CallTrace::runtime()`
     // 在 release 构建里是 `off`、在 debug 里是 `errors-only`——因此发布路径什么都不收集；意义在于那条
     // 链可见且可跑，而不是永远存在证据。
-    // Every NichLink path in the generated source is spelled from the crate the
+    // Every XiRang path in the generated source is spelled from the crate the
     // generated manifest depends on. The host crate does re-export the kernel's
     // `registry_core` at its root — that is what `host!()` emits, and it is why the
     // bare `lexicon`/`root_node_id` spellings below resolve — but the trace APIs are
@@ -380,7 +380,7 @@ pub fn project_files(
     // scaffolded binary host fail to compile. The crate name itself comes from the same
     // kernel constant the build-time renderer spells its generated code with, so a
     // rename moves it in one place.
-    // 生成源码里每一处 NichLink 路径都从生成清单所依赖的那个 crate 写起。宿主 crate 确实在根上
+    // 生成源码里每一处 XiRang 路径都从生成清单所依赖的那个 crate 写起。宿主 crate 确实在根上
     // 重导出了内核的 `registry_core`——`host!()` 发射的就是它，也正是下面裸写 `lexicon` /
     // `root_node_id` 能解析的原因——但 trace 那组 API 不在那份重导出里，因此 `crate::CallTrace`
     // 是一处失锚：它让每个脚手架生成的二进制宿主都编译不过。crate 名本身取自构建期渲染器发射生成
@@ -388,8 +388,8 @@ pub fn project_files(
     let toolchain = lexicon::RUN_METHOD_CRATE;
     let binary_body = format!(
         "\nfn main() {{\n    \
-         // Evidence is opt-in: neither `NICH_LINK_TRACE` (the collection mode) nor\n    \
-         // `NICH_LINK_TRACE_FILE` (its path) is set by default, and without one of them this\n    \
+         // Evidence is opt-in: neither `XIRANG_TRACE` (the collection mode) nor\n    \
+         // `XIRANG_TRACE_FILE` (its path) is set by default, and without one of them this\n    \
          // host records and writes nothing at all.\n    \
          let asked = std::env::var_os({toolchain}::lexicon::TRACE_FILE_ENV).is_some()\n        \
          || std::env::var_os({toolchain}::lexicon::TRACE_MODE_ENV).is_some();\n    \
@@ -402,7 +402,7 @@ pub fn project_files(
          \"CARGO_MANIFEST_DIR\",\n    )));\n    \
          match {toolchain}::write_trace_artifact(&trace, &path, env!(\"CARGO_PKG_NAME\")) {{\n        \
          Ok(()) => println!(\"trace written: {{}}\", path.display()),\n        \
-         Err(error) => eprintln!(\"nichlink: trace not written: {{error}}\"),\n    }}\n}}\n"
+         Err(error) => eprintln!(\"xirang: trace not written: {{error}}\"),\n    }}\n}}\n"
     );
     let prelude = format!(
         "{toolchain}::run_method::host!();\n{}",
@@ -526,7 +526,7 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        DependencySource, NICHLINK_REPOSITORY, ProjectKind, create_project, dependency_specs,
+        DependencySource, ProjectKind, XIRANG_REPOSITORY, create_project, dependency_specs,
         project_files, requested_source,
     };
     use crate::build_method::scaffold::{Editor, SNIPPET_FILE, editor_snippets};
@@ -581,20 +581,20 @@ mod tests {
         assert!(library.contains("CallTrace::runtime"), "{library}");
     }
 
-    /// Every NichLink path a scaffold writes is spelled from the crate the generated
+    /// Every XiRang path a scaffold writes is spelled from the crate the generated
     /// manifest depends on, and each old spelling is asserted **absent**: the templates
     /// said `crate::host!()`, `crate::run()` and `crate::CallTrace` for two batches while
     /// nothing compiled a generated project, so every scaffolded host was dead on
     /// arrival. Listing only the new spelling would let a later edit add the old one back
     /// beside it — the same "a description that reads well in both directions" trap the
     /// `apply cut` wording fell into.
-    /// 脚手架写下的每一处 NichLink 路径都从生成清单所依赖的那个 crate 写起，并且每一处旧拼法都被
+    /// 脚手架写下的每一处 XiRang 路径都从生成清单所依赖的那个 crate 写起，并且每一处旧拼法都被
     /// **反向断言不许出现**：模板用 `crate::host!()`、`crate::run()` 与 `crate::CallTrace`
     /// 写了两批，而没有任何东西去编译生成物，于是每个生成的宿主一出生就是坏的。只列出新拼法的钉子
     /// 会让后来的改动把旧拼法加回它旁边——正是 `apply cut` 的措辞栽进去的那个"两个方向读起来都通顺"的坑。
     #[test]
-    fn a_generated_host_spells_every_nichlink_path_from_its_dependency() {
-        let crate_name = nichlink_kernel::lexicon::RUN_METHOD_CRATE;
+    fn a_generated_host_spells_every_xirang_path_from_its_dependency() {
+        let crate_name = xirang_kernel::lexicon::RUN_METHOD_CRATE;
         let source = DependencySource::Local {
             workspace: PathBuf::from("/checkout"),
         };
@@ -650,7 +650,7 @@ mod tests {
 
     fn temporary_directory(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "nichlink-{label}-{}-{}",
+            "xirang-{label}-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -703,7 +703,7 @@ mod tests {
             "app",
             ProjectKind::Binary,
             &DependencySource::Git {
-                url: "https://example.invalid/nichlink".to_owned(),
+                url: "https://example.invalid/xirang".to_owned(),
             },
         )
         .expect("project");
@@ -731,10 +731,10 @@ mod tests {
     #[test]
     fn a_generated_project_can_be_published_and_built_in_a_workspace() {
         let local = DependencySource::Local {
-            workspace: std::path::PathBuf::from("/tmp/nichlink"),
+            workspace: std::path::PathBuf::from("/tmp/xirang"),
         };
         let git = DependencySource::Git {
-            url: "https://github.com/Nichtigall/nichlink".to_owned(),
+            url: "https://github.com/Nichtigall/xirang".to_owned(),
         };
         let expected = format!("version = \"{}\"", env!("CARGO_PKG_VERSION"));
         for source in [&local, &git] {
@@ -780,7 +780,7 @@ mod tests {
             );
         }
         assert!(
-            !runtime.contains("package = \"nichlink-toolchain\"")
+            !runtime.contains("package = \"xirang-toolchain\"")
                 && runtime.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))),
             "both tables name the one crate the merge produced: {runtime}"
         );
@@ -790,8 +790,8 @@ mod tests {
     /// 请求词表：默认用检测值；git 只在**点名**时使用；错的方式只有一种。
     #[test]
     fn a_request_names_the_source_and_git_is_never_guessed() {
-        let manifest = Path::new("/nowhere/nichlink/toolchain");
-        let exe = Path::new("/usr/local/bin/nichlink-mcp");
+        let manifest = Path::new("/nowhere/xirang/toolchain");
+        let exe = Path::new("/usr/local/bin/xirang-mcp");
         // Nothing named: the detected default, and here that is the registry — not a git fetch.
         // 什么都没点名：用检测出来的默认值，而这里它是 registry——不是一次 git 拉取。
         let detected =
@@ -823,7 +823,7 @@ mod tests {
         let default_url =
             requested_source(Some("git"), None, None, manifest, exe).expect("a default URL");
         assert!(
-            matches!(&default_url, DependencySource::Git { url } if url == NICHLINK_REPOSITORY),
+            matches!(&default_url, DependencySource::Git { url } if url == XIRANG_REPOSITORY),
             "{default_url:?}"
         );
         // `path` without a checkout is refused rather than silently turned into the registry.

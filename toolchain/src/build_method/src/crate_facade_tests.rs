@@ -13,10 +13,10 @@ fn host(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let parent = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-facade-{label}-{}-{sequence}",
+            "xirang-facade-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&parent);
@@ -25,9 +25,9 @@ fn host(label: &str) -> PathBuf {
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"control-button\"\nversion = \"0.2.0\"\nedition = \"2024\"\n\n\
-         [dependencies]\nnichlink-toolchain = { path = \"../../toolchain\" }\n\
+         [dependencies]\nxirang-toolchain = { path = \"../../toolchain\" }\n\
          control-button-graft = { path = \"../../control-button-graft\" }\n\n\
-         [build-dependencies]\nnichlink-toolchain = { path = \"../../toolchain\" }\n",
+         [build-dependencies]\nxirang-toolchain = { path = \"../../toolchain\" }\n",
     )
     .expect("host manifest");
     root
@@ -105,7 +105,7 @@ fn a_facade_sees_the_host_and_every_ghost() {
     assert!(
         facade
             .lib_rs
-            .contains("pub const NICHLINK_NAMESPACE: &str = \"control-button\";")
+            .contains("pub const XIRANG_NAMESPACE: &str = \"control-button\";")
             && facade.lib_rs.contains("generated_lib.rs"),
         "the crate root is the host's namespace plus the generated plan: {}",
         facade.lib_rs

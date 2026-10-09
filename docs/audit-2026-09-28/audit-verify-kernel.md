@@ -10,7 +10,7 @@
 
 作者**没有**落任何探针（其报告第 375 行自述：本轮没有新增测试或探针文件，K 系列复核手段只以“探针命令”形式给出、未实跑）。因此我的手段是造一套真跑的探针：
 
-- 探针工程 `/tmp/nk-probe`（`[workspace]` 独立、`path` 依赖只**读**检出：`nichlink = { package = "nichlink-core", path = "…/core", features = ["syntax"] }`），产物与 target 全在 `/tmp`，检出目录零写入。
+- 探针工程 `/tmp/nk-probe`（`[workspace]` 独立、`path` 依赖只**读**检出：`xirang = { package = "xirang-core", path = "…/core", features = ["syntax"] }`），产物与 target 全在 `/tmp`，检出目录零写入。
 - 构建：`CARGO_TARGET_DIR=/tmp/nk-probe/target cargo build --offline` → exit 0。
 - 运行：`/tmp/nk-probe/target/debug/nk-probe all` → exit 0（逐条打印 `[probe] <id> = <实际值>`）；递归类发现另起进程跑（`nk-probe deep <n>`），用退出码观察 abort。
 - 夹具是自写的 `RegistrationSnapshot` 构造器（与内核测试夹具同构但独立），不是作者的脚本，也不是既有测试的重跑。
@@ -164,7 +164,7 @@
 
   ①只有表头的锁不报错；②表头在记录之后时记录照样解析（新/旧 schema 被当成本版本可读）；③重复表头静默覆盖（不报错）。三条都是**放行**方向，与 `PluginCatalog::parse` 自己的文档“refusing unknown schemas”（`core/src/registry_core/plugin/catalog/catalog.rs:120`）相反。
 - 严重度：**维持 MAJOR**。
-- 备注：作者没提的第四条同类（我另记为 §4 X-2）：**表头拼错就是注释**——`# nichlink-schema v2`（缺 `=`）被 `catalog.rs:135` 的“`#` 开头即注释”吞掉，闸门完全不生效。
+- 备注：作者没提的第四条同类（我另记为 §4 X-2）：**表头拼错就是注释**——`# xirang-schema v2`（缺 `=`）被 `catalog.rs:135` 的“`#` 开头即注释”吞掉，闸门完全不生效。
 
 ### 2.8 K-08 MAJOR — 证实
 
@@ -210,7 +210,7 @@ thread '<unknown>' (396289) has overflowed its stack
 fatal runtime error: stack overflow, aborting
 ```
 
-  该进程调用的是公开 API `nichlink::mir::call_tree("f0", &chain_of(20_000), 20_001, 20_001)`（链上符号互不相同），跑在一个 256 KiB 栈的线程上；`count=200000` 同样以 abort 结束。作者预测的 20 万层不需要，**2 万层就够**。
+  该进程调用的是公开 API `xirang::mir::call_tree("f0", &chain_of(20_000), 20_001, 20_001)`（链上符号互不相同），跑在一个 256 KiB 栈的线程上；`count=200000` 同样以 abort 结束。作者预测的 20 万层不需要，**2 万层就够**。
 - 证据 2（实现侧，代码阅读佐证）：`core/src/registry_core/mir/call_tree.rs:373-405` 的 `assign_lane` 沿父子链递归；`:152-153` 只对 `limit` 做 `max(1)`，`depth` 无上界。
 - 严重度：**建议上调 MINOR → MAJOR**。理由：`call_tree` 是公开 API，`depth` 是调用方可控参数且文档未给上界；abort 不可捕获，与内核自己“栈溢出不是 `Result`”的立场（`core/src/registry_core/syntax/nesting.rs`）冲突。若维护者认定 `depth` 只作内部约定（本仓调用方 Studio 传 2），则应补一句文档上界并保持 MINOR——两条路都要求一个显式决定，现状是两者皆无。
 - 备注：作者写的“在小栈线程上期望不 abort”是可执行的复核手段，我按它跑通了。
@@ -230,7 +230,7 @@ fatal runtime error: stack overflow, aborting
 | K-18 | `K18.duplicate_id_diagnostics = 0` | 证实（重复身份在静态拓扑检查里零诊断） |
 | K-19 | `K19.source_file_matches(mixed_case_needle) = false` | 证实（另半支 `is_face_source` 为代码阅读佐证：`syntax/face.rs:169-171` 的标记行短路 + 调用点 `run_method/src/authoring/operations/operations.rs:293`） |
 | K-20 / C-04 | `grep "Split decision" core/src = 4`；`grep "B3a" core/src = 10` | **部分证实**：类别成立（4 处同义说明、10 处历史叙事），数字错（见 §4） |
-| K-23 | `K23.parse_face(widget_object) = Ok(Some(macro=widget_object, kind=None))` | 证实（非 NichLink 的 `*_object` 宏被当成注册面） |
+| K-23 | `K23.parse_face(widget_object) = Ok(Some(macro=widget_object, kind=None))` | 证实（非 XiRang 的 `*_object` 宏被当成注册面） |
 | K-24 | `grep -c leak_code = 2`，测试体四条断言全为否定（`None` / `is_empty`） | 证实（名字与断言相反） |
 | C-05..C-11 | 见下 | 证实 |
 
@@ -296,8 +296,8 @@ fatal runtime error: stack overflow, aborting
 
 ### X-2 · MINOR · 逻辑/静默放过 · `core/src/registry_core/plugin/catalog/catalog.rs:131-137`
 
-- 现象：schema 表头只认逐字 `# nichlink-schema=`；拼错（`# nichlink-schema v2`、`# nichlink_schema=v2`）落进“`#` 开头即注释”的分支被丢掉，于是**整道 schema 闸门静默失效**（正是 K-07 的同一后果，入口不同）。
-- 实测（`nk-probe X2`，exit 0）：`# nichlink-schema v2\nuser|fw|p|1|c|sha256:b|extension\n` → `Ok(1 records, no schema error)`。
+- 现象：schema 表头只认逐字 `# xirang-schema=`；拼错（`# xirang-schema v2`、`# xirang_schema=v2`）落进“`#` 开头即注释”的分支被丢掉，于是**整道 schema 闸门静默失效**（正是 K-07 的同一后果，入口不同）。
+- 实测（`nk-probe X2`，exit 0）：`# xirang-schema v2\nuser|fw|p|1|c|sha256:b|extension\n` → `Ok(1 records, no schema error)`。
 - 判据：一个版本闸门的失效方式应当是拒绝而不是沉默；本仓对“不认识的键”在同一 crate 的其它解析器里都是拒绝（如 graft 文档解析）。
 - 最小修复方向：把 `#` 注释收窄为已知键白名单（其余 `#` 行若形似表头则报错），或要求表头必须出现（缺表头即 `Err`）。
 - 复核手段：`PluginCatalog::parse("<typo'd header line>\n<record>")` 期望 `Err`。

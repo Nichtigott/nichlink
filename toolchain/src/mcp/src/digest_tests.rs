@@ -1,5 +1,5 @@
-//! Pins for `nichlink.digest`: bounded rows, the contract line, and the test-name rule.
-//! `nichlink.digest` 的钉子：有界的行、契约那一行，以及"被测试点名"的规则。
+//! Pins for `xirang.digest`: bounded rows, the contract line, and the test-name rule.
+//! `xirang.digest` 的钉子：有界的行、契约那一行，以及"被测试点名"的规则。
 //!
 //! The failure these guard is the fourth class the maintainer named: a file holding several
 //! algorithms, one branch of one of them wrong. The reply must show the structure — which functions

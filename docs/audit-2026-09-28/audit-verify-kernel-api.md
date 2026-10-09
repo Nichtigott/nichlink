@@ -11,8 +11,8 @@
 
 ```toml
 [dependencies]
-nichlink-core = { path = "/home/nich/Moirai_N3/nichlink/core", features = ["syntax"] }
-nichlink-run-method = { path = "/home/nich/Moirai_N3/nichlink/run_method" }
+xirang-core = { path = "/home/nich/Moirai_N3/nichlink/core", features = ["syntax"] }
+xirang-run-method = { path = "/home/nich/Moirai_N3/nichlink/run_method" }
 ```
 
 `CARGO_TARGET_DIR=/tmp/t11-ext-target cargo run --offline`，输出原文：
@@ -29,17 +29,17 @@ shim:   allow:ui;deny:ui/experimental OK
 EXTERNAL-CALL-OK
 ```
 
-它做的三件事，每一件都是 crate 外身份：① `nichlink::authoring::parse::compact_admission(&OwnedAdmission{…})`
-（注意类型必须写模块路径 `nichlink::declaration::OwnedAdmission`：根上**没有**裸名 `OwnedAdmission`——
+它做的三件事，每一件都是 crate 外身份：① `xirang::authoring::parse::compact_admission(&OwnedAdmission{…})`
+（注意类型必须写模块路径 `xirang::declaration::OwnedAdmission`：根上**没有**裸名 `OwnedAdmission`——
 第一版探针就是这样拿到 `E0432: no `OwnedAdmission` in the root`，说明这条调用确实是从 crate 外按公开
 路径走的）；② 用 `parse_admission_owned` 把渲染结果读回并与原策略 `assert_eq!`（渲染器与解析器互钉）；
-③ 走 `nichlink_run_method::authoring::parse::compact_admission`——Studio 实际调用的那条 shim 路径——
+③ 走 `xirang_run_method::authoring::parse::compact_admission`——Studio 实际调用的那条 shim 路径——
 断言同一份字节。
 
 **必要特性**（负向实测，不是猜）：把 `features = ["syntax"]` 去掉后，同一个探针：
 
 ```
-error[E0432]: unresolved import `nichlink::authoring::parse`
+error[E0432]: unresolved import `xirang::authoring::parse`
 note: found an item that was configured out
   --> core/src/registry_core/authoring/authoring.rs:20
    | #[cfg(feature = "syntax")]
@@ -117,7 +117,7 @@ VERDICT second-renderer-outside-kernel = FOUND      (exit 1)
 
 ### 装置 B：作者的 pin 我复跑 + 变异
 
-- 出厂树：`cargo test -p nichlink-studio --offline --all-features --lib admission_text_tests` →
+- 出厂树：`cargo test -p xirang-studio --offline --all-features --lib admission_text_tests` →
   `3 passed; 0 failed`（EXIT=0）。
 - 在副本变异（把 `admission_text` 换成手拼副本）后：**只有结构性那条红**——
   `2 passed; 1 failed`，失败者是 `the_call_site_carries_no_second_compact_renderer`。
@@ -134,9 +134,9 @@ VERDICT second-renderer-outside-kernel = FOUND      (exit 1)
 (false, false) => format!("allow:{}", allow.join(",")),
 ```
 
-- **对照组**（同一副本、未变异、同一 target 目录）：`cargo test -p nichlink-studio --offline --all-features --lib admission_text_tests`
+- **对照组**（同一副本、未变异、同一 target 目录）：`cargo test -p xirang-studio --offline --all-features --lib admission_text_tests`
   → `3 passed`，EXIT=0。
-- **变异组**：`cargo test -p nichlink-studio --offline --all-features --lib` → `95 passed; 5 failed`，
+- **变异组**：`cargo test -p xirang-studio --offline --all-features --lib` → `95 passed; 5 failed`，
   失败清单原文：
 
 ```
@@ -213,7 +213,7 @@ cargo test --workspace --offline --no-fail-fast     # 变异组
 红的四条（原文）：
 
 ```
-an_empty_provenance_column_is_not_the_seven_field_form          (nichlink-core --test plugin_lock_provenance)
+an_empty_provenance_column_is_not_the_seven_field_form          (xirang-core --test plugin_lock_provenance)
 an_explicitly_empty_provenance_column_pins_absence              (同上)
 studio::app::mutations::lock_writes::an_official_append_that_would_duplicate_an_identity_is_refused_not_written
 studio::app::tests::project::new_project_and_explicit_root_face_compile
@@ -223,9 +223,9 @@ studio::app::tests::project::new_project_and_explicit_root_face_compile
 
 | 命令 | 对照组 | 变异组 | 归因 |
 | --- | --- | --- | --- |
-| `-p nichlink-core --test plugin_lock_provenance`（独立 target） | `3 passed; 0 failed` | `1 passed; 2 failed`，报错 `the ten-field lock parses: PluginLockError { line: 1, message: "has an empty provenance column" }` | **归因于"拒绝"** |
-| `-p nichlink-studio --all-features --lib lock_writes`（独立 target） | `4 passed; 0 failed` | `an_official_append_…_refused_not_written` 红 | **归因于"拒绝"**（该测试断言 `PluginCatalog::parse(&text).expect("the seeded lock still parses")`，种子正是 `…|extension|||`） |
-| `-p nichlink-studio --all-features --lib new_project_and_explicit_root_face_compile`（独立 target） | **也红** | 红 | **不归因**：两边的报错都是离线环境里生成的样例工程解析 `nichlink-run-method = "^0.1.6"` 失败（`location searched: Git repository … Nichtigott/nichlink?branch=main / candidate versions found: 0.1.5`）；真实工作树里这条**是绿的**（`1 passed`），因此它是 `/tmp` 副本的离线解析产物，与本次变异无关 |
+| `-p xirang-core --test plugin_lock_provenance`（独立 target） | `3 passed; 0 failed` | `1 passed; 2 failed`，报错 `the ten-field lock parses: PluginLockError { line: 1, message: "has an empty provenance column" }` | **归因于"拒绝"** |
+| `-p xirang-studio --all-features --lib lock_writes`（独立 target） | `4 passed; 0 failed` | `an_official_append_…_refused_not_written` 红 | **归因于"拒绝"**（该测试断言 `PluginCatalog::parse(&text).expect("the seeded lock still parses")`，种子正是 `…|extension|||`） |
+| `-p xirang-studio --all-features --lib new_project_and_explicit_root_face_compile`（独立 target） | **也红** | 红 | **不归因**：两边的报错都是离线环境里生成的样例工程解析 `xirang-run-method = "^0.1.6"` 失败（`location searched: Git repository … Nichtigott/xirang?branch=main / candidate versions found: 0.1.5`）；真实工作树里这条**是绿的**（`1 passed`），因此它是 `/tmp` 副本的离线解析产物，与本次变异无关 |
 
 ⇒ "拒绝"归因明确的爆炸半径 = **3 条测试**：core 自己的 X-1 钉子两条 + Studio 写入路径一条
 （外加一条与它无关、在任何副本里都红的离线解析测试）。也就是说，改成拒绝会先把**仓库今天明确当合法
@@ -284,18 +284,18 @@ cd /tmp/t11-ext && CARGO_TARGET_DIR=/tmp/t11-ext-target cargo run --offline
 python3 /tmp/t11-check-second-implementation.py /home/nich/Moirai_N3/nichlink
 python3 /tmp/t11-check-second-implementation.py /tmp/t11-mut
 # §3-C（/tmp/t11-mut 的 core 里把两列表 arm 改坏后）
-cd /tmp/t11-mut && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target cargo test -p nichlink-studio --offline --all-features --lib
+cd /tmp/t11-mut && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target cargo test -p xirang-studio --offline --all-features --lib
 # §4
 cd /tmp/t11-x1 && CARGO_TARGET_DIR=/tmp/t11-x1-target cargo run --offline
 # §4.1（拒绝语义；每份副本各自的 target 目录——见该节的装置教训）
 cd /tmp/t11-mut2 && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target cargo test --workspace --offline --no-fail-fast
-cd /tmp/t11-ctrl && CARGO_TARGET_DIR=/tmp/t11-ctrl-target cargo test -p nichlink-core --offline --test plugin_lock_provenance
-cd /tmp/t11-ctrl && CARGO_TARGET_DIR=/tmp/t11-ctrl-target cargo test -p nichlink-studio --offline --all-features --lib lock_writes
+cd /tmp/t11-ctrl && CARGO_TARGET_DIR=/tmp/t11-ctrl-target cargo test -p xirang-core --offline --test plugin_lock_provenance
+cd /tmp/t11-ctrl && CARGO_TARGET_DIR=/tmp/t11-ctrl-target cargo test -p xirang-studio --offline --all-features --lib lock_writes
 ```
 
 **保真性**：所有源码修改都在 `/tmp`；工作树里我只新增本文件。五条门禁那场跑在 hash 钉住的树上
 （见第 8 节）。另需说明一次**被作废的瞬时红**：`8c646c4c` 状态的第一次门禁尝试里，
-`nichlink-core --test registration_rule_entry` 与 `nichlink-studio (lib)` 各出现一次编译错误
+`xirang-core --test registration_rule_entry` 与 `xirang-studio (lib)` 各出现一次编译错误
 （E0432 / E0425），而**紧接着在同一 hash 下重跑全部命令即全绿**（第 8 节）——那是别人在飞文件的
 瞬时状态，按队规作废重跑，不计入判定。
 
@@ -315,29 +315,29 @@ cd /tmp/t11-ctrl && CARGO_TARGET_DIR=/tmp/t11-ctrl-target cargo test -p nichlink
    `crate::Admission::new(&[…], &[…])` 这一 **Rust 构造拼法**（另一种拼法，不是第二份紧凑渲染器）；
    把这句话读成"内核只有一处渲染 admission"会与事实不符，t7 的文档措辞已限定在"紧凑拼法"上。
 4. 我未跑 `cargo test --workspace --all-features --doc`（CI 的额外一条）与
-   `tools/nichlink-package-audit` / `--verify-consumers`（前者与本批新增符号无关、后者需要 index，
-   见第 7 节）；`tools/nichlink-release-audit` 未实跑（需构建 artifact）。
+   `tools/xirang-package-audit` / `--verify-consumers`（前者与本批新增符号无关、后者需要 index，
+   见第 7 节）；`tools/xirang-release-audit` 未实跑（需构建 artifact）。
 5. §4.1 的"打红谁"名单里，`studio::app::tests::project::new_project_and_explicit_root_face_compile`
-   在**对照组里也红**（离线解析 `nichlink-run-method = "^0.1.6"` 时本地 git 缓存只有 0.1.5），
+   在**对照组里也红**（离线解析 `xirang-run-method = "^0.1.6"` 时本地 git 缓存只有 0.1.5），
    而真实工作树里同一条是绿的 ⇒ 它是 `/tmp` 副本的环境产物，**不计入**"拒绝会打红谁"。
    若要一条不依赖副本环境的名单，应在真实树里对同一处做同样的变异（需要工作树写权限，本轮没有）。
 
-## 7. 本批新增公开符号对版本线与 `tools/nichlink-package-audit` 的含义
+## 7. 本批新增公开符号对版本线与 `tools/xirang-package-audit` 的含义
 
-- **新增公开符号 = 1 个**：`nichlink::authoring::parse::compact_admission`（crate `nichlink-core`，lib 名
-  `nichlink`），位于 `#[cfg(feature = "syntax")]` 之后（§1 负向实测）。它同时经 run_method 的
-  glob shim 出现在 `nichlink_run_method::authoring::parse::compact_admission`——Studio 走的就是这条，
-  因此**发布面**（`nichlink-core` 与 `nichlink-run-method` 两个 crate）各多一个可用路径。
+- **新增公开符号 = 1 个**：`xirang::authoring::parse::compact_admission`（crate `xirang-core`，lib 名
+  `xirang`），位于 `#[cfg(feature = "syntax")]` 之后（§1 负向实测）。它同时经 run_method 的
+  glob shim 出现在 `xirang_run_method::authoring::parse::compact_admission`——Studio 走的就是这条，
+  因此**发布面**（`xirang-core` 与 `xirang-run-method` 两个 crate）各多一个可用路径。
 - **版本线**：这是**向后兼容的公开新增**（不破坏任何调用方；`Admission::new` 等既有拼法不变）。
-  但在本仓 `0.1.x` 线上，`release_version` 与 `tools/nichlink-publish --check-table` 都要求内部
-  `nichlink-*` 要求 **==** 工作区版本，所以它不会"只发 core"：下一次抬线时 19 处要求行与两个
+  但在本仓 `0.1.x` 线上，`release_version` 与 `tools/xirang-publish --check-table` 都要求内部
+  `xirang-*` 要求 **==** 工作区版本，所以它不会"只发 core"：下一次抬线时 19 处要求行与两个
   `publish = false` 宿主的同一行一起移动（后者正是本队 B2-1/`G-05` 刚扩进门禁的那类行）。
   换句话说：**它是 0.1.z 线上的兼容新增，但发布动作是一条线，不是一个 crate**。
-- **`tools/nichlink-package-audit`**：它检查两件不同的事。①**内容**半段（每个 `src/**/*.rs` 模块与
+- **`tools/xirang-package-audit`**：它检查两件不同的事。①**内容**半段（每个 `src/**/*.rs` 模块与
   声明的 README 必须在包里）——新符号落在**既有模块** `authoring/parse/admission.rs` 内，**不新增文件**，
   因此对该半段没有影响；②**打包**半段（从 tarball 隔离构建）只与"带版本号内部依赖是否已上 index"有关，
   与本符号无关。⇒ 本批新增符号对 package-audit **无行为影响**，不需要新的清单/表动作。
-- 旁证：`tools/nichlink-release-audit` 的 `defined_symbols` 会因新符号变化，但该脚本**只报告、不设基线
+- 旁证：`tools/xirang-release-audit` 的 `defined_symbols` 会因新符号变化，但该脚本**只报告、不设基线
   断言**（读码：`:44` 计数、`:158` 打印），因此不构成任何门禁口径的变更。
 
 ## 8. 五条门禁（hash 钉住的同一棵树）
@@ -347,12 +347,12 @@ cd /tmp/t11-ctrl && CARGO_TARGET_DIR=/tmp/t11-ctrl-target cargo test -p nichlink
 | 命令 | 结果 |
 | --- | --- |
 | `cargo fmt --all -- --check` | EXIT=0，零输出 |
-| `cargo test -p nichlink-core --offline --features syntax` | EXIT=0；8 个 test 二进制，**241 passed / 0 failed** |
-| `cargo test -p nichlink-studio --offline --all-features` | EXIT=0；5 个二进制，**114 passed / 0 failed** |
-| `cargo test -p nichlink-conventions --offline` | EXIT=0；2 个二进制，**113 passed / 0 failed** |
+| `cargo test -p xirang-core --offline --features syntax` | EXIT=0；8 个 test 二进制，**241 passed / 0 failed** |
+| `cargo test -p xirang-studio --offline --all-features` | EXIT=0；5 个二进制，**114 passed / 0 failed** |
+| `cargo test -p xirang-conventions --offline` | EXIT=0；2 个二进制，**113 passed / 0 failed** |
 | `cargo test --workspace --offline` | EXIT=0；55 个二进制，**791 passed / 0 failed**（FAILED 计数 0） |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | EXIT=0（`Finished dev profile … in 1.00s`，无 warning） |
-| `tools/nichlink-publish --check-table` | EXIT=0：`dependency table matches the manifests (9 crates)` |
+| `tools/xirang-publish --check-table` | EXIT=0：`dependency table matches the manifests (9 crates)` |
 
 （作废的第一次尝试见第 5 节末；它没有产出任何判定。）
 

@@ -84,7 +84,7 @@ pub(super) fn ide_shadow(
     public: bool,
 ) -> Option<IdeShadow> {
     (enabled && declaration_depth > 0).then(|| IdeShadow {
-        module: format!("__nichlink_ra_{chain}"),
+        module: format!("__xirang_ra_{chain}"),
         file: absolute.to_owned(),
         cfg: cfg.to_owned(),
         public,

@@ -82,12 +82,12 @@ shell（`fd+fe`、`fd+h1`）未被记录）。
 
 **缺陷：`host/Cargo.toml` 的 graft 依赖把读者带出隔离区** ✗✗
 - **现象**：四道 hardbug 类里，`h1`/`h2`/`h3` 的 `host/Cargo.toml` 把
-  `nichlink-example-control-button-graft` 的 `path` 指向
+  `xirang-example-control-button-graft` 的 `path` 指向
   `/…/target/hardbug-runs/t21/trees/<类>/graft` ✗ —— **隔离区之外的另一棵树**，而那里**放着 `.audit/truth.json`** ✓。
 - **为什么是缺陷**：我"拷树时排除 `.audit`"的隔离，被**清单里的绝对路径**重新打开了 ✗ ——
   读者顺着一条构建依赖就回到了有真值的目录 ✓（与"隔离靠删除真值"那条纪律是同一族，缺的是
   "**还要查清单里有没有指向隔离区外的路径**" ✗）。
-- **谁发现的**：`h1-nichlink` 探针**自报** ✓（它做反证时 `diff -r` 了那个被指向的 crate ⇒ 顺带看出它是另一棵树的副本 ✓）。
+- **谁发现的**：`h1-xirang` 探针**自报** ✓（它做反证时 `diff -r` 了那个被指向的 crate ⇒ 顺带看出它是另一棵树的副本 ✓）。
 - **怎么修**：把三棵树的依赖改指**各自的 `../graft`** ✓（与该副本**逐字节相同** ✓，`cargo metadata` 三棵全 `rc=0` ✓）；
   `TREES.json` 哈希已更新并写明原因 ✓。
 - **访问审计（决定已发布读数是否作废）** ✓：
@@ -102,7 +102,7 @@ shell（`fd+fe`、`fd+h1`）未被记录）。
 ## 八、探针口径缺陷（**我的 brief 漏了禁令** ✗，已审计 + 已重跑）
 
 **缺陷**：我给"一题一会话"探针写的禁令里，**漏了 `target/round9/answers/**` 与 `logs/**`** ✗
-（codegraph 那几条我写了 ✓、nichlink 这几条忘了 ✗）⇒ `h2-nichlink` 探针**读了 `h1-supply-chain` 的答案** ✗ ——
+（codegraph 那几条我写了 ✓、xirang 这几条忘了 ✗）⇒ `h2-xirang` 探针**读了 `h1-supply-chain` 的答案** ✗ ——
 它甚至在自己的推理里写明「**h1 的** consistency 输出说 1 of 9」✓（那是 h1 的答案原文 ✓，而 h2 自己那棵树的
 `consistency --parent` 是 `outliers 0 of 9` ✓，两者不同 ✓ ⇒ 来源只能是 h1 的答案文件 ✓）。
 
@@ -110,11 +110,11 @@ shell（`fd+fe`、`fd+h1`）未被记录）。
 与 `round9/answers/<别的题>` 路径 ✓。**注意噪声**：每道题**自己**的症状里就有 `does not ship`（h3 的测试原文 ✓）
 ⇒ **粗粒度短语计数没有鉴别力** ✗，要挑"只可能来自另一道题"的串 ✓。
 
-**判定**：`h2-nichlink` = **partial** ✓ —— 它的**答案内容仍成立** ✓（h2 的真值是"缺 `handle_contracts`"＋"台账那行是
+**判定**：`h2-xirang` = **partial** ✓ —— 它的**答案内容仍成立** ✓（h2 的真值是"缺 `handle_contracts`"＋"台账那行是
 button 指纹的副本" ✓，**h1 的答案里没有这两样** ✓，且它的证据链自足：自己按内核规则重算了指纹 ✓），
 但**代价数被污染** ✗（它带着另一题的上下文干活 ✓）。
 
-**处置**：① 禁令写全后**重跑 4 条 nichlink 单题探针** ✓（`target/probe-perq2/` ✓）—— 除 `round9/answers|logs` 外，
+**处置**：① 禁令写全后**重跑 4 条 xirang 单题探针** ✓（`target/probe-perq2/` ✓）—— 除 `round9/answers|logs` 外，
 新禁令还加了**不许递归全仓 grep** ✗（这条是 `h2` 探针**自己披露**的：它早期跑过一次 `grep -rn nonbridge .`
 可能扫到禁读目录，60 秒后掐掉、声称没读输出 ✓ —— 我核实到它确实**未读**那次的输出 ✓，但它后来**读了 h1 的答案** ✗）；
 ② **进开工前清单**：臂的禁令要**逐条写全**——至少覆盖"别的题的答案目录"✓、"对照"✓、"真值"✓、"递归全仓搜索"✗。

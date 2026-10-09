@@ -4,7 +4,7 @@
 Design only; no `.rs` edited. Argues settled decisions 2 and 3 of `docs/roadmap-1.0.md:24-29`. Cite form is `path:line`.
 仅设计，未改任何 `.rs`。为 `docs/roadmap-1.0.md:24-29` 的已定决策 2、3 提供论证。
 
-## Part 1 — wire `.nichlink/external-grafts/<selector>/graft.plan` into `Registry::overlay`
+## Part 1 — wire `.xirang/external-grafts/<selector>/graft.plan` into `Registry::overlay`
 ## 第一部分 — 把计划文件接进 `Registry::overlay`
 
 ### 1.1 Three layers today, and the gap
@@ -13,7 +13,7 @@ Design only; no `.rs` edited. Argues settled decisions 2 and 3 of `docs/roadmap-
 | --- | --- | --- |
 | Declaration | `static_graft_plan!` host entry (`run_method/src/macros/entry.rs:61`) | build → `GraftSyntax` → `BUILTIN_GRAFT_CUTS` (`build_method/src/renderer/pass.rs:63-99`) → `builtin_static_plan().grafts()` (`core/.../release/release.rs:188`) |
 | Application | `Registry::overlay` / `overlay_static` (`core/.../tree/graft_ops/overlay.rs:95,111`) | hosts; production `plugin-host/src/deployment.rs:45-60`; example `examples/control-button/tests/registry.rs:356-366` |
-| Record | `.nichlink/external-grafts/<selector>/graft.plan` (`run_method/src/authoring/external_graft/plan.rs:26,96,131,148`) | Studio only (`studio/src/studio/app/graft.rs:7-18`) |
+| Record | `.xirang/external-grafts/<selector>/graft.plan` (`run_method/src/authoring/external_graft/plan.rs:26,96,131,148`) | Studio only (`studio/src/studio/app/graft.rs:7-18`) |
 
 `GraftPlanDocument::cut()` (`core/.../plugin/graft/document.rs:153`) and `plan()` (`:163`) have **no production caller**: grep finds only `document.rs` tests, and Studio calls `declaration()` (`studio/.../graft.rs:117`), never `cut`/`plan`. The build only warns about a plan no declaration keeps alive (`build_method/src/graft_plan_check.rs:99`, emitted `build_method/src/pipeline.rs:37-44,68-72`) and never opens a plan (`graft_plan_check.rs:4-8`). Net: the record is inert — what Studio writes changes the screen and nothing else.
 
@@ -21,7 +21,7 @@ Design only; no `.rs` edited. Argues settled decisions 2 and 3 of `docs/roadmap-
 
 Split by the kernel's no-I/O rule (AGENTS.md rule 3):
 - **Pure reconciliation → `core`.** Which base `NodeId` a record's `target`/`target_path` addresses, comparing that slot against the declaration's cuts, and composing the cut list are pure tree operations; they sit beside `resolve_cut_targets` (`resolution.rs:42`) and `overlay_cuts` (`overlay.rs:123`) and test without a filesystem.
-- **Reading `.nichlink/...` → `run_method`.** The only reader today is feature-gated behind `authoring` (`run_method/Cargo.toml:11`, pulls `syn`). A runtime host must not need `authoring`, so the loader goes in the **non-gated runtime module**, not `authoring::external_graft`.
+- **Reading `.xirang/...` → `run_method`.** The only reader today is feature-gated behind `authoring` (`run_method/Cargo.toml:11`, pulls `syn`). A runtime host must not need `authoring`, so the loader goes in the **non-gated runtime module**, not `authoring::external_graft`.
 
 New files, mounted the uniform way: `core/src/registry_core/tree/graft_ops/record.rs` (declared from `graft_ops.rs:31` beside `overlay`/`resolution`) and `run_method/src/runtime/graft_record.rs` (declared from `run_method/src/runtime/runtime.rs:4-7` beside `evidence`).
 
@@ -60,7 +60,7 @@ impl Registry {
 
 ```rust
 // run_method/src/runtime/graft_record.rs  (NOT feature-gated)
-pub fn graft_record_root(package_root: &Path) -> PathBuf; // root/.nichlink/external-grafts
+pub fn graft_record_root(package_root: &Path) -> PathBuf; // root/.xirang/external-grafts
 pub enum LoadedGraft { Record(RecordedGraft), Unreadable { selector: String, reason: String } }
 pub fn load_graft_records(package_root: &Path) -> Result<Vec<LoadedGraft>, String>;
 pub fn load_graft_record(package_root: &Path, selector: &str) -> Result<GraftPlanDocument, String>;
@@ -74,7 +74,7 @@ pub struct GraftOverlay { pub effective: Registry, pub reports: Vec<RecordReport
 
 ### 1.5 How a host and the CLI call it
 
-Host: `apply_recorded_grafts(&base_registry(), &external, builtin_static_plan().grafts(), Path::new(env!("CARGO_MANIFEST_DIR")))`; print `outcome.reports` and `outcome.unreadable`, then use `outcome.effective`. CLI (roadmap B4 item 2, `nichlink grafts [--json]`) calls only `load_graft_records(root)` and prints selector/`target`/`target_path`/`graft`/`full` or the parse reason. Cost: `cli/Cargo.toml` has no `nichlink-toolchain` dependency, so this needs one direct dep (its `studio` dep is transitive and unusable).
+Host: `apply_recorded_grafts(&base_registry(), &external, builtin_static_plan().grafts(), Path::new(env!("CARGO_MANIFEST_DIR")))`; print `outcome.reports` and `outcome.unreadable`, then use `outcome.effective`. CLI (roadmap B4 item 2, `xirang grafts [--json]`) calls only `load_graft_records(root)` and prints selector/`target`/`target_path`/`graft`/`full` or the parse reason. Cost: `cli/Cargo.toml` has no `xirang-toolchain` dependency, so this needs one direct dep (its `studio` dep is transitive and unusable).
 
 ### 1.6 Reconciliation: `target` NodeId vs `target_path` vs the tree
 
@@ -92,7 +92,7 @@ Only `a!=b` is fatal, because either selector silently changes which face the au
 
 ### 1.7 Decision: record vs declaration naming the same slot differently
 
-**A — record wins + warning.** Prevents the record being inert for the case it exists to serve: choosing a plugin the binary could not name. The string declaration form exists because "the implementation may arrive later as a plugin, and the compiler is not asked to resolve a crate the author has not written yet" (`document.rs:173-179`). Allows an unreviewed, machine-local `.nichlink/` file to re-route shipped behavior, and makes the runtime overlay diverge from `BUILTIN_GRAFT_CUTS` (`overlay_static`, pinned at `examples/control-button/tests/registry.rs:356`, can yield a different tree).
+**A — record wins + warning.** Prevents the record being inert for the case it exists to serve: choosing a plugin the binary could not name. The string declaration form exists because "the implementation may arrive later as a plugin, and the compiler is not asked to resolve a crate the author has not written yet" (`document.rs:173-179`). Allows an unreviewed, machine-local `.xirang/` file to re-route shipped behavior, and makes the runtime overlay diverge from `BUILTIN_GRAFT_CUTS` (`overlay_static`, pinned at `examples/control-button/tests/registry.rs:356`, can yield a different tree).
 
 **B — declaration wins + warning.** Prevents source/review bypass and keeps build scope, static plan, and runtime overlay aligned. Allows the record's `graft`/`full` to have no runtime meaning — the feature is wired but unobservable, and there is no way to opt into a runtime override at all.
 
@@ -112,7 +112,7 @@ Reasoning: (1) the record is the newest, most specific artifact and the build is
 
 | # | Crate | File | Assertion |
 | --- | --- | --- | --- |
-| 1 | `nichlink` | `core/src/registry_core/tree/graft_ops/record.rs` | id and path agree → resolves to `target` |
+| 1 | `xirang` | `core/src/registry_core/tree/graft_ops/record.rs` | id and path agree → resolves to `target` |
 | 2 | core | `.../record.rs` | id gone, path present → resolves by path + `IdentityDrifted` |
 | 3 | core | `.../record.rs` | id and path differ → `Err` naming both |
 | 4 | core | `.../record.rs` | both gone → `UnkeptSlot`, never fatal |
@@ -122,12 +122,12 @@ Reasoning: (1) the record is the newest, most specific artifact and the build is
 | 8 | core | `.../record.rs` | `full=true` discards base children, `full=false` keeps them (mirror `resolution.rs:266-314`) |
 | 9 | core | `.../record.rs` | differing `full` reports `GranularityOverridden`, never mixes graft/full |
 | 10 | core | `.../record.rs` | after the stored `target_path` goes stale, the applied cut uses the current `path_for` |
-| 11 | `nichlink-toolchain` | `run_method/tests/graft_record.rs` | **`a_record_on_disk_reaches_overlay`**: write a `graft.plan` under a temp root, call `apply_recorded_grafts`, assert the effective kind at the slot is the record's implementation — the test that would have caught "record never reaches overlay" |
+| 11 | `xirang-toolchain` | `run_method/tests/graft_record.rs` | **`a_record_on_disk_reaches_overlay`**: write a `graft.plan` under a temp root, call `apply_recorded_grafts`, assert the effective kind at the slot is the record's implementation — the test that would have caught "record never reaches overlay" |
 | 12 | run_method | `run_method/tests/graft_record.rs` | directory ≠ `document.graft` → `Err` naming both names (S1+ superseded the report) |
 | 13 | run_method | `run_method/tests/graft_record.rs` | unparseable plan → `Err` naming every unreadable plan; no record is applied (S1+ superseded "land in `unreadable`") |
 | 14 | run_method | `run_method/tests/graft_record.rs` | loader/overlay works with `default-features` (no `authoring`) |
 | 15 | example | `examples/control-button/tests/registry.rs` | a record overriding `root/control/button` changes the effective tree but not `builtin_static_plan()` |
-| 16 | `nichlink-toolchain` | `build_method/src/graft_plan_check.rs` | `an_undeclared_plan_target_is_an_error_with_the_clause`: a plan no declaration can name is a build error carrying the paste-ready clause; `a_gated_declaration_still_counts` keeps a `#[cfg]`-off declaration sufficient |
+| 16 | `xirang-toolchain` | `build_method/src/graft_plan_check.rs` | `an_undeclared_plan_target_is_an_error_with_the_clause`: a plan no declaration can name is a build error carrying the paste-ready clause; `a_gated_declaration_still_counts` keeps a `#[cfg]`-off declaration sufficient |
 
 Tests 11–15 are new. Test 11 alone closes the gap.
 
@@ -137,7 +137,7 @@ Tests 11–15 are new. Test 11 alone closes the gap.
 2. **Directory vs `document.graft`.** Report-and-use-document is a choice; refusing is defensible if the directory is meant as an immutable key.
 3. **`cut()`/`plan()` removal** is a public-API change pre-1.0; keep `cut()` if the CLI wants a tree-free preview.
 4. **Fatal vs skip** for contradictory records: §1.6 refuses `a!=b` but skips `UnkeptSlot`; whether one broken record fails the whole overlay is an owner call.
-5. **Risk not resolvable by reading:** whether real hosts keep `.nichlink/` out of VCS. If ignored, A is machine-local behavior drift; the doc must state that `.nichlink/external-grafts/` is runtime input.
+5. **Risk not resolvable by reading:** whether real hosts keep `.xirang/` out of VCS. If ignored, A is machine-local behavior drift; the doc must state that `.xirang/external-grafts/` is runtime input.
 6. **Risk:** once A applies, `overlay_recorded` and `overlay_static` can produce different trees for the same inputs. Nothing compares them today; test 15 pins the intended divergence, but a reviewer may read it as a bug.
 
 ---
@@ -203,8 +203,8 @@ Pass `Vec::new()`. `CallTrace::current_path()` (`frames.rs:223`) is the traced v
 /// 声明源与来源链；用 `Display` 渲染。存在与否就是宿主的决策信号：注册机不替宿主决定是否致命。
 ///
 /// ```no_run
-/// # use nichlink_toolchain::run_method::{Provenance, Registry, RuntimeValue};
-/// # fn demo(registry: &Registry, node: nichlink::NodeId) {
+/// # use xirang_toolchain::run_method::{Provenance, Registry, RuntimeValue};
+/// # fn demo(registry: &Registry, node: xirang::NodeId) {
 /// let value = RuntimeValue::number(0.5, Provenance::default().push(node, "Slider", "measure", "0.5"));
 /// if let Err(error) = registry.health_check(node, &value, Vec::new()) { eprintln!("{error}"); }
 /// # }
@@ -213,7 +213,7 @@ Pass `Vec::new()`. `CallTrace::current_path()` (`frames.rs:223`) is the traced v
 
 ### 2.8 The example to add
 
-Crate `nichlink-example-control-button`, file `examples/control-button/examples/health_check.rs` (sibling of `examples/tree.rs`), run as `cargo run -p nichlink-example-control-button --example health_check`. To make it real, the Button face (`examples/control-button/src/control/object/button/button.rs`) gains `runtime_checks: [NON_EMPTY_TEXT]`; the example validates a label, passing one good `RuntimeValue::text` and one whitespace-only and printing both results. Without a declared check it would prove nothing.
+Crate `xirang-example-control-button`, file `examples/control-button/examples/health_check.rs` (sibling of `examples/tree.rs`), run as `cargo run -p xirang-example-control-button --example health_check`. To make it real, the Button face (`examples/control-button/src/control/object/button/button.rs`) gains `runtime_checks: [NON_EMPTY_TEXT]`; the example validates a label, passing one good `RuntimeValue::text` and one whitespace-only and printing both results. Without a declared check it would prove nothing.
 
 ### 2.9 Tests that pin the design
 

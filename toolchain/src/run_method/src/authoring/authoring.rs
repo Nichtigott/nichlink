@@ -1,5 +1,5 @@
-//! File-backed authoring for NichLink registration faces.
-//! NichLink 注册面的文件化创作支持。
+//! File-backed authoring for XiRang registration faces.
+//! XiRang 注册面的文件化创作支持。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ use self::parse::trait_names_from_paths;
 /// same question before suggesting a repair, and two literals would be two answers.
 /// 常量本体住在 `kernel::lexicon`，与其它文本契约一起：桥在建议修复前会问同一个问题，而两个字面量就是
 /// 两个答案。
-pub(crate) use nichlink_kernel::lexicon::GENERATED_MARKER;
+pub(crate) use xirang_kernel::lexicon::GENERATED_MARKER;
 
 #[path = "context.rs"]
 pub mod context;

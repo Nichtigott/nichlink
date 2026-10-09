@@ -100,7 +100,7 @@
 **装置**：直接读 `examples/control-button/src/lib.rs:44-58` 并逐行核对宏调用的真实行号；再用第 3 项的全量锚点扫描器验配对规则。
 
 - 报告里这条现在写作（`docs/audit-2026-09-28/audit-report.md:1421`）：`` 类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:48-54`，宏调用在 `:48`、两个 `cut(...)` 实参在 `:50`/`:52`） ``。
-- 文件实测：`:48` = `nichlink_run_method::static_graft_plan!(`；`:49` = `FRAMEWORK,`；`:50` = `cut(crate::control::object::button::NODE_ID)`；`:52` = `cut(crate::control::object::slider::NODE_ID)`；`:54` = `);`。
+- 文件实测：`:48` = `xirang_run_method::static_graft_plan!(`；`:49` = `FRAMEWORK,`；`:50` = `cut(crate::control::object::button::NODE_ID)`；`:52` = `cut(crate::control::object::slider::NODE_ID)`；`:54` = `);`。
 - **判定：通过**——锚点区间 `48-54` 覆盖整个宏调用，配对 token `static_graft_plan!` **落在区间内（第 48 行）**；t29 报的"引 `:50`/`:52` 而 token 在 `:48`"已修掉。全量扫描器对此处也判 0 违规。
 
 ---
@@ -121,7 +121,7 @@
 - **根导出/glob**：方案 §2.1/§2.2 的 `toolchain/src/lib.rs` 形态（`:228-237`）已是 `build_time`/`runtime`/`call_evidence`/`plugin_host`，并明写"只 glob 宿主面向的 `runtime` 模块"（`:220`、`:237`）；
 - **E0428 分析**：§2.2 的"消失/仍存在"表（`:205-220`）把"`pub mod run;` 与 `pub use build::run;` 重名"标为**已消失**（并给了理由：模块名改成 `runtime`），把"三个函数同名 `run`"标为**仍存在**，与 t35 要求的改法（理由改成"删掉一条只为躲重名而设的规则"）一致；
 - **撞名表**：`:214-219` 的模块表已用新名，逐行给出各自会撞的公开名（`build_time`/`mcp`/`cli` 各带一个 `run`，其余四个"无"）；
-- **feature/bin/`required-features` 表与安装命令**：§1.4（`:145-155`）用新包名 `nichlink-toolchain` 给出五条 bin 的 `required-features` 与 `cargo install nichlink-toolchain --features cli|studio,node-graph|mcp`；§1.3 保留 feature 名并给对照表（`:166` 说明 `features = ["run"]`/`["build"]` 与模块名不同的理由）。
+- **feature/bin/`required-features` 表与安装命令**：§1.4（`:145-155`）用新包名 `xirang-toolchain` 给出五条 bin 的 `required-features` 与 `cargo install xirang-toolchain --features cli|studio,node-graph|mcp`；§1.3 保留 feature 名并给对照表（`:166` 说明 `features = ["run"]`/`["build"]` 与模块名不同的理由）。
 - **旧名残留计数 = 0**：全文扫 `pub mod build;`/`pub mod run;`/`pub mod plugins;`/`build::`/`run::`/`plugins::`，只命中 `:196` 与 `:209` 两处，且都在"**已消失**/旧叙述已失效"的对照语境里；`§10.1` 也明写"第一版 NAM-40 的 394/394 已被证伪并撤回，本文任何句子都不以它为据"。
 
 ---

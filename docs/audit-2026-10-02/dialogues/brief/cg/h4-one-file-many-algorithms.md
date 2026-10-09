@@ -41,7 +41,7 @@ Plan for h4: node the 4 files (4 calls) + maybe callees.
 
 Let me also plan the three h-classes: each has host/ (10 object files + lib.rs + control.rs + registry_rule.rs + tests/offsets.rs or shipped.rs) and graft/ (10 files + lib.rs). The classes:
 - h1-supply-chain: "one sibling calls a different family of names than its siblings do" → the symptom: offsets test fails with a total no single widget explains. The defect: one of the host object files (or graft) calls a different family of names (e.g. calls `gauge_fast::…` vs `…::gauge_slow`, or uses the wrong trait method). Let me find it: compare the 10 object files for a family difference, e.g. one file calls `X_fast::new()` while others call something else. Since they're similar, I can look for the odd one out via codegraph (callees of each object) or by reading.
-- h2-claim-unkept: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" → in `host/.nichlink/adop
+- h2-claim-unkept: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry" → in `host/.xirang/adop
 …[推理：此处截断，全文 2487 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 

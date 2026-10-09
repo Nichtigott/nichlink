@@ -62,6 +62,6 @@ fn the_root_the_refusal_names_is_the_one_that_resolves() {
     let (root, namespace) = package("root-resolves");
     let resolved =
         resolve_node(&root, &namespace, "root").expect("the root the refusal names resolves");
-    assert_eq!(resolved, nichlink_kernel::root_node_id(&namespace));
+    assert_eq!(resolved, xirang_kernel::root_node_id(&namespace));
     let _ = std::fs::remove_dir_all(&root);
 }

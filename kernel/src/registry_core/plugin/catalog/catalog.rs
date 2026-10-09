@@ -214,11 +214,11 @@ impl PluginCatalog {
         // 读成"本次构建的 schema"（审计 `LGC-LG-04`）。
         let mut schema: Option<(usize, &str)> = None;
         for (line_number, line) in lock.lines().enumerate() {
-            let Some(rest) = line.trim().strip_prefix("# nichlink-schema") else {
+            let Some(rest) = line.trim().strip_prefix("# xirang-schema") else {
                 continue;
             };
-            // A misspelled header is refused, not read as a comment; `# nichlink-schema-related`
-            // is prose. 拼错的表头被拒绝、不当注释读掉；`# nichlink-schema-related` 是散文。
+            // A misspelled header is refused, not read as a comment; `# xirang-schema-related`
+            // is prose. 拼错的表头被拒绝、不当注释读掉；`# xirang-schema-related` 是散文。
             match rest
                 .strip_prefix('=')
                 .map(str::trim)

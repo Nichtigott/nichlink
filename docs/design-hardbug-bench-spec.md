@@ -1,20 +1,20 @@
 # W7 出题台规格（四类复杂 bug：注入 → 构造真值 → 机械判分 → 理想路径 → 必拒捷径）
 
 依据：`target/hardbug/BRIEF.md`（设计种子）与 `target/hardbug/optimization-analysis.md`（A–E 五类分析）。
-**纪律**：题目**不由人编写**（由生成器从既有的 `tools/nichlink-mcp-eval` 夹具派生 + 注入），**真值由构造
+**纪律**：题目**不由人编写**（由生成器从既有的 `tools/xirang-mcp-eval` 夹具派生 + 注入），**真值由构造
 给出**，**判分机械**（脚本，不许模型当裁判），两臂在**同一棵注入副本**上跑，题面**不含答案**，
 参照树与答案键放 `.audit/`。**证伪条件先写死**：若配 codegraph 的称职 agent 靠读
-`target/nichlink/out/*.tsv` + 手工推导也能拿下同类题，则判**我们无绝对优势**。
+`target/xirang/out/*.tsv` + 手工推导也能拿下同类题，则判**我们无绝对优势**。
 
 ## 通用装置
 
-- 生成器：`tools/nichlink-mcp-hardbug build <dir> <class>`（新工具；复用时以**示例宿主**
+- 生成器：`tools/xirang-mcp-hardbug build <dir> <class>`（新工具；复用时以**示例宿主**
   `examples/control-button` + `examples/control-button-graft` 为基座，复制、重指路径、丢掉示例自己的断言，
   再按下面的配方生成子对象并注入，最后写 `.audit/truth.json` 与 `.audit/README.md`）；
 - 每棵树：`cargo test --offline` 的**红/绿形状必须与配方一致**，且**由生成器自己跑出来**（见"每题自证"）：
   注入态必须红、文档化修法必须绿、**还原注入后必须重新变红**（否则上面那次自证可能针对的是一棵根本没坏过
   的树）；
-- 判分脚本：`tools/nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]`，只读**答案文本 + 调用日志**，
+- 判分脚本：`tools/xirang-mcp-hardbug score <tree> <answer> [--log <jsonl>]`，只读**答案文本 + 调用日志**，
   判：根因命中（`file:line` + 机制词）· **仪器调用数** · **步数** · 响应字符/token 估算 ·
   是否构造了反证 · 修复最小性 · 必拒捷径。规则逐条可由 `plan --scoring` 打印给审计读；
   **没有日志就把调用数与步数报 `null`**，绝不从答案的散文里猜。
@@ -44,7 +44,7 @@
 
 | 字段 | 任务要改吗 | 处置 |
 | --- | --- | --- |
-| `usage{input,output,cacheRead}`（provider 自报，非估算） | 不改——事后读 harness 的会话日志 | **已加**：`tools/nichlink-mcp-hardbug tokens <session>` |
+| `usage{input,output,cacheRead}`（provider 自报，非估算） | 不改——事后读 harness 的会话日志 | **已加**：`tools/xirang-mcp-hardbug tokens <session>` |
 | `reasoning_chars`（链长） | 不改——同上 | **已加**（同一个子命令） |
 | `fix_diff_lines` / `touched_files_outside_scope` | 要——得让修复落盘 | **不塞进现有四题**；留作新类 |
 | `patch_layers`（补丁层数，"糊纸"的代理量） | 要——同上 | **同上**；且它是**新能力问题**，该有自己的题树，不是挂在 h1–h4 上 |
@@ -72,8 +72,8 @@ out of the build"）；② **词表收成一份实现** `mechanism_words(klass)`
 的类描述改回泄漏版 ⇒ rc=1，`line 22: world`）。独立复核（手写词表 + grep，不导入那份实现）：四类题面
 机制词命中 **0**。
 
-**D7/D8 冻结前检查单** `freeze <tree>`——列两样：① **非源码产物**（`target/`、`.nichlink/`、`.audit/`
-下的一切，含构建期自证留下的 `target/nichlink/out/check-default.log`）；② **指向树外的绝对引用**
+**D7/D8 冻结前检查单** `freeze <tree>`——列两样：① **非源码产物**（`target/`、`.xirang/`、`.audit/`
+下的一切，含构建期自证留下的 `target/xirang/out/check-default.log`）；② **指向树外的绝对引用**
 （D7 的跨树耦合）。**这两条检查在写出来之后当场报了两个假阳性**，都靠"新检查先跑一棵干净树"抓到：
 第一版把所有绝对路径都算上 ⇒ 干净树报 4 条（其中 3 条是**合法**的：题树本来就该依赖检出的
 `toolchain`/`kernel`/`macro`/`conventions` crate）⇒ 收紧成只允许检出自己的 crate 目录；第二版把边界取成
@@ -103,7 +103,7 @@ out of the build"）；② **词表收成一份实现** `mechanism_words(klass)`
 **164,674 字符，其中 56%（91,623）来自不经过桥的命令**。这正是"输入侧那 10% 的来路"——以前要手写脚本才算
 得出来，现在一次调用就有。
 
-### 真实社区 bug 语料：`tools/nichlink-realbug`（T-17，2026-10-02）
+### 真实社区 bug 语料：`tools/xirang-realbug`（T-17，2026-10-02）
 
 **配方**（`plan` 逐字打印）：选一笔"消息含 fix/bug/regress **且** 同时改了源码与测试"的提交 ⇒ **在该提交自己的
 检出上** `git apply -R` **只回退源码那一半**（测试留着）⇒ 机械解析"那条测试属于哪个 cargo 目标" ⇒ 红/绿自证 ⇒
@@ -140,7 +140,7 @@ verdict   holds（reverted_failed ✓ · reverted_named_the_test ✓ · restored
 **为什么做它**：这四栏此前每一栏都被**手写脚本**算过两遍——而"每次都要手工重推"的量，下一轮一定会算错。
 
 ```
-nichlink-mcp-hardbug report <log> [--session <dir>]
+xirang-mcp-hardbug report <log> [--session <dir>]
 ```
 
 | 栏 | 读自 | 判据 |
@@ -184,7 +184,7 @@ W8 第一轮跑到一半，mcp 臂的 h4 答案当场指出夹具里有**两个*
 `counter-proof` / `fix`），并把"树只读、不许改测试、每条断言要给命令 + 原始输出 + 退出码"写死；
 实测四份题面对真值关键词（离群对象名、族名、缺失声明名、死臂名、被剪面名）**命中数皆为 0**。
 
-**调用日志取自桥自己**（`nichlink-mcp … --log <文件>` 写 `{"exit","request":[…] ,"response":…}`）——
+**调用日志取自桥自己**（`xirang-mcp … --log <文件>` 写 `{"exit","request":[…] ,"response":…}`）——
 判分读它，不从答案的散文里猜；桥的日志只覆盖桥调用，因此 `steps` 等于 `instrument_calls` 并在 `notes` 里
 写明"shell 步不在这里"，绝不把两者混成一个数。
 
@@ -239,8 +239,8 @@ W8 第一轮跑到一半，mcp 臂的 h4 答案当场指出夹具里有**两个*
 
 ## 生成器落点（2026-10-01 侦察）
 
-`tools/` 下的出题器与判分器都是 **Python 脚本**（`nichlink-mcp-eval` 66 KB、`nichlink-mcp-eval-chains`
-21 KB，另有 `nichlink-chain-eval-*` 一整套）。⇒ **W7 生成器写成独立脚本** `tools/nichlink-mcp-hardbug`
+`tools/` 下的出题器与判分器都是 **Python 脚本**（`xirang-mcp-eval` 66 KB、`xirang-mcp-eval-chains`
+21 KB，另有 `xirang-chain-eval-*` 一整套）。⇒ **W7 生成器写成独立脚本** `tools/xirang-mcp-hardbug`
 （Python 3），**不要**往 66 KB 的既有脚本里再塞一个职责：
 
 - 内部用 `subprocess` 调既有的出题器起底，再按本文件上面的配方注入；

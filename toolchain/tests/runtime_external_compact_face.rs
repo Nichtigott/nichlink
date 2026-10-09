@@ -17,7 +17,7 @@
 /// `host!()`.
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此
 /// 测试 crate 要提供宿主从 `host!()` 得到的那一行同样的值。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 /// The handle-marker type the declaration below names. `kind` is captured as an
 /// identifier, so it has to be an item the author wrote before the macro.
@@ -25,7 +25,7 @@ pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 /// 之前写下的条目。
 pub struct CompactExternal;
 
-nichlink_toolchain::run_method::external_object! {
+xirang_toolchain::run_method::external_object! {
     collector: development,
     kind: CompactExternal,
 }
@@ -49,7 +49,7 @@ fn a_kind_only_external_face_derives_its_registry_name_from_the_module() {
 fn a_kind_only_external_face_hangs_from_the_package_root() {
     assert_eq!(
         REGISTRATION.parent,
-        nichlink_toolchain::run_method::root_node_id(NICHLINK_NAMESPACE)
+        xirang_toolchain::run_method::root_node_id(XIRANG_NAMESPACE)
     );
 }
 
@@ -120,7 +120,7 @@ fn a_kind_only_external_face_defaults_the_remaining_fields() {
     // 却在每个跑打包测试的消费者那里失败——它正是这样被发现的。两种拼法都不影响身份：`NodeId`
     // 把两种分隔符折叠为同一字节。
     let portable =
-        nichlink_toolchain::run_method::registry_core::portable_path(REGISTRATION.source.file);
+        xirang_toolchain::run_method::registry_core::portable_path(REGISTRATION.source.file);
     assert!(
         portable.ends_with("tests/runtime_external_compact_face.rs"),
         "the default names this file, however the build spelled it: {portable}"

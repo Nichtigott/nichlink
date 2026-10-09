@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::{plan_facade, plan_ghost};
 use crate::build_method::crate_plan::{PlannedCrate, PlannedMount};
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 /// A throwaway host package with the manifest a plan reads.
 /// 一个一次性宿主包，带规划要读的清单。
@@ -14,10 +14,10 @@ fn host(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-release-{label}-{}-{sequence}",
+            "xirang-release-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
@@ -45,9 +45,9 @@ fn host(label: &str) -> PathBuf {
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"host\"\nversion = \"9.9.9\"\nedition = \"2021\"\n\n\
-         [dependencies]\nnichlink-toolchain = { path = \"../toolchain\" }\n\
+         [dependencies]\nxirang-toolchain = { path = \"../toolchain\" }\n\
          fast-widget = { path = \"../fast-widget\" }\n\n\
-         [build-dependencies]\nnichlink-toolchain = { path = \"../toolchain\" }\n",
+         [build-dependencies]\nxirang-toolchain = { path = \"../toolchain\" }\n",
     )
     .expect("the host manifest");
     root

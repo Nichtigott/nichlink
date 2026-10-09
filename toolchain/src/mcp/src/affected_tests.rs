@@ -1,12 +1,12 @@
-//! Pins for `nichlink.affected`: what a changed file reaches, and what it says when nothing
+//! Pins for `xirang.affected`: what a changed file reaches, and what it says when nothing
 //! reaches it.
-//! `nichlink.affected` 的钉子：一个改动过的文件能触到什么，以及什么都没有时它说什么。
+//! `xirang.affected` 的钉子：一个改动过的文件能触到什么，以及什么都没有时它说什么。
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink_kernel::identity::NodeId;
 use serde_json::json;
+use xirang_kernel::identity::NodeId;
 
 use super::affected;
 
@@ -16,7 +16,7 @@ fn package(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-affected-{label}-{}-{sequence}",
+        "xirang-mcp-affected-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -160,14 +160,14 @@ fn the_three_spellings_of_several_files_agree() {
 ///
 /// `plan_layer` answers from records that are not Rust code, so the fixture has to have both halves:
 /// a face the derivation can find (the plan's target is an identity) and a plan on disk under
-/// `.nichlink/external-grafts`.
+/// `.xirang/external-grafts`.
 /// `plan_layer` 依据的是"不是 Rust 代码"的那些记录，因此夹具两半都要有：推导找得到的注册面（计划的目标
-/// 是一个身份）与 `.nichlink/external-grafts` 下的一份计划。
+/// 是一个身份）与 `.xirang/external-grafts` 下的一份计划。
 fn package_with_plan(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-affected-{label}-{}-{sequence}",
+        "xirang-mcp-affected-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -203,7 +203,7 @@ fn package_with_plan(label: &str) -> PathBuf {
     let target =
         NodeId::from_namespaced_path("affected-plan-fixture", "shared/shared.rs", "Shared");
     write_fixture(
-        &root.join(".nichlink/external-grafts/swapped/graft.plan"),
+        &root.join(".xirang/external-grafts/swapped/graft.plan"),
         &format!(
             "version = 1\ntarget = {target}\ntarget_path = root/shared\ngraft = swapped\nfull = \
              false\n"

@@ -2,12 +2,12 @@
 //! 命名空间来源门禁：面文件读 crate 根的常量，不读包名。
 //!
 //! Identity is `hash(namespace, source path, declared name)`, and since audit `M7` / P3.3 the
-//! declaration macros read `crate::NICHLINK_NAMESPACE` — a constant the crate root owns — instead of
+//! declaration macros read `crate::XIRANG_NAMESPACE` — a constant the crate root owns — instead of
 //! `env!("CARGO_PKG_NAME")` at each declaration site. Why it matters is exactly what a partition
 //! does: a crate that mounts one face file through another `#[path]` would make that file read the
 //! **ghost crate's** package name, and every face it declares would be silently renamed.
 //! 身份是 `hash(命名空间, 源码路径, 声明名)`，而自审计 `M7` / P3.3 起，声明宏读的是 crate 根持有的
-//! `crate::NICHLINK_NAMESPACE` 常量，而不是在每个声明处读 `env!("CARGO_PKG_NAME")`。为什么这件事要紧，
+//! `crate::XIRANG_NAMESPACE` 常量，而不是在每个声明处读 `env!("CARGO_PKG_NAME")`。为什么这件事要紧，
 //! 正是分区所做的事：一个经另一个 `#[path]` 挂载同一份面文件的 crate，会让那份文件读到**幽灵 crate 的**
 //! 包名，于是它声明的每一个面都被静默改名。
 //!
@@ -32,7 +32,7 @@ use crate::{crate_directories, relative, rust_sources};
 /// tree emits for a host (`<parent>_object!`).
 /// 声明注册面的那些拼法——隐藏原语，以及生成树为宿主发出的别名（`<parent>_object!`）。
 const DECLARATIONS: &[&str] = &[
-    "__nichlink_object!",
+    "__xirang_object!",
     "__external_object!",
     "__registration_face!",
     "root_object!",
@@ -41,7 +41,7 @@ const DECLARATIONS: &[&str] = &[
 
 /// The spelling a face file has to use instead.
 /// 面文件必须改用的那个拼法。
-const CONSTANT: &str = "crate::NICHLINK_NAMESPACE";
+const CONSTANT: &str = "crate::XIRANG_NAMESPACE";
 
 /// The retired spelling.
 /// 已退役的那个拼法。
@@ -101,7 +101,7 @@ pub fn findings_in(root: &Path, sources: &[PathBuf]) -> Vec<Finding> {
             }
             // The constant's own definition is where the value legitimately comes from.
             // 常量自身的定义正是那个值正当的来源。
-            if line.contains("NICHLINK_NAMESPACE") {
+            if line.contains("XIRANG_NAMESPACE") {
                 continue;
             }
             found.push(Finding {

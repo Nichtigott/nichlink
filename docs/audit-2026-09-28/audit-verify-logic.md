@@ -13,16 +13,16 @@
 
 | 装置 | 依赖 | 命中条目 |
 | --- | --- | --- |
-| `/tmp/verifyprobe/vp/src/bin/p_admission.rs` | `nichlink-core`（syntax） | LG-02 |
-| `p_catalog.rs` | `nichlink-core` | LG-04、LG-40（旁证）、LG-03 的核侧一半 |
-| `p_traits.rs` | `nichlink-core` | LG-30、LG-05 的守卫一半 |
+| `/tmp/verifyprobe/vp/src/bin/p_admission.rs` | `xirang-core`（syntax） | LG-02 |
+| `p_catalog.rs` | `xirang-core` | LG-04、LG-40（旁证）、LG-03 的核侧一半 |
+| `p_traits.rs` | `xirang-core` | LG-30、LG-05 的守卫一半 |
 | `p_syn_abort.rs` | `syn` + 内核守卫 | LG-05 |
-| `p_gates.rs` | `nichlink-conventions`（直接调门禁函数） | LG-25、LG-26 |
-| `p_lint.rs` + `rustc` 三文件 | `nichlink-conventions::lint` + `rustc` | LG-24 |
-| `p_faceview.rs` + 三棵树夹具 | `nichlink-build-method::face_views` | LG-08、LG-11 |
-| `p_idcache.rs` + A/B 两包（两次调用） | `nichlink-build-method::run_for` | LG-01 |
-| `p_plugin_timeout.rs` | `nichlink-plugin-host`（process-tools） | LG-32 |
-| 端到端驱动 `target/debug/nichlink-mcp`（原始字节 stdin） | 已构建的 MCP 二进制 + 自建包夹具 | LG-18、LG-19、LG-20、LG-21、LG-22、LG-23 |
+| `p_gates.rs` | `xirang-conventions`（直接调门禁函数） | LG-25、LG-26 |
+| `p_lint.rs` + `rustc` 三文件 | `xirang-conventions::lint` + `rustc` | LG-24 |
+| `p_faceview.rs` + 三棵树夹具 | `xirang-build-method::face_views` | LG-08、LG-11 |
+| `p_idcache.rs` + A/B 两包（两次调用） | `xirang-build-method::run_for` | LG-01 |
+| `p_plugin_timeout.rs` | `xirang-plugin-host`（process-tools） | LG-32 |
+| 端到端驱动 `target/debug/xirang-mcp`（原始字节 stdin） | 已构建的 MCP 二进制 + 自建包夹具 | LG-18、LG-19、LG-20、LG-21、LG-22、LG-23 |
 
 作者原探针（`/tmp/nichverify`、`/tmp/nichprobe`）**我一次都没有运行**，只在正文里注明「采信作者实测」时引用其结论。
 
@@ -136,15 +136,15 @@
   1 正确表头 v3 + 记录          -> Ok(1)            （对照：门禁在工作）
   2 版本错、表头在前            -> Err(… uses identity schema v9, expected v3)
   3 版本错、**没有记录**        -> Ok(0)            ← 检查根本不跑（作者 K07）
-  4 `# nichlink-schema v9`（少 `=`）-> Ok(1)         ← 当普通注释吞掉（作者 X-2）
-  5 `# nichlinkschema=v9`（少连字符）-> Ok(1)        ← **本轮新增旁路**
+  4 `# xirang-schema v9`（少 `=`）-> Ok(1)         ← 当普通注释吞掉（作者 X-2）
+  5 `# xirangschema=v9`（少连字符）-> Ok(1)        ← **本轮新增旁路**
   6 表头在记录之后              -> Ok(1)            ← 之前的记录从不检查（作者 K07）
   7 CRLF 版本错 / 8 前导空白     -> Err              （对照：trim 救了这两种拼法）
   ```
 - **代码闭环**：`core/.../plugin/catalog/catalog.rs:131-137`（`strip_prefix` 失败即落 `starts_with('#') => continue`）
   与 `:138-145`（schema 检查在**记录循环内**）。
 - **严重度**：维持 MAJOR（门禁可静默失效）。**备注**：作者只举了「少 `=`」，我另测出「少连字符」
-  同样绕过——说明修法不能只救一种拼写错，要按「以 `# nichlink-schema` 开头就进 schema 处理」改。
+  同样绕过——说明修法不能只救一种拼写错，要按「以 `# xirang-schema` 开头就进 schema 处理」改。
 
 ### LG-05（MAJOR）`flow_provider` 编辑入口缺嵌套守卫 → **部分证实（修法与触发形状需改）**
 
@@ -254,10 +254,10 @@
   `self.cut == path` 比对，不受影响——这正好解释了总账「触发条件：宿主入口用类型化切口」。
 - **严重度**：维持 MAJOR。
 
-### LG-13（MAJOR）`NICH_LINK_NAMESPACE` 下 verify 与 diff/search 各用一套命名空间 → **证实**
+### LG-13（MAJOR）`XIRANG_NAMESPACE` 下 verify 与 diff/search 各用一套命名空间 → **证实**
 
 - **代码阅读佐证**：`mcp/src/verify.rs:43` 用 `package_name(&manifest)`（Cargo 名）作 `check_for` 的
-  package；`mcp/src/registry.rs:59-61` 的 `namespace()` 先读 `NICH_LINK_NAMESPACE` 覆盖；
+  package；`mcp/src/registry.rs:59-61` 的 `namespace()` 先读 `XIRANG_NAMESPACE` 覆盖；
   `tree_delta.rs:101-119` 的 `by_source` 按**源码路径**命中（与命名空间无关），于是每个面都落进
   `Reidentified(previous)`；`build_output_is_current` 的指纹只散列路径与内容，仍报 `current`。
 - **严重度**：维持 MAJOR。**备注**：这条是**我本人**在 t5 的 BR-6 里提出的（作者标了别名 BR-6）；
@@ -267,7 +267,7 @@
 
 - **代码阅读佐证**：`run_method/src/macros/face_registration.rs:9-10` 模块文档「收集器标识决定注册信息
   进入哪个链接器段」；`:168-171` 的 `(linked; $registration)` 展开为一个**注释**
-  （「采集由 nichlink-debug 持有；core 只保留纯声明」）。`development` 臂也是空。
+  （「采集由 xirang-debug 持有；core 只保留纯声明」）。`development` 臂也是空。
 - **严重度**：维持 MAJOR（自述承诺一类，按本仓标准起记 MAJOR）。**备注**：该臂**零运行期后果**
   （静态计划仍由 `static_plan` 生成），修法可以是实现，也可以只是把文档改成「保留位」。
 
@@ -307,8 +307,8 @@
 ### LG-18（MAJOR）MIR `jsonl:true` 给任意可读文件盖快照表头 → **证实（端到端）**
 
 - **我的装置**：自建包夹具 `mcpfix`（`notes.txt` = 普通文本），raw JSON-RPC 驱动
-  `target/debug/nichlink-mcp`。
-- **证据**（`printf … | NICH_LINK_PACKAGE_ROOT=$F ./target/debug/nichlink-mcp`，exit=0）：
+  `target/debug/xirang-mcp`。
+- **证据**（`printf … | XIRANG_PACKAGE_ROOT=$F ./target/debug/xirang-mcp`，exit=0）：
   ```text
   {"id":1,…,"text":"{\"kind\":\"snapshot\",\"namespace\":\"mcp-host\",\"root\":\"08806abc…\"}\n"}
   {"id":2,…,"text":"file …/notes.txt\nfunctions 0 calls 0 locals 0\ncalls:\nlocals:\n"}
@@ -327,7 +327,7 @@
   报错路径字面在包内、实际解析到**包外**文件：拷贝遍历确实走进了链接。
 - **证据 B（细节修正）**：包外文件可读时，预览回复里**看不到**任何 `outside*` 行——因为项目侧与副本侧
   都经同一个链接读到同一份字节，diff 判定「未变」。即：**外链数据确实被拉进 `/tmp` 副本，而 diff 不会说**。
-  残留目录 `/tmp/nichlink-mcp-preview-485308-0` 里就有 `outside_link` 这一项（配合 LG-20 的泄漏）。
+  残留目录 `/tmp/xirang-mcp-preview-485308-0` 里就有 `outside_link` 这一项（配合 LG-20 的泄漏）。
 - **代码闭环**：`mcp/src/preview.rs:50-52` 用 `source.is_dir()`（跟随链接）且全函数无 visited/深度上限。
 - **严重度**：维持 MAJOR。**备注**：作者只测了「自指链接 → faces 124」；我补的这条说明
   **包外数据**这一半也能独立成立，且 diff 不是它的观察面。
@@ -336,12 +336,12 @@
 
 - **证据（我自己跑出来的残留）**：我这次失败的预览留下
   ```text
-  /tmp/nichlink-mcp-preview-485308-0   13:30:13（本轮） 内容：binfile.dat Cargo.toml notes.txt outside_link src
+  /tmp/xirang-mcp-preview-485308-0   13:30:13（本轮） 内容：binfile.dat Cargo.toml notes.txt outside_link src
   （另有两个更早的：-343377-0 12:38、-416016-0 13:00，是作者/t12 那几轮留下的）
   ```
   失败路径的清理缺口比总账写的更宽：`mcp/src/apply.rs:84-88` 里 `copy_package(root)?` 一旦失败就
   直接返回，**连 `remove_copy` 都没到**（`:144` 的清理只在更后面）。所以「复制中途失败」本身就足够泄漏。
-- **代码阅读佐证**：`preview.rs:22-29` 手工拼 `temp_dir()/nichlink-mcp-preview-{pid}-{seq}` +
+- **代码阅读佐证**：`preview.rs:22-29` 手工拼 `temp_dir()/xirang-mcp-preview-{pid}-{seq}` +
   `remove_dir_all` 预清 + `create_dir_all`（无排他创建、无权限收紧）。
 - **严重度**：维持 MAJOR。**备注**：**我 t5 的 BR-19 里「符号链接被顺着写入」那半是错的**——
   `remove_dir_all` 先删掉了链接本身，t12 的证伪与我本轮读码一致；总账把它改成「删除并重建 + 失败泄漏」
@@ -368,10 +368,10 @@
 
 ### LG-22（MAJOR）非 UTF-8 请求帧结束整个桥 → **证实（三类对照）**
 
-- **我的装置**：raw 字节喂 `nichlink-mcp`，每类后面跟一条 `ping`。
+- **我的装置**：raw 字节喂 `xirang-mcp`，每类后面跟一条 `ping`。
 - **证据**：
   ```text
-  非法 UTF-8 帧： exit=1 stdout lines=0 stderr=nichlink-mcp: cannot read stdin: request line is not valid UTF-8
+  非法 UTF-8 帧： exit=1 stdout lines=0 stderr=xirang-mcp: cannot read stdin: request line is not valid UTF-8
   坏 JSON    ： exit=0 stdout lines=2 （-32700 + ping 回复）
   超长行      ： exit=0 stdout lines=2 （-32600 + ping 回复）
   ```
@@ -394,7 +394,7 @@
 
 - **我的装置 A（门禁函数本身，比作者的 rustc 探针更直接）**：`p_lint` 在
   `/tmp/verifyprobe/lintfix`（一个真工作区：根 `[workspace] members=["zznew"]`）上依次写四种 crate 根，
-  调 `nichlink_conventions::lint::missing_roots`。
+  调 `xirang_conventions::lint::missing_roots`。
   ```text
   #![deny(warnings)]            -> missing_roots = []
   #![warn(missing_docs)]        -> missing_roots = []
@@ -412,7 +412,7 @@
 
 ### LG-25（MAJOR）tag 守卫用子串黑名单判否 → **证实（并多三种等价拼法）**
 
-- **我的装置**：`p_gates` 直接调 `nichlink_conventions::release_workflow::findings(text)`，自建 9 种
+- **我的装置**：`p_gates` 直接调 `xirang_conventions::release_workflow::findings(text)`，自建 9 种
   `if:` 写法 × 两种上传命令。
 - **证据**（节选，全表见装置输出）：
   ```text
@@ -489,7 +489,7 @@
 
 ### LG-32（MAJOR）子进程给出完整帧却不退出时答案被丢成 `Timeout` → **证实（第一手）**
 
-- **我的装置**：`p_plugin_timeout`（`nichlink-plugin-host`，`process-tools`）——插件脚本
+- **我的装置**：`p_plugin_timeout`（`xirang-plugin-host`，`process-tools`）——插件脚本
   `printf '\005\000\000\000hello'; sleep 5`，`timeout = 300 ms`；对照脚本写完即退出。
 - **证据**：
   ```text

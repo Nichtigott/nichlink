@@ -14,7 +14,7 @@ fn new_project_and_explicit_root_face_compile() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-new-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-new-{suffix}"));
 
     let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('n')));
@@ -36,10 +36,10 @@ fn new_project_and_explicit_root_face_compile() {
             .contains("builtin_static_plan().len()")
     );
     let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("project manifest");
-    assert!(manifest.contains("nichlink-toolchain"));
+    assert!(manifest.contains("xirang-toolchain"));
     // 批 2 合并后样例应用只有一个依赖：旧的两个半边包名都不该再出现。
     // After the batch-2 merge the sample app has one dependency: neither old half-name may appear.
-    assert!(!manifest.contains("nichlink-build"));
+    assert!(!manifest.contains("xirang-build"));
     assert!(app.registry.depth_first().is_empty());
 
     let root_id = app.registry.id();
@@ -56,7 +56,7 @@ fn new_project_and_explicit_root_face_compile() {
     );
     let workspace =
         std::fs::read_to_string(root.join("src/workspace/workspace.rs")).expect("workspace face");
-    assert!(workspace.starts_with("// generated-by=NichLink"));
+    assert!(workspace.starts_with("// generated-by=XiRang"));
     assert!(workspace.contains("crate::root_object!"));
     assert!(workspace.contains("crate::root_object! {\n    kind: Workspace,"));
 
@@ -178,7 +178,7 @@ fn new_project_wizard_creates_library_entrypoint() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-lib-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-lib-{suffix}"));
 
     let mut app = App::load_app();
     app.handle_key(KeyEvent::from(KeyCode::Char('n')));
@@ -204,7 +204,7 @@ fn new_project_starts_with_an_empty_registration_tree() {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-empty-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-empty-{suffix}"));
 
     let mut app = App::load_app();
     let mut project = super::super::NewProjectState::new();

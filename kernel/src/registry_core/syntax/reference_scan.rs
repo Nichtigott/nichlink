@@ -56,7 +56,7 @@ fn is_build_macro(name: &str) -> bool {
             | "external_object"
             | "__control_object"
             | "__external_object"
-            | "__nichlink_object"
+            | "__xirang_object"
             | "__registration_face"
     ) || name.ends_with("_object")
 }
@@ -165,10 +165,10 @@ impl<'ast> Visit<'ast> for ReferenceVisitor {
         // instead of being lost. Leaving them uncollected let the build prune a
         // face a macro still referenced, and the damage appeared only in the
         // host's `cargo check` (`error[E0433]: cannot find \`dial\` in \`object\``)
-        // while `nichlink check` reported ok.
+        // while `xirang check` reported ok.
         // 凡本构建自己读不了的宏，都是词法遍历进不去的展开，因此它写出的路径要从 token 里收集，
         // 而不是丢掉。过去不收曾让构建剪掉一个宏仍引用着的面，而损害只在宿主的 `cargo check` 里
-        // 以 `error[E0433]: cannot find \`dial\` in \`object\`` 出现，`nichlink check` 却报 ok。
+        // 以 `error[E0433]: cannot find \`dial\` in \`object\`` 出现，`xirang check` 却报 ok。
         if !name.as_deref().is_some_and(is_build_macro) {
             visit_macro_paths(&item.tokens, &mut self.references.paths);
         }

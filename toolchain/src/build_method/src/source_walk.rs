@@ -271,7 +271,7 @@ fn record_unplaced(unplaced: &mut Vec<UnplacedFace>, src: &Path, path: &Path) {
             // 名字)` 含源码路径，因此"把文件挪过去"不是一次布局修正——它是一次改名，而按旧 id 记账的每一条
             // graft 记录、认领条目与插件锁都会不再解析。审计一次改名时实测：构建只说这个文件在错的目录里，
             // 这句话同时是对的与没用的（审计 `M7`，§M7.60）。
-            message: "registration face is outside the `<name>/<name>.rs` layout, so the build can never compile it; move the file to `<name>/<name>.rs`. That move is a **rename** as far as this                       framework is concerned: `NodeId = hash(namespace, source path, name)` takes the source                       path as an input, so the face this build derives is not the one the old path produced                       — every graft record, adoption entry and plugin lock keyed by the old identity stops                       resolving, and `nichlink.diff {\"records\": true}` lists what did"
+            message: "registration face is outside the `<name>/<name>.rs` layout, so the build can never compile it; move the file to `<name>/<name>.rs`. That move is a **rename** as far as this                       framework is concerned: `NodeId = hash(namespace, source path, name)` takes the source                       path as an input, so the face this build derives is not the one the old path produced                       — every graft record, adoption entry and plugin lock keyed by the old identity stops                       resolving, and `xirang.diff {\"records\": true}` lists what did"
                 .to_owned(),
         }),
         Err(error) => unplaced.push(UnplacedFace {
@@ -385,7 +385,7 @@ pub(crate) fn collect_source_files(nodes: &[Node], files: &mut Vec<std::path::Pa
 /// 内核源码遍历向本执行面索取的文件系统事实。
 struct StdSourceTree;
 
-impl nichlink_kernel::source::SourceTree for StdSourceTree {
+impl xirang_kernel::source::SourceTree for StdSourceTree {
     fn is_directory(&self, path: &Path) -> bool {
         path.is_dir()
     }
@@ -412,11 +412,11 @@ pub(crate) fn collect_rust_sources(
     directory: &Path,
     files: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
-    nichlink_kernel::source::collect_rust_sources(
+    xirang_kernel::source::collect_rust_sources(
         &StdSourceTree,
         directory,
-        nichlink_kernel::source::SourceWalk::EVERYTHING,
-        |_, _| nichlink_kernel::source::Keep::Yes,
+        xirang_kernel::source::SourceWalk::EVERYTHING,
+        |_, _| xirang_kernel::source::Keep::Yes,
         files,
     )
 }
@@ -444,18 +444,18 @@ fn parallel_map<T: Send>(
 ///
 /// A rule rather than a number, because machines differ and a tool call must not take a user's whole
 /// machine: **half the cores, at most [`MAX_WORKERS`], never fewer than one core left alone** — an
-/// editor, a compiler and a test run are usually standing beside us. `NICH_LINK_JOBS` (see the
+/// editor, a compiler and a test run are usually standing beside us. `XIRANG_JOBS` (see the
 /// kernel's `lexicon`) overrides it for a caller who knows better. The **result never depends on this
 /// number**: order is preserved either way, which is what
 /// `discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count` and
 /// `parallel_tests::fingerprints_do_not_depend_on_the_worker_count` hold.
 /// 是规则而不是数字，因为机器各不相同，而一次工具调用不该把用户的整台机器拿走：**一半的核、最多
 /// [`MAX_WORKERS`] 个、至少留一个核**——编辑器、编译器与测试通常就在旁边。比规则更清楚自己处境的调用方
-/// 用 `NICH_LINK_JOBS`（见内核 `lexicon`）覆盖它。**结果绝不取决于这个数字**：两种情况下顺序都保持，
+/// 用 `XIRANG_JOBS`（见内核 `lexicon`）覆盖它。**结果绝不取决于这个数字**：两种情况下顺序都保持，
 /// 这正是 `discovery_tests::the_discovered_tree_does_not_depend_on_the_worker_count` 与
 /// `parallel_tests::fingerprints_do_not_depend_on_the_worker_count` 守住的东西。
 pub(crate) fn worker_budget() -> usize {
-    let requested = std::env::var(nichlink_kernel::lexicon::JOBS_ENV)
+    let requested = std::env::var(xirang_kernel::lexicon::JOBS_ENV)
         .ok()
         .and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|count| *count > 0);
@@ -467,11 +467,11 @@ pub(crate) fn worker_budget() -> usize {
 /// 把预算写成"显式请求 + 机器核数"的纯函数（审计 `T1`）。
 ///
 /// Split out so the rule can be pinned **without writing to the process environment**: the rule is
-/// what matters, and a test that mutates `NICH_LINK_JOBS` would be writing to the same environment
+/// what matters, and a test that mutates `XIRANG_JOBS` would be writing to the same environment
 /// every other test in this process reads (`std::env::set_var` is `unsafe` in edition 2024 for
 /// exactly that reason). An explicit request that parses to a positive number wins outright; a zero
 /// or a typo is not a request and falls through to the machine rule.
-/// 拆出来是为了让规则**不必写进程环境**就能被钉住：要紧的是规则本身，而一个改写 `NICH_LINK_JOBS` 的测试
+/// 拆出来是为了让规则**不必写进程环境**就能被钉住：要紧的是规则本身，而一个改写 `XIRANG_JOBS` 的测试
 /// 会写进本进程里其它每个测试都在读的那份环境（edition 2024 里 `std::env::set_var` 是 `unsafe`，正是
 /// 这个原因）。解析出正数的显式请求直接生效；零或错别字不算请求，落到机器规则上。
 fn budget_from(requested: Option<usize>, cores: usize) -> usize {
@@ -711,7 +711,7 @@ mod discovery_tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-source-walk-{label}-{}-{sequence}",
+            "xirang-source-walk-{label}-{}-{sequence}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);

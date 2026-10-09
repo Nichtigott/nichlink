@@ -1,6 +1,6 @@
-//! Tests for `nichlink.read`'s three shapes: the window, the explicit range, and the
+//! Tests for `xirang.read`'s three shapes: the window, the explicit range, and the
 //! whole file — plus the total-line header every one of them carries.
-//! `nichlink.read` 三种形状的测试：窗口、显式区间与整文件——外加它们每一个都携带的总行数标头。
+//! `xirang.read` 三种形状的测试：窗口、显式区间与整文件——外加它们每一个都携带的总行数标头。
 //!
 //! The measured failure these exist against is the shape the window forced: a 473-line
 //! file took `ceil(473/81)` = six calls, and no call said how much was left, because the
@@ -48,7 +48,7 @@ fn root_with_lines(label: &str, lines: usize) -> Root {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-read-{label}-{}-{sequence}",
+        "xirang-mcp-read-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -297,21 +297,21 @@ fn the_read_description_names_the_shapes_and_the_total() {
     let listed = crate::mcp::tools::tools();
     let read = listed
         .iter()
-        .find(|tool| tool["name"] == "nichlink.read")
-        .expect("nichlink.read is advertised");
+        .find(|tool| tool["name"] == "xirang.read")
+        .expect("xirang.read is advertised");
     let description = read["description"]
         .as_str()
-        .unwrap_or_else(|| panic!("nichlink.read has no description: {read}"));
+        .unwrap_or_else(|| panic!("xirang.read has no description: {read}"));
     for expected in ["whole", "lines", "N lines", "total"] {
         assert!(
             description.contains(expected),
-            "`{expected}` is part of nichlink.read's contract: {description}"
+            "`{expected}` is part of xirang.read's contract: {description}"
         );
     }
     for key in ["whole", "lines", "line", "context"] {
         assert!(
             read["inputSchema"]["properties"].get(key).is_some(),
-            "nichlink.read does not advertise `{key}`: {read}"
+            "xirang.read does not advertise `{key}`: {read}"
         );
     }
 }
@@ -340,20 +340,20 @@ fn the_advertised_spelling_is_the_one_read() {
 #[test]
 fn the_adoption_ledger_is_readable_by_name() {
     let root = root_with_lines("ledger", 1);
-    std::fs::create_dir_all(root.0.join(".nichlink/adopted")).expect("ledger directory");
+    std::fs::create_dir_all(root.0.join(".xirang/adopted")).expect("ledger directory");
     std::fs::write(
-        root.0.join(".nichlink/adopted/entries"),
+        root.0.join(".xirang/adopted/entries"),
         "root/control/button|certifies|traced once|nich|2026-10-01T10:00:00+08:00|src/lib.rs|\
          deadbeef|certifies it\n",
     )
     .expect("the ledger");
     let answer = read_source(
         &root.0,
-        &json!({"path": ".nichlink/adopted/entries", "whole": true}),
+        &json!({"path": ".xirang/adopted/entries", "whole": true}),
     )
     .expect("the ledger is a text file this tree carries");
     assert!(
-        answer.starts_with(".nichlink/adopted/entries:1-1 (1 lines)"),
+        answer.starts_with(".xirang/adopted/entries:1-1 (1 lines)"),
         "the header names the file and its total: {answer}"
     );
     assert!(

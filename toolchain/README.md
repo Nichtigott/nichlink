@@ -1,24 +1,24 @@
-# nichlink-toolchain
+# xirang-toolchain
 
-The publishing surface: the seven thin execution surfaces of NichLink in one crate.
-合并后的发布面：NichLink 的七个薄执行面合成的一个 crate。
+The publishing surface: the seven thin execution surfaces of XiRang in one crate.
+合并后的发布面：XiRang 的七个薄执行面合成的一个 crate。
 
 | module | was | responsibility |
 | --- | --- | --- |
-| `build_method` | `nichlink-build-method` | build-time filesystem / `OUT_DIR` orchestration |
-| `runtime` | `nichlink-run-method` | runtime state instance + trace binding |
-| `call_evidence` | `nichlink-debug-method` | observation evidence surface |
-| `plugin_host` | `nichlink-plugin-host` | wasm / process plugin host execution |
-| `studio` | `nichlink-studio` | ratatui authoring / inspection surface |
-| `mcp` | `nichlink-mcp` | AI-agent stdio bridge |
-| `cli` | `nichlink-cli` | process glue: argv dispatch, cargo subprocesses |
+| `build_method` | `xirang-build-method` | build-time filesystem / `OUT_DIR` orchestration |
+| `runtime` | `xirang-run-method` | runtime state instance + trace binding |
+| `call_evidence` | `xirang-debug-method` | observation evidence surface |
+| `plugin_host` | `xirang-plugin-host` | wasm / process plugin host execution |
+| `studio` | `xirang-studio` | ratatui authoring / inspection surface |
+| `mcp` | `xirang-mcp` | AI-agent stdio bridge |
+| `cli` | `xirang-cli` | process glue: argv dispatch, cargo subprocesses |
 
-Host usage: `[dependencies] nichlink-toolchain` + `[build-dependencies] nichlink-toolchain`;
-the crate root calls `nichlink_toolchain::run_method::host!();` and the thin `build.rs` calls
-`nichlink_toolchain::build_method::run()`.
-宿主用法：`[dependencies] nichlink-toolchain` + `[build-dependencies] nichlink-toolchain`；
-crate 根部调用 `nichlink_toolchain::run_method::host!();`，薄 `build.rs` 调用
-`nichlink_toolchain::build_method::run()`。
+Host usage: `[dependencies] xirang-toolchain` + `[build-dependencies] xirang-toolchain`;
+the crate root calls `xirang_toolchain::run_method::host!();` and the thin `build.rs` calls
+`xirang_toolchain::build_method::run()`.
+宿主用法：`[dependencies] xirang-toolchain` + `[build-dependencies] xirang-toolchain`；
+crate 根部调用 `xirang_toolchain::run_method::host!();`，薄 `build.rs` 调用
+`xirang_toolchain::build_method::run()`。
 
 Feature names are kept from the crates that carried them (`wasm`, `process-tools`, `authoring`,
 `node-graph`, `prototype-fixtures`, `dev-supervisor`); `default = ["wasm", "node-graph"]`

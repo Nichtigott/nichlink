@@ -58,7 +58,7 @@ pub(crate) mod test_support {
             .expect("clock after Unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "nichlink-build-{label}-{}-{stamp}",
+            "xirang-build-{label}-{}-{stamp}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("temporary fixture root");

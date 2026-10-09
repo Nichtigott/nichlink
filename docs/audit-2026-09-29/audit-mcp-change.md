@@ -45,10 +45,10 @@ panicked at verify_tests.rs:179:5 / connector verdict: ok …` / `0 passed; 1 fa
 
 ## 5. 五条 verify（最终树重跑，全部 exit 0）
 
-`cargo fmt --all -- --check`（无输出）；`cargo test -p nichlink-toolchain --offline --features
+`cargo fmt --all -- --check`（无输出）；`cargo test -p xirang-toolchain --offline --features
 mcp`（14 处 ok，含新钉子）；`cargo test --workspace --offline`（36 处 ok）；`cargo clippy
 --workspace --all-targets --offline --all-features -- -D warnings`（`Finished dev profile`）；
-`cargo test -p nichlink-conventions --offline`（`ok. 139 passed`，含 anchors resolve）。
+`cargo test -p xirang-conventions --offline`（`ok. 139 passed`，含 anchors resolve）。
 
 边界：`git status --porcelain` 只有 ` M verify.rs`、` M verify_tests.rs`、`?? docs/audit-2026-09-29/`；
 examples/ 与 toolchain/tests/fixtures/ 未动；无新增 `#[allow(missing_docs)]`、无新增公开项；未提交。

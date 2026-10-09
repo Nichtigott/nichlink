@@ -1,5 +1,5 @@
-//! Text contracts shared by every NichLink surface.
-//! 每个 NichLink 执行面共享的文本契约。
+//! Text contracts shared by every XiRang surface.
+//! 每个 XiRang 执行面共享的文本契约。
 //!
 //! These strings are contracts, not settings. The build step writes the file
 //! the host crate includes, generated code addresses the runtime crate by
@@ -60,7 +60,7 @@ pub const GENERATED_LIB_FILE: &str = "generated_lib.rs";
 /// The runtime crate's name, as generated code and the face front end address
 /// it.
 /// 运行期 crate 的名字——生成代码与宏前端这样寻址它。
-pub const RUN_METHOD_CRATE: &str = "nichlink_toolchain";
+pub const RUN_METHOD_CRATE: &str = "xirang_toolchain";
 
 /// The face field that marks replaceable plugin surface.
 /// 标记可替换插件面的注册面字段。
@@ -84,7 +84,7 @@ pub const GENERATION_FILE: &str = "graph.generation";
 
 /// The first line of the generation record.
 /// generation 记录的第一行。
-pub const GENERATION_MARKER: &str = "nichlink-build-index";
+pub const GENERATION_MARKER: &str = "xirang-build-index";
 
 /// The name of the file that admits **one writer per tree** at a time.
 /// 一次只允许**一棵树一个写者**的那份文件的文件名。
@@ -105,7 +105,7 @@ pub const PUBLISH_LOCK_FILE: &str = ".publishing.lock";
 /// facade 自己不编译任何面；它携带的是 graft 切口表与契约断言，而其中每一个 `crate::<模块>` 都被改写成
 /// **编译该模块的那个 crate**。子树被切出之后宿主无法携带它们——它的生成树会点名一个自己不再编译的模块
 /// （审计 `M7`，P3.2/§M7.33）。
-pub const SHAPE_FACADE_ENV: &str = "NICH_LINK_SHAPE_FACADE";
+pub const SHAPE_FACADE_ENV: &str = "XIRANG_SHAPE_FACADE";
 
 /// The environment variable that tells a run to render **only** one crate's subtrees.
 /// 告诉一次运行**只**渲染某一个 crate 的子树的环境变量。
@@ -117,11 +117,11 @@ pub const SHAPE_FACADE_ENV: &str = "NICH_LINK_SHAPE_FACADE";
 /// 幽灵 crate 编译的是宿主不再编译的碎片，而它自己的构建脚本把这里设成认领的子树
 /// （`control::object,panel`）。其余节点一律不发射，而认领子树**之上**的节点发成空的容器模块：挂载祖先的
 /// 面文件会把那个面第二次注册进第二个注册机（审计 `M7`，P3.2）。
-pub const SHAPE_ONLY_ENV: &str = "NICH_LINK_SHAPE_ONLY";
+pub const SHAPE_ONLY_ENV: &str = "XIRANG_SHAPE_ONLY";
 
 /// The environment variable bounding how long a publish waits for that lock, in milliseconds.
 /// 限制一次发布为那把锁等待多久的环境变量，单位毫秒。
-pub const LOCK_WAIT_ENV: &str = "NICH_LINK_LOCK_WAIT_MS";
+pub const LOCK_WAIT_ENV: &str = "XIRANG_LOCK_WAIT_MS";
 
 /// The key the generation record stamps the **namespace** it was published under.
 /// generation 记录盖下"它发布时所用**命名空间**"的那把钥匙。
@@ -151,7 +151,7 @@ pub const ADD_CRATES_LOCK_FILE: &str = "add-crates.lock";
 
 /// The first line of the crate-shape lock.
 /// crate 形状锁的第一行。
-pub const ADD_CRATES_MARKER: &str = "nichlink-crate-shape";
+pub const ADD_CRATES_MARKER: &str = "xirang-crate-shape";
 
 /// The front-end marker that selects the collector adapter.
 /// 选择 collector 适配层的前端标记。
@@ -159,16 +159,16 @@ pub const FACE_FIELD_COLLECTOR: &str = "collector";
 
 /// The environment variable that pins the first-pass source scope.
 /// 固定第一次源码范围的环境变量。
-pub const SCOPE_ENV: &str = "NICH_LINK_SCOPE";
+pub const SCOPE_ENV: &str = "XIRANG_SCOPE";
 
 /// The environment variable that pins the host entry file.
 /// 固定宿主入口文件的环境变量。
-pub const ENTRY_ENV: &str = "NICH_LINK_ENTRY";
+pub const ENTRY_ENV: &str = "XIRANG_ENTRY";
 
 /// The environment variable that asks the build step for a verbose status
 /// line.
 /// 向构建步骤索取详细状态行的环境变量。
-pub const BUILD_VERBOSE_ENV: &str = "NICH_LINK_BUILD_VERBOSE";
+pub const BUILD_VERBOSE_ENV: &str = "XIRANG_BUILD_VERBOSE";
 
 /// The environment variable that caps how many workers a walk may use (audit `T1`).
 /// 限制一次遍历最多用几个工作线程的环境变量（审计 `T1`）。
@@ -176,24 +176,24 @@ pub const BUILD_VERBOSE_ENV: &str = "NICH_LINK_BUILD_VERBOSE";
 /// The default is a rule rather than a number — half the machine, at most eight, never fewer than
 /// one core left alone — because machines differ and a tool call must not take a user's whole
 /// machine. This variable is the explicit override for a caller who knows better than the rule, and
-/// it is part of the text contract for the same reason `NICH_LINK_ENTRY` is: two surfaces read it,
+/// it is part of the text contract for the same reason `XIRANG_ENTRY` is: two surfaces read it,
 /// and a second literal would drift.
 /// 默认值是一条规则而不是一个数字——半台机器、最多八个、至少留一个核——因为机器各不相同，而一次工具
 /// 调用不该把用户的整台机器拿走。这个变量是给"比规则更清楚自己处境"的调用方的显式覆盖；它属于文本契约
-/// 的理由与 `NICH_LINK_ENTRY` 相同：有两处读它，而第二个字面量会漂。
-pub const JOBS_ENV: &str = "NICH_LINK_JOBS";
+/// 的理由与 `XIRANG_ENTRY` 相同：有两处读它，而第二个字面量会漂。
+pub const JOBS_ENV: &str = "XIRANG_JOBS";
 
 /// The environment variable that pins the package a surface works on.
 /// 固定执行面所工作的包的环境变量。
-pub const PACKAGE_ROOT_ENV: &str = "NICH_LINK_PACKAGE_ROOT";
+pub const PACKAGE_ROOT_ENV: &str = "XIRANG_PACKAGE_ROOT";
 
 /// The environment variable that pins the namespace authored faces land under.
 /// 固定创作的注册面所属命名空间的环境变量。
-pub const NAMESPACE_ENV: &str = "NICH_LINK_NAMESPACE";
+pub const NAMESPACE_ENV: &str = "XIRANG_NAMESPACE";
 
 /// The namespace a face lands under when nothing selects one.
 /// 没有任何东西选择时，注册面所属的命名空间。
-pub const DEFAULT_NAMESPACE: &str = "nichlink.default";
+pub const DEFAULT_NAMESPACE: &str = "xirang.default";
 
 /// The module whose whole subtree carries the registration machinery, and is
 /// therefore never pruned by the first-pass scope.
@@ -220,18 +220,18 @@ pub const SCOPE_ALWAYS_INCLUDED: &[&str] = &[
 /// 每个生成的注册面文件所携带的第一行。
 ///
 /// A text contract rather than a runtime detail: it is what tells a rewrite action whether a face is
-/// **NichLink's to rewrite** or the operator's to keep (`is_nichlink_owned_source`), and the bridge's
+/// **XiRang's to rewrite** or the operator's to keep (`is_xirang_owned_source`), and the bridge's
 /// repair suggestions have to ask the same question before they hand back a request that would be
 /// refused. It lived as a private constant inside the authoring module, which is why the second
 /// reader could only have copied the literal.
-/// 这是文本契约而不是运行期细节：它决定了重写动作可以把哪个面当作**NichLink 的**来改、哪个是操作者的
-/// 要留着（`is_nichlink_owned_source`），而桥的修复建议必须先问同一个问题，才不至于交回一条会被拒绝的
+/// 这是文本契约而不是运行期细节：它决定了重写动作可以把哪个面当作**XiRang 的**来改、哪个是操作者的
+/// 要留着（`is_xirang_owned_source`），而桥的修复建议必须先问同一个问题，才不至于交回一条会被拒绝的
 /// 请求。它原先只是创作模块内部的私有常量，这正是第二个读取方只能抄字面量的原因。
-pub const GENERATED_MARKER: &str = "// generated-by=NichLink";
+pub const GENERATED_MARKER: &str = "// generated-by=XiRang";
 
-/// Package-level directory holding NichLink's authoring records.
-/// 存放 NichLink 创作记录的包级目录。
-pub const NICHLINK_DIR: &str = ".nichlink";
+/// Package-level directory holding XiRang's authoring records.
+/// 存放 XiRang 创作记录的包级目录。
+pub const XIRANG_DIR: &str = ".xirang";
 
 /// Where a partition puts the crates it generates, **beside** the host rather than in it.
 /// 拆分把生成出来的 crate 放在哪里——在宿主**旁边**，而不是里面。
@@ -239,18 +239,18 @@ pub const NICHLINK_DIR: &str = ".nichlink";
 /// Visible, not a dot directory: a host root that lists `app-widgets`, `app-gauges` and `app-facade`
 /// next to `host/` and `src/` tells a reader nothing about which of them they may edit, and a hidden
 /// one tells them nothing at all. `crates/` uses the same word the declaration file does
-/// (`add_crates.rs`), and every package inside it opens with `Generated by NichLink … do not edit`.
+/// (`add_crates.rs`), and every package inside it opens with `Generated by XiRang … do not edit`.
 /// 可见，不是点目录：一个在 `host/`、`src/` 旁边列出 `app-widgets`、`app-gauges`、`app-facade` 的宿主根，
 /// 读不出哪一个是他能改的；藏起来的更是什么都读不出。`crates/` 用的是与声明文件（`add_crates.rs`）同一个词，
-/// 而它里面每个包的第一行都写着 `Generated by NichLink … do not edit`。
+/// 而它里面每个包的第一行都写着 `Generated by XiRang … do not edit`。
 pub const CRATES_DIR: &str = "crates";
 
-/// Directory name, under `NICHLINK_DIR`, holding external graft plans.
-/// `NICHLINK_DIR` 下存放外部 graft 计划的目录名。
+/// Directory name, under `XIRANG_DIR`, holding external graft plans.
+/// `XIRANG_DIR` 下存放外部 graft 计划的目录名。
 pub const EXTERNAL_GRAFT_DIR: &str = "external-grafts";
 
-/// Directory name, under `NICHLINK_DIR`, holding the adoption ledger.
-/// `NICHLINK_DIR` 下存放采信台账的目录名。
+/// Directory name, under `XIRANG_DIR`, holding the adoption ledger.
+/// `XIRANG_DIR` 下存放采信台账的目录名。
 pub const ADOPTION_DIR: &str = "adopted";
 
 /// File name, under `ADOPTION_DIR`, holding the ledger's lines.
@@ -261,8 +261,8 @@ pub const ADOPTION_FILE: &str = "entries";
 /// 单个外部 graft 计划的文件名。
 pub const GRAFT_PLAN_FILE: &str = "graft.plan";
 
-/// Directory name, under `NICHLINK_DIR`, holding the move records.
-/// `NICHLINK_DIR` 下存放搬动记录的目录名。
+/// Directory name, under `XIRANG_DIR`, holding the move records.
+/// `XIRANG_DIR` 下存放搬动记录的目录名。
 ///
 /// A move is an **identity change** — `NodeId = hash(namespace, source path, name)` — so these records
 /// are a compatibility note for the next reader rather than an audit ledger, and only the most recent
@@ -275,17 +275,17 @@ pub const MOVES_DIR: &str = "moves";
 /// [`MOVES_DIR`] 下每个编号目录里存放一条搬动记录的文件名。
 pub const MOVE_PLAN_FILE: &str = "move.plan";
 
-/// Directory name, under `NICHLINK_DIR`, holding recorded trace artifacts.
-/// `NICHLINK_DIR` 下存放已记录 trace artifact 的目录名。
+/// Directory name, under `XIRANG_DIR`, holding recorded trace artifacts.
+/// `XIRANG_DIR` 下存放已记录 trace artifact 的目录名。
 pub const TRACE_DIR: &str = "traces";
 
 /// File name of one recorded trace artifact.
 /// 单个已记录 trace artifact 的文件名。
-pub const TRACE_FILE: &str = "nichlink.trace";
+pub const TRACE_FILE: &str = "xirang.trace";
 
 /// The environment variable that pins the trace artifact a reader loads.
 /// 固定读取方加载哪个 trace artifact 的环境变量。
-pub const TRACE_FILE_ENV: &str = "NICH_LINK_TRACE_FILE";
+pub const TRACE_FILE_ENV: &str = "XIRANG_TRACE_FILE";
 
 /// The environment variable that selects the trace collection mode.
 /// 选择 trace 收集模式的环境变量。
@@ -300,7 +300,7 @@ pub const TRACE_FILE_ENV: &str = "NICH_LINK_TRACE_FILE";
 /// 按名字被告知去设置这个变量的，而脚手架模板会把这个名字写进生成的代码。
 /// `the_text_contracts_keep_their_published_values` 现在把它钉在它的同类旁边，而 `0.1.4` 正是
 /// 让 `run_method` 又能消费一个 core 符号的那次版本移动。
-pub const TRACE_MODE_ENV: &str = "NICH_LINK_TRACE";
+pub const TRACE_MODE_ENV: &str = "XIRANG_TRACE";
 
 /// Whether `path` names `prefix` itself or a segment strictly below it.
 /// `path` 是 `prefix` 本身，还是位于其下的某个路径段。
@@ -451,9 +451,9 @@ pub fn resolve_package_root(
 /// 从配置值解析创作所属的命名空间。
 ///
 /// The default is a constant rather than a literal at each site, because three
-/// surfaces used to spell `nichlink.default` out and a rename would have had to
+/// surfaces used to spell `xirang.default` out and a rename would have had to
 /// find all three.
-/// 默认值是一个常量而不是每个使用处的字面量，因为此前有三个执行面把 `nichlink.default`
+/// 默认值是一个常量而不是每个使用处的字面量，因为此前有三个执行面把 `xirang.default`
 /// 写了出来，改名就得找齐三处。
 pub fn resolve_namespace(configured: Option<&str>) -> &str {
     configured.unwrap_or(DEFAULT_NAMESPACE)

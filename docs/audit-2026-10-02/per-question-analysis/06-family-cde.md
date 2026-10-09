@@ -12,7 +12,7 @@
 
 - ①1 `adopted` 一条就把本题的三个前提给全了：(a) 现状「adopted since 12:32:28 (unchanged since the confirmation) (provisional) — root/control/button: …」；(b) 计数「provisional 1  lapsed 0」；(c) **新锚的写入契约**，逐字：「a route this ledger does not name is a **new anchor** — a first confirmation, not a renewal: pass `anchor`, `certifies`, `evidence`, `verifier`, `reason` and `files` together with `apply: true` and `confirm: true`, and this tool appends one line whose fingerprint it computes from those files」。
 - ①2 `conformance` 给既有条目的裁定：`bytes      unchanged since the confirmation`，并列出 `covers     src/control/object/button/button.rs`。
-- ①4 / ①9 `consistency --specimen` 给"横向加的那个跟没跟已采信的形状"：改前 `family root/control · member nichlink-example-control-button · 1 sibling(s)`、`conformance: 0 of 1 sibling(s) do not carry the specimen's shape`；改后 `2 sibling(s)`、`conformance: 0 of 2 sibling(s) do not carry the specimen's shape`。
+- ①4 / ①9 `consistency --specimen` 给"横向加的那个跟没跟已采信的形状"：改前 `family root/control · member xirang-example-control-button · 1 sibling(s)`、`conformance: 0 of 1 sibling(s) do not carry the specimen's shape`；改后 `2 sibling(s)`、`conformance: 0 of 2 sibling(s) do not carry the specimen's shape`。
 - ①3 / ①10 `registry` 给树的变化：`faces 3` → `faces 4`，新增行 `root/control/dial   Dial   control/object/dial/dial.rs   e1070833a032e106f9cdd0eff2149bc2`。
 - ①5 / ①6 `apply` 预览+落盘：`preview effect: created \`control/object/dial/dial.rs\` under parent fb97ddd5f2b803d1b7f40a776d8a22d9`、`faces 4`、`consequences (static, text-level): 0 in-tree test line(s) name this face`。值得一提：**这段输出一个字都没提台账**。
 - ⑪ `check`：`verdict  passed (cargo exit 0)`。
@@ -31,7 +31,7 @@
 5. **步 8–10：索引收尾**。①5 `sync`（`Synced 3 changed files`）、①6 `node toggle.rs`（读回自己刚写的文件）、①7 `files`。这 3 条占了 7 条仪器的 43%，产出的信息是"新文件已入索引"。
 6. **步 16/17：改答案格式与台账号**（`nonbridge:` 必须做末行、SETUP.md 的字节数），不是题目本身（full/cg/fc.md step 16/17）。
 
-**题面要的东西全靠非仪器通道**：`cat .nichlink/adopted/entries`、`sha256sum` ×3、`cargo test` ×3、`cargo run --example tree` ×2、`diff`。这 7 条仪器没有一条能判定题面的两个问题（这条采信是否仍然有效／新对象是否跟随已采信形状）：①1/①2 的价值是**反证**（暴露副本是错的、第一次 init 作废），①4 是照抄形状的素材，①5/①6/①7 是索引维护与留档。它自己在 ①4 就把边界写明了：「I cannot recompute the ledger's fingerprint scheme **from the tree** (no code in the tree reads/writes it)」（full/cg/fc.md ①4）。
+**题面要的东西全靠非仪器通道**：`cat .xirang/adopted/entries`、`sha256sum` ×3、`cargo test` ×3、`cargo run --example tree` ×2、`diff`。这 7 条仪器没有一条能判定题面的两个问题（这条采信是否仍然有效／新对象是否跟随已采信形状）：①1/①2 的价值是**反证**（暴露副本是错的、第一次 init 作废），①4 是照抄形状的素材，①5/①6/①7 是索引维护与留档。它自己在 ①4 就把边界写明了：「I cannot recompute the ledger's fingerprint scheme **from the tree** (no code in the tree reads/writes it)」（full/cg/fc.md ①4）。
 
 **它怎么证明台账没动**：(a) `cat` 台账原文（非桥 1）；(b) 台账文件 sha256 基线 `697a5380e448c1e5`、`button.rs` 基线 `e842be74cce534bf`（step 5 基线捕获）；(c) 答案声明"前后都是"这两枚，并用 `--example tree` 3 行→4 行证明扩展真的发生了（brief/cg/fc.md 非桥 2/6）。它用的是**间接**判据（"被覆盖的文件字节没变"），因为它的工具说不出"这条采信现在是否仍然成立"。改后那一次 sha256 复核没进 `logs/fc.txt`（日志里只有基线那一次），复核者另用 mtime 独立核过台账一字未动（`cg26-review-2.md` §107 表行「台账文件 mtime 仍是拷贝时刻 23:24:56（它的改动都在 23:26:25 之后）」。
 
@@ -48,7 +48,7 @@
 
 **引导含义**（三条，具体到可实施）：
 1. **`conformance` 的 `bytes` 行应连同指纹口径与重算值一起给**。建议加一行，例如 `fingerprint 22b54a4c… = adoption_fingerprint(path ++ 0x00 ++ len ++ 0x00 ++ content) — recomputed here ✓`（内核公开函数：`kernel/src/registry_core/adoption/adoption.rs:200`；写入点 `toolchain/src/mcp/src/adopted.rs:329`，两条路径见 `cg26-review-2.md` §4.1）。依据：codegraph 的推理原文「I cannot recompute the ledger's fingerprint scheme from the tree (no code in the tree reads/writes it)」（full/cg/fc.md ①4）与「None of my fingerprint hypotheses match」（step 5）；我们臂也没有这条信息，只是被 `conformance` 的裁定挡过去了，推理里留下「maybe … blake3 truncated … Not important.」（brief/ours/fc.md ①2）。**这一行不改，下一轮还会有人把"我算不出"写成"无法重算"。**
-2. **`apply` 的 `consequences` 块应显式声明它对 `.nichlink/adopted/entries` 没有写入**（例如 `ledger: untouched — no adopted entry names this path`）。依据：`apply` 现在的输出只列 test 行与 `cut(`/`graft(` 站点，台账一字未提（brief/ours/fc.md ①5/①6），而两侧为回答"台账还在"各掏了 3 次 sha256（answers/round9/fc.md:26；brief/cg/fc.md 非桥 1 + step 5）。
+2. **`apply` 的 `consequences` 块应显式声明它对 `.xirang/adopted/entries` 没有写入**（例如 `ledger: untouched — no adopted entry names this path`）。依据：`apply` 现在的输出只列 test 行与 `cut(`/`graft(` 站点，台账一字未提（brief/ours/fc.md ①5/①6），而两侧为回答"台账还在"各掏了 3 次 sha256（answers/round9/fc.md:26；brief/cg/fc.md 非桥 1 + step 5）。
 3. **把"新锚 vs 续期"提前到判定行**：`adopted` 的输出现在把这条契约放在最后一行 `next`；建议在 `provisional 1  lapsed 0` 同一行补一个计数（如 `new anchors: 0`），让"新对象要不要补一行"不必读到末尾才知道。依据：codegraph 在 step 5 的整段权衡（「Should I add a new ledger entry? … would be fabricating evidence」）与我们臂恰好读到 `next` 行就照办（answers/round9/fc.md:14）。
 
 **关于"指纹无法重算"这句错话：README §四把它记在我们臂名下，但一手材料指向 codegraph 侧。**
@@ -162,5 +162,5 @@ test result: FAILED. 2 passed; 1 failed
 4. **`fc` 改后的 sha256 复核没有进 codegraph 的逐题日志**（`logs/fc.txt` 只有 step 5 的基线捕获）；"前后同为一枚"的后半段依赖答案自述 + 复核者独立做的 mtime 检查（`cg26-review-2.md` §107）。
 5. **`fc` 的"21 步"只能按对话里的 14 个可指认步描述**（步 73/74/77 · 2–10 · 16/17），其余步没有调用记录、也没有推理留存（被渲染脚本截断处标了"全文见 outputs/"），那部分**无法判定**其内容。
 6. **`fd`/`fe` 的两臂改前状态都不在桥日志里**：我们侧 `fe` 完全没有改前桥调用、`fd` 有两条；codegraph 侧的改前状态全在非桥 raw cargo。因此"工具的哪一行让它相信还有别处"在 `fe`（我们侧）上**无法从工具输出回答**，只能从 `batching.md` 与推理复原。
-7. **方法说明**：为核验 `fc` 那句错话的成因，本文件除对话渲染版外还查了 cg26 会话原文（`~/.dsh/sessions/--home-nich-Moirai_N3-nichlink--/225f5295-…/session.v4.jsonl.zstd`，`zstd -dc` 后按 seq 定位）；时间线结论（作答期间 0 次 `registry_core/adoption`、首次出现在 t5 任务里）只有这条通道能给出，对话渲染版本身没有它。
+7. **方法说明**：为核验 `fc` 那句错话的成因，本文件除对话渲染版外还查了 cg26 会话原文（`~/.dsh/sessions/--home-nich-Moirai_N3-xirang--/225f5295-…/session.v4.jsonl.zstd`，`zstd -dc` 后按 seq 定位）；时间线结论（作答期间 0 次 `registry_core/adoption`、首次出现在 t5 任务里）只有这条通道能给出，对话渲染版本身没有它。
 8. **装置（不属我的判定对象，只登记）**：codegraph 的 `fc` 前 3 步打在上一臂交付态副本上（①2 `files` 里能看到 `dial.rs`），第一次 `init` 因此作废；README §三已声明整轮口径"含装置故障处理 ⇒ 对它不利、无法扣除"。另：`TREES.json` 的 `fd` 行在复核后被改写，臂当时读到的是旧串（见 `fd` 节）。

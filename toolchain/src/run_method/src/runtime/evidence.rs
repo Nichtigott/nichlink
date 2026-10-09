@@ -1,5 +1,5 @@
-//! Historical-path shim: the names below are re-exported at `nichlink_run_method`'s root.
-//! 历史路径 shim：下面这些名字在 `nichlink_run_method` 根部重导出。
+//! Historical-path shim: the names below are re-exported at `xirang_run_method`'s root.
+//! 历史路径 shim：下面这些名字在 `xirang_run_method` 根部重导出。
 //!
 //! Observed call edges and evidence shared by tracing and tooling. The types are protocol nouns
 //! defined in the kernel; this module keeps the historical re-export path for the run_method
@@ -11,4 +11,4 @@ pub use super::trace::{
     CallSite, CallTrace, DataEdge, DataHop, FramePath, LocalId, LocalKind, LocalValue, Observation,
     TraceMode,
 };
-pub use nichlink_kernel::{CallEdge, EvidenceKind, LogicalCallEdge};
+pub use xirang_kernel::{CallEdge, EvidenceKind, LogicalCallEdge};

@@ -52,7 +52,7 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
         .filter(|value| !value.is_empty());
     let full = arguments.get("full").and_then(Value::as_bool) == Some(true);
     let entry =
-        nichlink_kernel::syntax::entries::render_graft_expression(&cut, cut_end, full, &graft)
+        xirang_kernel::syntax::entries::render_graft_expression(&cut, cut_end, full, &graft)
             .map_err(|error| format!("this cut cannot be written: {}", error.message))?;
 
     let declared = crate::build_method::declared_grafts(root).map_err(|error| {
@@ -64,7 +64,7 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
     let plan = declared.entry.clone();
     let source = std::fs::read_to_string(&plan)
         .map_err(|error| format!("{} is not readable: {error}", plan.display()))?;
-    let existing = nichlink_kernel::syntax::entries::graft_entries(&source).map_err(|error| {
+    let existing = xirang_kernel::syntax::entries::graft_entries(&source).map_err(|error| {
         format!(
             "the plan does not parse before the write: {}",
             error.message
@@ -82,7 +82,7 @@ pub(crate) fn run_cut(root: &Path, arguments: &Value) -> Result<Outcome, String>
     }
     let before = existing.len();
     let edited = insert_plan_entry(&source, &entry)?;
-    let after = nichlink_kernel::syntax::entries::graft_entries(&edited)
+    let after = xirang_kernel::syntax::entries::graft_entries(&edited)
         .map_err(|error| format!("the written plan does not parse: {}", error.message))?;
     if after.len() != before + 1 {
         return Err(format!(
@@ -231,7 +231,7 @@ fn example_face(root: &Path) -> Option<String> {
 pub(crate) fn plan_graft_example(root: &Path) -> Option<String> {
     let plan = crate::build_method::declared_grafts(root).ok()?.entry;
     let source = std::fs::read_to_string(plan).ok()?;
-    let entries = nichlink_kernel::syntax::entries::graft_entries(&source).ok()?;
+    let entries = xirang_kernel::syntax::entries::graft_entries(&source).ok()?;
     entries
         .first()
         .map(|entry| entry.graft.clone())
@@ -264,7 +264,7 @@ pub(crate) fn plan_graft_example(root: &Path) -> Option<String> {
 fn path_class_refusal(
     root: &Path,
     cut: &str,
-    existing: &[nichlink_kernel::syntax::entries::GraftSyntax],
+    existing: &[xirang_kernel::syntax::entries::GraftSyntax],
 ) -> Option<String> {
     if cut.starts_with("crate::") || existing.is_empty() {
         return None;

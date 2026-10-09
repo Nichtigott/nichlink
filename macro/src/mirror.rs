@@ -14,8 +14,8 @@ use proc_macro2::{
     Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream as Tokens, TokenTree,
 };
 
-use nichlink_kernel::lexicon;
-use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
+use xirang_kernel::lexicon;
+use xirang_kernel::registry_core::declaration::FACE_FIELD_ORDER;
 
 /// How the mirror carries one face field.
 /// 镜像如何承载一个注册面字段。
@@ -320,7 +320,7 @@ mod tests {
         });
         assert!(
             compact(&output).contains(&format!(
-                "::{}::__nichlink_object!",
+                "::{}::__xirang_object!",
                 lexicon::RUN_METHOD_CRATE
             )),
             "{output}"

@@ -25,8 +25,8 @@ pub struct StableFaceId([u8; 16]);
 pub const ROOT_NODE_ID: NodeId = NodeId::from_path("<root>", "root");
 
 impl NodeId {
-    /// Rebuild an identity emitted by NichLink's build step.
-    /// 从 NichLink 构建步骤生成的字节恢复身份。
+    /// Rebuild an identity emitted by XiRang's build step.
+    /// 从 XiRang 构建步骤生成的字节恢复身份。
     #[doc(hidden)]
     pub const fn from_raw(bytes: [u8; 16]) -> Self {
         Self(bytes)

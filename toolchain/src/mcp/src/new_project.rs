@@ -2,12 +2,12 @@
 //! 创建宿主项目：桥的脚手架写入。
 //!
 //! The bridge does not render a project itself. It calls
-//! `crate::build_method::scaffold::create_project`, the executor `nichlink new` (the
+//! `crate::build_method::scaffold::create_project`, the executor `xirang new` (the
 //! CLI) and `submit_new_project` (Studio) both run, so a project an agent scaffolds
 //! is the project those two write: the same manifest, build script, source entry,
 //! editor snippets, and detected dependency source.
 //! 桥不自己渲染项目。它调用 `crate::build_method::scaffold::create_project`——CLI 的
-//! `nichlink new` 与 Studio 的 `submit_new_project` 都运行的那个执行器——因此代理脚手架出来的
+//! `xirang new` 与 Studio 的 `submit_new_project` 都运行的那个执行器——因此代理脚手架出来的
 //! 项目就是那两者写出的项目：同一份清单、构建脚本、源码入口、编辑器 snippet，以及同一个被探测出的
 //! 依赖来源。
 //!
@@ -38,8 +38,8 @@ use serde_json::Value;
 use crate::mcp::preview::{remove_copy, work_directory};
 use crate::mcp::source_index::portable_path;
 
-/// Run one `nichlink.new_project` request, previewing unless `apply` is true.
-/// 执行一次 `nichlink.new_project` 请求；除非 `apply` 为真，否则只预览。
+/// Run one `xirang.new_project` request, previewing unless `apply` is true.
+/// 执行一次 `xirang.new_project` 请求；除非 `apply` 为真，否则只预览。
 pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, String> {
     // Every refusal about the request itself carries a complete, executable request — built from
     // the values the caller already sent, so what it shows is one edit away from what they meant.
@@ -71,7 +71,7 @@ pub(crate) fn new_project(root: &Path, arguments: &Value) -> Result<String, Stri
     if target.exists() {
         if !target.is_dir() {
             return Err(format!(
-                "REFUSED: {} exists and is not a directory; nichlink.new_project creates one. \
+                "REFUSED: {} exists and is not a directory; xirang.new_project creates one. \
                  Nothing was written",
                 target.display()
             ));
@@ -421,7 +421,7 @@ fn staging_directory(target: &Path) -> Result<PathBuf, String> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
-    Ok(parent.join(format!(".nichlink-new-{name}-{stamp}")))
+    Ok(parent.join(format!(".xirang-new-{name}-{stamp}")))
 }
 
 /// The complete request this tool accepts, filled with whatever the caller already sent.
@@ -458,7 +458,7 @@ fn text(arguments: &Value, key: &str) -> Result<String, String> {
     match arguments.get(key).and_then(Value::as_str) {
         Some(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
         Some(_) => Err(format!("`{key}` must not be empty")),
-        None => Err(format!("nichlink.new_project requires `{key}`")),
+        None => Err(format!("xirang.new_project requires `{key}`")),
     }
 }
 
@@ -471,7 +471,7 @@ fn kind(arguments: &Value) -> Result<ProjectKind, String> {
         Some(other) => Err(format!(
             "`kind` must be `binary` or `library`, not `{other}`"
         )),
-        None => Err("nichlink.new_project requires `kind` (`binary` or `library`)".to_owned()),
+        None => Err("xirang.new_project requires `kind` (`binary` or `library`)".to_owned()),
     }
 }
 
@@ -529,7 +529,7 @@ fn destination(root: &Path, requested: &str) -> Result<PathBuf, String> {
     if !inside(root, &target) {
         return Err(format!(
             "REFUSED: `{requested}` resolves to {}, which is outside the root this call runs in \
-             ({}); nichlink.new_project writes only inside that root. Nothing was written",
+             ({}); xirang.new_project writes only inside that root. Nothing was written",
             target.display(),
             root.display()
         ));
@@ -622,7 +622,7 @@ fn preview(
     faces: &[String],
 ) -> String {
     let mut report = format!(
-        "preview: nichlink.new_project would create the {kind} project `{package}` at {}\n",
+        "preview: xirang.new_project would create the {kind} project `{package}` at {}\n",
         target.display()
     );
     report.push_str(&format!(

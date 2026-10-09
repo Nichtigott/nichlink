@@ -14,13 +14,13 @@
 
 **工具返回**（逐字）：
 ```
-evidence: adoption ledger at /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/.nichlink/adopted/entries (provisional by construction)
+evidence: adoption ledger at /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/.xirang/adopted/entries (provisional by construction)
 adopted since 2026-10-01T10:00:00+08:00 (unchanged since the confirmation) (provisional) — root/control/button: the reference sibling shape [evidence: traced once; confirmed by nich; why: the shape every sibling follows]
 adoption lapsed at src/control/object/panel/panel.rs (changed since the confirmation); the recorded print is `root/control/button`'s current print, not this file's — a copy of another entry's bytes; needs confirmation — root/control/panel: the panel's original contract [adopted at 2026-09-20T09:00:00+08:00 by nich; why: recorded before the panel was rewritten]
 provisional 1  lapsed 1
 note: nothing here renews or revokes an adoption — a lapsed one needs a person to confirm the new state, and a confirmation is one more line. A later line for the same anchor is the one in force; an earlier line stays as its history, which is why a lapsed line can sit above a provisional one and still be the truth about the bytes it named.
 next   `conformance {anchor: "root/control/panel"}` says whether that lease still holds and where it lapsed; a route the ledger does not name is a **new anchor** — a first confirmation, not a renewal: pass `anchor`, `certifies`, `evidence`, `verifier`, `reason` and `files` with `apply: true` and `confirm: true`, and this tool appends one line whose fingerprint it computes from those files
-evidence nichlink.adopted {} → exit 0
+evidence xirang.adopted {} → exit 0
 
 ```
 
@@ -57,7 +57,7 @@ Let me start with h1-supply-chain and h2-claim-unkept.
 ```
 
 **同一步并行发出的其它调用**：
-- `bash` → 归属 h1-supply-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/h1-supply-chain/host; L=target/round9/logs/h1-supply-chain.jsonl\necho '===== consistency parent control'; $B --call consistency --root $R --log $L --parent root/control; echo \"EXIT=$?\"\necho '=====
+- `bash` → 归属 h1-supply-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/h1-supply-chain/host; L=target/round9/logs/h1-supply-chain.jsonl\necho '===== consistency parent control'; $B --call consistency --root $R --log $L --parent root/control; echo \"EXIT=$?\"\necho '=====
 …[参数：此处截断，全文 617 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 ### ①2 日志第 2 条 · exit 0 · step 154（turn 1）
@@ -72,7 +72,7 @@ anchor `root/control/button` — 1 revision(s) in the ledger; the last is in for
   covers     src/control/object/button/button.rs
 not covered here: whether the siblings of this anchor's object follow the same shape (ask `consistency --specimen <anchor>`, which reads the declared fields from the files this entry covers and compares the siblings against them), and the shape of the ledger's own history beyond the newest line
 next   `adopted` for every entry's verdict, `consistency --specimen root/control/button` for whether the siblings follow this shape
-evidence nichlink.conformance {"anchor":"root/control/button"} → exit 0
+evidence xirang.conformance {"anchor":"root/control/button"} → exit 0
 
 ```
 
@@ -97,7 +97,7 @@ anchor `root/control/panel` — 1 revision(s) in the ledger; the last is in forc
   covers     src/control/object/panel/panel.rs
 not covered here: whether the siblings of this anchor's object follow the same shape (ask `consistency --specimen <anchor>`, which reads the declared fields from the files this entry covers and compares the siblings against them), and the shape of the ledger's own history beyond the newest line
 next   `adopted` for every entry's verdict, `consistency --specimen root/control/panel` for whether the siblings follow this shape
-evidence nichlink.conformance {"anchor":"root/control/panel"} → exit 0
+evidence xirang.conformance {"anchor":"root/control/panel"} → exit 0
 
 ```
 
@@ -111,13 +111,13 @@ specimen root/control/button — ledger revision 1 is the one in force (an adopt
 state      provisional — certifies: the reference sibling shape (adopted 2026-10-01T10:00:00+08:00 by nich)
 covers     src/control/object/button/button.rs
 shape      exports `control.render` · handle_traits `ControlHandle`
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
-family root/control · member nichlink-example-control-button · 8 sibling(s)
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
+family root/control · member xirang-example-control-button · 8 sibling(s)
   outlier     spinner: lacks `handle_traits`
 conformance: 1 of 8 sibling(s) do not carry the specimen's shape
 not covered by this comparison: it reads the shape the ledger's files declare (parts, exports, handle_traits, part_traits) through the kernel's face parser and compares each sibling's own file against it, so a shape stated in a shared helper, produced by a macro this tree does not spell, or carried only by runtime behaviour is invisible; `parts` is compared by presence alone because it names each object's own parts type, while each label the specimen states in `exports`, `handle_traits` and `part_traits` has to appear in the sibling's list — a label the sibling states and the specimen does not is that sibling's own business; a sibling that declares **more** fields than the specimen is not reported, because the specimen is the baseline and the question is whether it was followed; and a deviation is a place to look, not a defect — whether the design should still be this way is the ledger's own question
 next   `read {path, line}` for a deviating sibling's body, `conformance {anchor}` for the ledger's own verdict on this specimen
-evidence nichlink.consistency {"specimen":"root/control/button"} → exit 0
+evidence xirang.consistency {"specimen":"root/control/button"} → exit 0
 
 ```
 
@@ -133,7 +133,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host
 tree   14 rust file(s), 24 function(s)
 elapsed 23212 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -148,7 +148,7 @@ census: 0 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `base_registry` (src/lib.rs:70)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 4 of 13 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
+evidence xirang.check {"face":"default","timeout_ms":900000} → exit 0
 
 ```
 
@@ -157,7 +157,7 @@ evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
 
 **调用** `bash`（step 147）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"; echo '=== ledger'; grep -n '' .nichlink/adopted/entries", "description": "h2-claim-unkept: run tests and read ledger", "timeoutMs": 1300000}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"; echo '=== ledger'; grep -n '' .xirang/adopted/entries", "description": "h2-claim-unkept: run tests and read ledger", "timeoutMs": 1300000}
 ```
 
 **结果**：
@@ -210,11 +210,11 @@ Let me now run the offsets test to capture raw output + exit code, and also use 
 
 Then h2, h3, h4.
 
-Let me run h1-supply-chain's test. The host depends on nichlink-toolchain via path (the sed pointed it to the checkout) and on the graft crate. Let me run `cargo test --offline` in host/. It may need to compile a lot (the toolchain) — the .cargo-target dir has no h1-supply-chain entry... it has fa fb fd fe g3 h1 r1..r4. So a cold build is needed for this host; that could take minutes. Let me try with a shared target dir per hardbug class: /target/round9/.cargo-target/h1-supply-chain.
+Let me run h1-supply-chain's test. The host depends on xirang-toolchain via path (the sed pointed it to the checkout) and on the graft crate. Let me run `cargo test --offline` in host/. It may need to compile a lot (the toolchain) — the .cargo-target dir has no h1-supply-chain entry... it has fa fb fd fe g3 h1 r1..r4. So a cold build is needed for this host; that could take minutes. Let me try with a shared target dir per hardbug class: /target/round9/.cargo-target/h1-supply-chain.
 
 Actually — to save time, maybe reuse the fa target dir? Different package/deps (graft). Cargo can share a target dir across projects (it keys by fingerprint), so using .cargo-target/fa for h1-supply-chain would reuse the toolchain build artifacts. That's a legit speedup: `CARGO_TARGET_DIR=.../.cargo-target/fa`. Hmm, but it could cause lock contention with other runs; fine.
 
-Let me use a per-class dir but pre-warm by... no, simplest: use the shared `.cargo-target/fa` dir for the hardbug classes (it already has nichlink-toolchain built). Actually different packages → cargo still needs to build the host + graft crates, but the toolchain dependency build is cached. Let me use `.cargo-target/hardbug` as a new shared dir; the first run will rebuild the toolchain (slow, maybe 1-3 min). Reusing fa's dir avoids that. Let me reuse `.cargo-target/fa`.
+Let me use a per-class dir but pre-warm by... no, simplest: use the shared `.cargo-target/fa` dir for the hardbug classes (it already has xirang-toolchain built). Actually different packages → cargo still needs to build the host + graft crates, but the toolchain dependency build is cached. Let me use `.cargo-target/hardbug` as a new shared dir; the first run will rebuild the toolchain (slow, maybe 1-3 min). Reusing fa's dir avoids that. Let me reuse `.cargo-target/fa`.
 
 Hmm, concurrent cargo runs sharing a target dir: cargo takes a lock, so parallel runs serialize. I'll run the 4 hardbug tests sequentially (one command, sequential `cargo test` invocations per class... but that's "several problems in one shell command" → needs a batching.md entry). Hmm! The batching rule applies to "把几道题放进同一条 shell 命令" — for attribution of per-problem tokens. If I run 4 classes' tests in one bash call, I must record it in batching.md. That's fine — I'll record it (it's honest: the 4 hardbug classes shared one shell command for compiling/running their tests). But then "逐题 token 无法归因"... the batching.md line covers it.
 
@@ -222,7 +222,7 @@ Cleaner: keep one problem per bash call, and run them in parallel in the same me
 
 Alternative: the tool's `check` can run the tests; but I still need cargo.
 
-Let me check how big the toolchain build is: the fa check took 23s (incremental, already built). A cold build of nichlink-toolchain + deps... The main workspace target/debug exists; maybe I can point CARGO_TARGET_DIR at /home/nich/Moirai_N3/nichlink/target (the checkout's own target dir) — it already has all the toolchain artifacts! `CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target` for the hardbug trees. Since the toolchain path dep is the checkout itself, the fingerprints should mostly match (different profile features?). The tree's Cargo.toml has features run/authoring — the checkout's target dir has those built (from previous rounds/debug binary). Risk: writing into the main target dir (allowed — it's the workspace). It might also invalidate the checkout's build (different feature unification) — that could slow later builds of the MCP tool (but I'm done building it).
+Let me check how big the toolchain build is: the fa check took 23s (incremental, already built). A cold build of xirang-toolchain + deps... The main workspace target/debug exists; maybe I can point CARGO_TARGET_DIR at /home/nich/Moirai_N3/nichlink/target (the checkout's own target dir) — it already has all the toolchain artifacts! `CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target` for the hardbug trees. Since the toolchain path dep is the checkout itself, the fingerprints should mostly match (different profile features?). The tree's Cargo.toml has features run/authoring — the checkout's target dir has those built (from previous rounds/debug binary). Risk: writing into the main target dir (allowed — it's the workspace). It might also invalidate the checkout's build (different feature unification) — that could slow later builds of the MCP tool (but I'm done building it).
 
 Hmm, safer: use `.cargo-target/hardbug` (new) and accept one cold build (sequential, first class). Then the other three reuse it. To avoid the batching issue, I'll run them one class per bash call, sequentially (each in its own message-ish). But parallel calls in one message would contend for the lock → they'd serialize automatically; each is a separate shell command → no batching entry needed. That's the cleanest: 4 separate bash calls (even if they queue on the cargo lock). Let me do that: 4 parallel bash calls, each with its own tree and CARGO_TARGET_DIR=.cargo-target/<clas
 …[推理：此处截断，全文 7294 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
@@ -231,7 +231,7 @@ Hmm, safer: use `.cargo-target/hardbug` (new) and accept one cold build (sequent
 **同一步并行发出的其它调用**：
 - `bash` → 归属 h1-supply-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -25; echo \"EXIT=${PIPESTATUS[0]}\"", "description": "h1-supply-chain: run offse
 …[参数：此处截断，全文 331 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
-- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"; echo '=== ledger'; grep -n '' .nichlink/ado
+- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"; echo '=== ledger'; grep -n '' .xirang/ado
 …[参数：此处截断，全文 397 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `bash`（step 150）：
@@ -331,10 +331,10 @@ Both classes' evidence is excellent:
 
 So h2's three facts: (a) reference shape (button) declares exports + handle_traits; (b) spinner lacks handle_traits (exactly one declaration missing); (c) the panel ledger entry's fingerprint is button's, not panel's → lapsed ("a copy of another entry's bytes").
 
-Root cause (file:line): the panel entry's fingerprint line — `.nichlink/adopted/entries` line 2 (the fingerprint field is a copy of line 1's). Hmm, but "root cause" for the missing declaration: `src/control/object/spinner/spinner.rs` — let me find the exact line where the declaration is missing (i.e. the `handle_contracts`/`handle_traits` in the macro block). Let me read spinner.rs and button.rs + panel.rs to give precise lines.
+Root cause (file:line): the panel entry's fingerprint line — `.xirang/adopted/entries` line 2 (the fingerprint field is a copy of line 1's). Hmm, but "root cause" for the missing declaration: `src/control/object/spinner/spinner.rs` — let me find the exact line where the declaration is missing (i.e. the `handle_contracts`/`handle_traits` in the macro block). Let me read spinner.rs and button.rs + panel.rs to give precise lines.
 
 Let me now also think about the "mechanism" and "fix" for h2:
-- root cause: two places. The BRIEF wants one file+line for "the defect". Hmm, h2's symptom has two halves (the class says: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry"). I'll give: (1) `src/control/object/spinner/spinner.rs:<line>` missing `handle_traits: ["ControlHandle"]` (the one declaration the reference shape carries); (2) `.nichlink/adopted/entries:2` — the panel line's fingerprint is button's (`edc72845…`), so it never described panel.rs; panel.rs's real bytes have a different fingerprint → lapsed. Actually careful: "one ledger entry no longer describes the bytes it names" — the tool says "the recorded print is `root/control/button`'s current print, not this file's — a copy of another entry's bytes". So the entry's fingerprint field = button's fingerprint. Let me verify by computing sha256 of both files — but the ledger fingerprint may not be plain sha256. In fc, the ledger's fingerprint (22b54a4c) ≠ the file's sha256 (e842be74), yet `adopted` said "unchanged since the confirmation". So the ledger's fingerprint is some other digest (maybe blake3 or sha256 of normalized content). Hmm! In h2, both entries have the same fingerprint string (edc72845...), and the tool says the panel line's recorded print is button's current print. So the tool computed button's print = edc72845... and panel's print = something else. Fine: the tool's own comparison is authoritative; I don't need to reproduce the hash.
+- root cause: two places. The BRIEF wants one file+line for "the defect". Hmm, h2's symptom has two halves (the class says: "a real specimen ledger entry, one sibling missing exactly one declaration, one lapsed entry"). I'll give: (1) `src/control/object/spinner/spinner.rs:<line>` missing `handle_traits: ["ControlHandle"]` (the one declaration the reference shape carries); (2) `.xirang/adopted/entries:2` — the panel line's fingerprint is button's (`edc72845…`), so it never described panel.rs; panel.rs's real bytes have a different fingerprint → lapsed. Actually careful: "one ledger entry no longer describes the bytes it names" — the tool says "the recorded print is `root/control/button`'s current print, not this file's — a copy of another entry's bytes". So the entry's fingerprint field = button's fingerprint. Let me verify by computing sha256 of both files — but the ledger fingerprint may not be plain sha256. In fc, the ledger's fingerprint (22b54a4c) ≠ the file's sha256 (e842be74), yet `adopted` said "unchanged since the confirmation". So the ledger's fingerprint is some other digest (maybe blake3 or sha256 of normalized content). Hmm! In h2, both entries have the same fingerprint string (edc72845...), and the tool says the panel line's recorded print is button's current print. So the tool computed button's print = edc72845... and panel's print = something else. Fine: the tool's own comparison is authoritative; I don't need to reproduce the hash.
 
 Let me now get exact lines: read spinner.rs macro block (which fields it declares) and button.rs's block; and panel.rs (it was "rewritten" — maybe it renamed its exports or changed shape). Let me read all three quickly.
 
@@ -345,7 +345,7 @@ Let me batch: read h2's spinner/button/panel via bash grep, and run h3/h4 bridge
 
 **同一步并行发出的其它调用**：
 - `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && for f in button spinner panel; do echo \"===== $f\"; sed -n '1,40p' src/control/object/$f/$f.rs; done", "description": "Read h2 sibling faces"}`
-- `bash` → 归属 h3-cross-file-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/h3-cross-file-chain/host; L=target/round9/logs/h3-cross-file-chain.jsonl\necho '===== check'; $B --call check --root $R --log $L --face default --timeout_ms 900000 2>&1 | sed -n '1,22p'; echo \"EXIT=$
+- `bash` → 归属 h3-cross-file-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/h3-cross-file-chain/host; L=target/round9/logs/h3-cross-file-chain.jsonl\necho '===== check'; $B --call check --root $R --log $L --face default --timeout_ms 900000 2>&1 | sed -n '1,22p'; echo \"EXIT=$
 …[参数：此处截断，全文 592 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `bash`（step 155）：
@@ -413,7 +413,7 @@ Let me verify button's exact line numbers (I printed the file earlier without nu
 
 Root cause (file:line) for h2:
 (a) `src/control/object/spinner/spinner.rs:23` — the macro block ends without the one declaration its siblings carry (`handle_contracts: [crate::control::ControlHandle]`); the census/consistency names spinner as the outlier lacking `handle_traits`.
-(b) `.nichlink/adopted/entries:2` — the panel line records button's fingerprint (both fingerprints are the same string), so it never described panel.rs's bytes; `conformance --anchor root/control/panel` → lapsed.
+(b) `.xirang/adopted/entries:2` — the panel line records button's fingerprint (both fingerprints are the same string), so it never described panel.rs's bytes; `conformance --anchor root/control/panel` → lapsed.
 
 Fix (smallest edit, not applied): add `handle_contracts: [crate::control::ControlHandle],` to spinner.rs's block (1 line); and for the ledger, **a person** must confirm the panel's new state — the tool's rule: a lapsed entry needs a person, not an edit: append one line (`adopted --anchor root/control/panel --certifies … --files src/control/object/panel/panel.rs --confirm --apply`), leaving the history line in place. Files not touched: tests, button.rs, control.rs, the other 7 siblings, and the existing ledger line 2 (history stays).
 
@@ -430,7 +430,7 @@ Let me grab the line numbers.
 
 **调用** `write`（step 156）：
 ```
-{"content": "# h2-claim-unkept — 真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目\n\nroot cause — 两处，各自独立：\n① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，\n   少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。\n② `.nichlink/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：\n   两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），\n   因此它从未描述过 `panel.rs` 的字节。\n\nmechanism — ① 参考形状（台账在册的 `root/control/button`，`comparison` 报 `shape: exports control.render · handle_traits ControlHandle`）\n   里 `handle_traits` 这个标签是**从 `handle_contracts` 的 Rust 路径派生**的（`kernel/src/registry_core/authoring/parse/parse.rs:197-210`，\n   宏侧同规则）；spinner 少了这条声明 ⇒ 解析出的面缺 `handle_traits` ⇒ `consistency --specimen` 点名它。\n   ② 台账是\"租约\"：一行只为它写下的那些文件与那枚指纹背书；panel 行的指纹其实是 button 的，\n   与 `panel.rs` 现字节对不上（且 panel 被重写过），于是该条目 **lapsed**。\n\nevidence — ① `cargo test --offline`（root=h2-claim-unkept/host，exit **0**）；`check {face:default}` → `verdict passed (cargo exit 0)`\n   （症状不在红里，在静态事实上）。\n② `adopted` → `provisional 1  lapsed 1`：button「unchanged since the confirmation (provisional)」；\n   panel「adoption lapsed at src/control/object/panel/panel.rs (changed since the confirmation); the recorded print is\n   `root/control/button`'s current print, not this file's — a copy of another entry's bytes; needs confirmation」。\n③ `conformance {anchor:root/control/panel}` → `in force lapsed at src/control/object/panel/panel.rs: the bytes moved after\n   the confirmation, so this needs a **person**, not an edit`、`bytes changed since the confirmation`。\n④ `consistency {specimen:root/control/button}` → `family root/control · 8 sibling(s)`、`outlier spinner: lacks handle_traits`、\n   `conformance: 1 of 8 sibling(s) do not carry the specimen's shape`。\n⑤ `cat .nichlink/adopted/entries`：两行指纹列逐字相同（见 ②）。\n\ncounter-proof — 若 spinner 缺的不是\"恰好一条声明\"，`consistency --specimen` 会点名它缺的**不止**
+{"content": "# h2-claim-unkept — 真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目\n\nroot cause — 两处，各自独立：\n① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，\n   少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。\n② `.xirang/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：\n   两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），\n   因此它从未描述过 `panel.rs` 的字节。\n\nmechanism — ① 参考形状（台账在册的 `root/control/button`，`comparison` 报 `shape: exports control.render · handle_traits ControlHandle`）\n   里 `handle_traits` 这个标签是**从 `handle_contracts` 的 Rust 路径派生**的（`kernel/src/registry_core/authoring/parse/parse.rs:197-210`，\n   宏侧同规则）；spinner 少了这条声明 ⇒ 解析出的面缺 `handle_traits` ⇒ `consistency --specimen` 点名它。\n   ② 台账是\"租约\"：一行只为它写下的那些文件与那枚指纹背书；panel 行的指纹其实是 button 的，\n   与 `panel.rs` 现字节对不上（且 panel 被重写过），于是该条目 **lapsed**。\n\nevidence — ① `cargo test --offline`（root=h2-claim-unkept/host，exit **0**）；`check {face:default}` → `verdict passed (cargo exit 0)`\n   （症状不在红里，在静态事实上）。\n② `adopted` → `provisional 1  lapsed 1`：button「unchanged since the confirmation (provisional)」；\n   panel「adoption lapsed at src/control/object/panel/panel.rs (changed since the confirmation); the recorded print is\n   `root/control/button`'s current print, not this file's — a copy of another entry's bytes; needs confirmation」。\n③ `conformance {anchor:root/control/panel}` → `in force lapsed at src/control/object/panel/panel.rs: the bytes moved after\n   the confirmation, so this needs a **person**, not an edit`、`bytes changed since the confirmation`。\n④ `consistency {specimen:root/control/button}` → `family root/control · 8 sibling(s)`、`outlier spinner: lacks handle_traits`、\n   `conformance: 1 of 8 sibling(s) do not carry the specimen's shape`。\n⑤ `cat .xirang/adopted/entries`：两行指纹列逐字相同（见 ②）。\n\ncounter-proof — 若 spinner 缺的不是\"恰好一条声明\"，`consistency --specimen` 会点名它缺的**不止**
 …[参数：此处截断，全文 2940 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -472,7 +472,7 @@ Let me write them.
 2: root cause — 两处，各自独立：
 3: ① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，
 4:    少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。
-5: ② `.nichlink/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：
+5: ② `.xirang/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：
 6:    两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），
 7:    因此它从未描述过 `panel.rs` 的字节。
 8: mechanism — ① 参考形状（台账在册的 `root/control/button`，`comparison` 报 `shape: exports control.render · handle_traits ControlHandle`）
@@ -489,7 +489,7 @@ Let me write them.
 19:    the confirmation, so this needs a **person**, not an edit`、`bytes changed since the confirmation`。
 20: ④ `consistency {specimen:root/control/button}` → `family root/control · 8 sibling(s)`、`outlier spinner: lacks handle_traits`、
 21:    `conformance: 1 of 8 sibling(s) do not carry the specimen's shape`。
-22: ⑤ `cat .nichlink/adopted/entries`：两行指纹列逐字相同（见 ②）。
+22: ⑤ `cat .xirang/adopted/entries`：两行指纹列逐字相同（见 ②）。
 23: counter-proof — 若 spinner 缺的不是"恰好一条声明"，`consistency --specimen` 会点名它缺的**不止** `handle_traits`
 24: （它的 `exports` 在 `spinner.rs:21`，与参考形状一致）；若 panel 那条只是"旧但仍在描述它自己的字节"，
 25: `adopted` 会判 provisional、而不是判"记录的是 button 的当前指纹"——它判的是后者，且两行指纹确实同一串。
@@ -512,7 +512,7 @@ Let me read g3.md, h2-claim-unkept.md, h3-cross-file-chain.md and compact them.
 
 **调用** `write`（step 164）：
 ```
-{"content": "# h2-claim-unkept — 真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目\nroot cause — 两处，各自独立：① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。② `.nichlink/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），因此它从未描述过 `panel.rs` 的字节。\nmechanism — ① 参考形状（台账在册的 `root/control/button`，`consistency --specimen` 报 `shape: exports control.render · handle_traits ControlHandle`）里 `handle_traits` 这个标签是**从 `handle_contracts` 的 Rust 路径派生**的（`kernel/src/registry_core/authoring/parse/parse.rs:197-210`，宏侧同规则）；spinner 少这条声明 ⇒ 解析出的面缺 `handle_traits` ⇒ 被点名。② 台账是\"租约\"：一行只为它写下的文件与那枚指纹背书；panel 行的指纹其实是 button 的，与 `panel.rs` 现字节对不上（且 panel 被重写过）⇒ 该条目 **lapsed**。\nevidence — ① `cargo test --offline`（root=h2-claim-unkept/host，exit **0**）；`check {face:default}` → `verdict passed (cargo exit 0)`（症状不在红里，在静态事实上）。\n② `adopted` → `provisional 1  lapsed 1`：button「unchanged since the confirmation (provisional)」；panel「adoption lapsed at src/control/object/panel/panel.rs (changed since the confirmation); the recorded print is `root/control/button`'s current print, not this file's — a copy of another entry's bytes; needs confirmation」。\n③ `conformance {anchor:root/control/panel}` → `in force lapsed at src/control/object/panel/panel.rs: the bytes moved after the confirmation, so this needs a **person**, not an edit`、`bytes changed since the confirmation`。\n④ `consistency {specimen:root/control/button}` → `family root/control · 8 sibling(s)`、`outlier spinner: lacks handle_traits`、`conformance: 1 of 8 sibling(s) do not carry the specimen's shape`。\n⑤ `cat .nichlink/adopted/entries`：两行指纹列逐字相同（见 ②）。\ncounter-proof — 若 spinner 缺的不是\"恰好一条声明\"，`consistency --specimen` 会点名它缺的**不止** `handle_traits`（它的 `exports` 在 `spinner.rs:21`，与参考形状一致）；若 panel 那条只是\"旧但仍在描述它自己的字节\"，`
+{"content": "# h2-claim-unkept — 真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目\nroot cause — 两处，各自独立：① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。② `.xirang/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），因此它从未描述过 `panel.rs` 的字节。\nmechanism — ① 参考形状（台账在册的 `root/control/button`，`consistency --specimen` 报 `shape: exports control.render · handle_traits ControlHandle`）里 `handle_traits` 这个标签是**从 `handle_contracts` 的 Rust 路径派生**的（`kernel/src/registry_core/authoring/parse/parse.rs:197-210`，宏侧同规则）；spinner 少这条声明 ⇒ 解析出的面缺 `handle_traits` ⇒ 被点名。② 台账是\"租约\"：一行只为它写下的文件与那枚指纹背书；panel 行的指纹其实是 button 的，与 `panel.rs` 现字节对不上（且 panel 被重写过）⇒ 该条目 **lapsed**。\nevidence — ① `cargo test --offline`（root=h2-claim-unkept/host，exit **0**）；`check {face:default}` → `verdict passed (cargo exit 0)`（症状不在红里，在静态事实上）。\n② `adopted` → `provisional 1  lapsed 1`：button「unchanged since the confirmation (provisional)」；panel「adoption lapsed at src/control/object/panel/panel.rs (changed since the confirmation); the recorded print is `root/control/button`'s current print, not this file's — a copy of another entry's bytes; needs confirmation」。\n③ `conformance {anchor:root/control/panel}` → `in force lapsed at src/control/object/panel/panel.rs: the bytes moved after the confirmation, so this needs a **person**, not an edit`、`bytes changed since the confirmation`。\n④ `consistency {specimen:root/control/button}` → `family root/control · 8 sibling(s)`、`outlier spinner: lacks handle_traits`、`conformance: 1 of 8 sibling(s) do not carry the specimen's shape`。\n⑤ `cat .xirang/adopted/entries`：两行指纹列逐字相同（见 ②）。\ncounter-proof — 若 spinner 缺的不是\"恰好一条声明\"，`consistency --specimen` 会点名它缺的**不止** `handle_traits`（它的 `exports` 在 `spinner.rs:21`，与参考形状一致）；若 panel 那条只是\"旧但仍在描述它自己的字节\"，`
 …[参数：此处截断，全文 2809 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -554,14 +554,14 @@ Let me rewrite both files.
 ## 三、交付答案（逐字）
 
 # h2-claim-unkept — 真标本台账 + 一个同族只缺一条声明 + 一条指纹失效的条目
-root cause — 两处，各自独立：① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。② `.nichlink/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），因此它从未描述过 `panel.rs` 的字节。
+root cause — 两处，各自独立：① `src/control/object/spinner/spinner.rs:23`：它的 `crate::control_object!` 块（`:19-23`）在 `parent:` 之后**直接闭合**，少了兄弟都写在**同一行号**的那一条 `handle_contracts: [crate::control::ControlHandle],`（button/panel/badge 皆为 `:23`）。② `.xirang/adopted/entries:2`（`root/control/panel` 那一行）记录的指纹是 **button 那一行的副本**：两行指纹字符串逐字相同（`edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9`），因此它从未描述过 `panel.rs` 的字节。
 mechanism — ① 参考形状（台账在册的 `root/control/button`，`consistency --specimen` 报 `shape: exports control.render · handle_traits ControlHandle`）里 `handle_traits` 这个标签是**从 `handle_contracts` 的 Rust 路径派生**的（`kernel/src/registry_core/authoring/parse/parse.rs:197-210`，宏侧同规则）；spinner 少这条声明 ⇒ 解析出的面缺 `handle_traits` ⇒ 被点名。② 台账是"租约"：一行只为它写下的文件与那枚指纹背书；panel 行的指纹其实是 button 的，与 `panel.rs` 现字节对不上（且 panel 被重写过）⇒ 该条目 **lapsed**。
 evidence — ① `cargo test --offline`（root=h2-claim-unkept/host，exit **0**）；`check {face:default}` → `verdict passed (cargo exit 0)`（症状不在红里，在静态事实上）。
 ② `adopted` → `provisional 1  lapsed 1`：button「unchanged since the confirmation (provisional)」；panel「adoption lapsed at src/control/object/panel/panel.rs (changed since the confirmation); the recorded print is `root/control/button`'s current print, not this file's — a copy of another entry's bytes; needs confirmation」。
 ③ `conformance {anchor:root/control/panel}` → `in force lapsed at src/control/object/panel/panel.rs: the bytes moved after the confirmation, so this needs a **person**, not an edit`、`bytes changed since the confirmation`。
 ④ `consistency {specimen:root/control/button}` → `family root/control · 8 sibling(s)`、`outlier spinner: lacks handle_traits`、`conformance: 1 of 8 sibling(s) do not carry the specimen's shape`。
-⑤ `cat .nichlink/adopted/entries`：两行指纹列逐字相同（见 ②）。
+⑤ `cat .xirang/adopted/entries`：两行指纹列逐字相同（见 ②）。
 counter-proof — 若 spinner 缺的不是"恰好一条声明"，`consistency --specimen` 会点名它缺的**不止** `handle_traits`（它的 `exports` 在 `spinner.rs:21`，与参考形状一致）；若 panel 那条只是"旧但仍在描述它自己的字节"，`adopted` 会判 provisional 而不是判"记录的是 button 的当前指纹"——它判的是后者，且两行指纹确实同一串；若 panel.rs 从未变动，`conformance` 不会报 bytes changed——它报了。
-fix — ① 最小改动：`src/control/object/spinner/spinner.rs:22` 之后补回 **1 行** `handle_contracts: [crate::control::ControlHandle],`（与 button/panel/badge 的 `:23` 同形）。② 台账**不能**靠编辑修：按工具规则，失效的条目需要**人**再追加一行确认（`adopted` 的 `anchor/certifies/evidence/verifier/reason/files` + `apply/confirm`，指纹由它自己算），**旧行保留为历史**。未改动：`tests/`（不许改测试）、`src/control/control.rs`、其余 7 个兄弟、`.nichlink/adopted/entries:1`（button 那行）以及 panel 行本身（历史不改写）。本树**只读**，以上均未落盘。
+fix — ① 最小改动：`src/control/object/spinner/spinner.rs:22` 之后补回 **1 行** `handle_contracts: [crate::control::ControlHandle],`（与 button/panel/badge 的 `:23` 同形）。② 台账**不能**靠编辑修：按工具规则，失效的条目需要**人**再追加一行确认（`adopted` 的 `anchor/certifies/evidence/verifier/reason/files` + `apply/confirm`，指纹由它自己算），**旧行保留为历史**。未改动：`tests/`（不许改测试）、`src/control/control.rs`、其余 7 个兄弟、`.xirang/adopted/entries:1`（button 那行）以及 panel 行本身（历史不改写）。本树**只读**，以上均未落盘。
 调用清单（`target/round9/logs/h2-claim-unkept.jsonl`）：adopted · conformance(button) · conformance(panel) · consistency(specimen=button) · check(default)。
 总调用：成功 5 / 被拒 0

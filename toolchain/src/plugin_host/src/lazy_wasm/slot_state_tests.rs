@@ -62,7 +62,7 @@ fn artifact(bytes: Vec<u8>) -> VerifiedPluginArtifact {
             name: "plugin-test",
             crate_name: "plugin_test",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.test"),
+            framework: FrameworkId::new("xirang.test"),
             source: PluginSource::User,
             mode: PluginMode::Extension,
             checksum,
@@ -90,7 +90,7 @@ fn state() -> SlotState {
     SlotState {
         definition: WasmPluginSlot::new(
             "test",
-            FrameworkId::new("nichlink.test"),
+            FrameworkId::new("xirang.test"),
             PluginMode::Extension,
             FlowContract::NONE,
             &[ValidationChannel::Local],

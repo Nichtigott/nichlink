@@ -15,22 +15,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "nichlink-example-partitioned-button"
+name = "xirang-example-partitioned-button"
 version = "0.2.1"
 dependencies = [
- "nichlink-example-partitioned-button-graft",
- "nichlink-toolchain",
+ "xirang-example-partitioned-button-graft",
+ "xirang-toolchain",
 ]
 
 [[package]]
-name = "nichlink-example-partitioned-button-graft"
+name = "xirang-example-partitioned-button-graft"
 version = "0.2.1"
 dependencies = [
- "nichlink-toolchain",
+ "xirang-toolchain",
 ]
 
 [[package]]
-name = "nichlink-kernel"
+name = "xirang-kernel"
 version = "0.2.2"
 dependencies = [
  "proc-macro2",
@@ -38,19 +38,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "nichlink-macro"
+name = "xirang-macro"
 version = "0.2.2"
 dependencies = [
- "nichlink-kernel",
+ "xirang-kernel",
  "proc-macro2",
 ]
 
 [[package]]
-name = "nichlink-toolchain"
+name = "xirang-toolchain"
 version = "0.2.2"
 dependencies = [
- "nichlink-kernel",
- "nichlink-macro",
+ "xirang-kernel",
+ "xirang-macro",
  "proc-macro2",
  "serde_json",
  "syn 2.0.119",
@@ -60,9 +60,9 @@ dependencies = [
 name = "partitioned-button-facade"
 version = "0.2.1"
 dependencies = [
- "nichlink-example-partitioned-button",
- "nichlink-example-partitioned-button-graft",
- "nichlink-toolchain",
+ "xirang-example-partitioned-button",
+ "xirang-example-partitioned-button-graft",
+ "xirang-toolchain",
  "partitioned-button-objects",
 ]
 
@@ -70,8 +70,8 @@ dependencies = [
 name = "partitioned-button-objects"
 version = "0.2.1"
 dependencies = [
- "nichlink-example-partitioned-button-graft",
- "nichlink-toolchain",
+ "xirang-example-partitioned-button-graft",
+ "xirang-toolchain",
 ]
 
 [[package]]

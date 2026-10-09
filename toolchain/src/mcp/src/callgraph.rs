@@ -181,7 +181,7 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
     let query = arguments
         .get("function")
         .and_then(Value::as_str)
-        .ok_or_else(|| "nichlink.callgraph requires function or orphans".to_owned())?
+        .ok_or_else(|| "xirang.callgraph requires function or orphans".to_owned())?
         .trim();
     if query.is_empty() {
         return Err("function must not be empty".to_owned());
@@ -462,7 +462,7 @@ pub(crate) fn callgraph(root: &Path, arguments: &Value) -> Result<String, String
                         last - first,
                         SOURCE_LINES,
                         "lines",
-                        "pass `path` and use `nichlink.read` for the whole file"
+                        "pass `path` and use `xirang.read` for the whole file"
                     )
                 ));
             }
@@ -533,7 +533,7 @@ fn labelled_sources(
                     .dir
                     .strip_prefix(root)
                     .map(|relative| {
-                        nichlink_kernel::declaration::portable_path(&relative.to_string_lossy())
+                        xirang_kernel::declaration::portable_path(&relative.to_string_lossy())
                     })
                     .unwrap_or_else(|_| member.name.clone());
                 for file in sources {

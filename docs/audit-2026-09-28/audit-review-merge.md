@@ -2,7 +2,7 @@
 
 - 复核人：`bridge-auditor`（本单只读；唯一写入是本文件）
 - 复核对象：`75e4387`（命名批次 B7+B8 + A1 収平）、`2656ddb`（批 1：`core/`→`kernel/`）、
-  `13c0b13`（批 2：七合一为 `nichlink-toolchain`）、`ddaa33e`（批 3 准备：版本线 0.2.0）
+  `13c0b13`（批 2：七合一为 `xirang-toolchain`）、`ddaa33e`（批 3 准备：版本线 0.2.0）
 - 承接：`gates-auditor` 的 t137 **部分完成**（它交回了分提交清单，未做深度探针、未创建本文件）
 - 方法：**全部探针自建**；四个提交各用 `git archive <sha>` 解到 `/tmp/t139/<sha>`（不改工作树、
   不碰 `.git`），每个副本用自己的 `CARGO_TARGET_DIR`；变异实验只在 `/tmp/t139/mut`（HEAD 的
@@ -16,11 +16,11 @@
 | 提交 | verdict | 主要依据（本报告节） |
 | --- | --- | --- |
 | `75e4387` | **pass（含作者自审成分）** | 旧 shim 路径仍解析（自建 crate 探针 exit 0）；改名后的名字不是包（8/8 `-p` 失败）；身份红线 0 命中；§2 |
-| `2656ddb` | **pass** | `core/` 不存在、`kernel/src/lib.rs` 在；`nichlink-core` 不可解析；历史 `pub use` shim 仍编译（`cargo check -p nichlink-run-method` exit 0）；§3 |
-| `13c0b13` | **needs_revision** | 七旧包名 7/7 `-p` 失败 ✓、`--check-table` 3 crates ✓、模块暴露 ✓；**但** ①`tools/nichlink-package-audit` 内容半段**红**（7 个 fixture 文件不在包里，本提交引入并延续到 HEAD）②覆盖净减 **20** 个测试（已声明为遗留、未修）③记录数字错（25/49 vs 20/54）；§4 |
+| `2656ddb` | **pass** | `core/` 不存在、`kernel/src/lib.rs` 在；`xirang-core` 不可解析；历史 `pub use` shim 仍编译（`cargo check -p xirang-run-method` exit 0）；§3 |
+| `13c0b13` | **needs_revision** | 七旧包名 7/7 `-p` 失败 ✓、`--check-table` 3 crates ✓、模块暴露 ✓；**但** ①`tools/xirang-package-audit` 内容半段**红**（7 个 fixture 文件不在包里，本提交引入并延续到 HEAD）②覆盖净减 **20** 个测试（已声明为遗留、未修）③记录数字错（25/49 vs 20/54）；§4 |
 | `ddaa33e` | **needs_revision** | 版本线一致（根 0.2.0、四个成员 `version.workspace = true`、`--workspace-version` = 0.2.0）✓；**未执行任何发布**（0 tag、0 `.crate`、diff 仅 8 文件）✓；**但**继承 ① 的 package-audit 红 ⇒ 批 3 的“发布前门禁全绿”不能算成立；另“0.1.6 残留 0”实测 2 处（皆为测试夹具字符串）；§5 |
 
-**整轮判定：`needs_revision`** —— 阻点只有一条实质项：`nichlink-toolchain` 的**包内容半段红**
+**整轮判定：`needs_revision`** —— 阻点只有一条实质项：`xirang-toolchain` 的**包内容半段红**
 （F-13-1 = F-14-1，同一根因、两处记账），它在批 3 真正 `cargo publish` 之前必须收口；其余为记账
 与覆盖存量（F-13-2/F-13-3/F-14-2）。
 
@@ -81,7 +81,7 @@ cargo test --workspace --offline --all-features -- --list | grep -c ': test$'   
 
 ```
 error[E0753]: expected outer doc comment      # exit 101
-error: could not compile `nichlink-toolchain` (lib) ...
+error: could not compile `xirang-toolchain` (lib) ...
 ```
 
 ⇒ 探针有牙：同一个变异手法打在挂载文件上，构建立刻红 ✓。
@@ -119,7 +119,7 @@ error: could not compile `nichlink-toolchain` (lib) ...
 
 | 探针 | 命令（副本 `/tmp/t139/75e4387`） | 原始结果 |
 | --- | --- | --- |
-| 旧 shim 路径仍可 `use` | 自建 crate `/tmp/t139/probe75`：`use nichlink_run_method::{authoring::validation, registry_core, runtime::trace::artifact, tree};` | **exit 0** ✓（`Checking t139-probe-75` → `Finished`） |
+| 旧 shim 路径仍可 `use` | 自建 crate `/tmp/t139/probe75`：`use xirang_run_method::{authoring::validation, registry_core, runtime::trace::artifact, tree};` | **exit 0** ✓（`Checking t139-probe-75` → `Finished`） |
 | 改名后的名字不是包 | `cargo pkgid -p call_trace / evidence / nodes / index / face_manifest / geometry / support / validation` | **8/8** 报 `package ID specification … did not match any packages` ✓ |
 | 身份红线 | `git diff-tree --no-commit-id --name-status -r 75e4387 -- examples studio/tests/fixtures` | **0 命中**（194 文件：45 A / 46 D / 103 M，全仓改名/搬迁不在红线区）✓ |
 
@@ -131,9 +131,9 @@ error: could not compile `nichlink-toolchain` (lib) ...
 | 探针 | 命令（副本 `/tmp/t139/2656ddb`） | 原始结果 |
 | --- | --- | --- |
 | `core/` 已不存在 | `test -d core` | 不存在 ✓（`kernel/src/lib.rs` 在 ✓） |
-| `nichlink_core` 不可解析 | `cargo pkgid -p nichlink-core` | `error: package ID specification 'nichlink-core' did not match any packages`（提示 `nichlink-cli`）✓ |
-| 历史 `pub use` shim 仍编译 | `cargo check -p nichlink-run-method --offline` | **exit 0** ✓（`registry_core`/`tree`/`plugin`/`face_file`/`validation` 等 17 条 pin 所在的 crate 编译通过） |
-| 成员面 | `cargo metadata --no-deps` | 12 个包：`nichlink-kernel` + 八旧名 + 两个示例 + `nichlink-conventions` ✓（`nichlink-core` 已消失） |
+| `xirang_core` 不可解析 | `cargo pkgid -p xirang-core` | `error: package ID specification 'xirang-core' did not match any packages`（提示 `xirang-cli`）✓ |
+| 历史 `pub use` shim 仍编译 | `cargo check -p xirang-run-method --offline` | **exit 0** ✓（`registry_core`/`tree`/`plugin`/`face_file`/`validation` 等 17 条 pin 所在的 crate 编译通过） |
+| 成员面 | `cargo metadata --no-deps` | 12 个包：`xirang-kernel` + 八旧名 + 两个示例 + `xirang-conventions` ✓（`xirang-core` 已消失） |
 | 身份红线 | 同上口径 | **0 命中**（358 文件）✓ |
 
 **findings**：无阻断项。
@@ -142,41 +142,41 @@ error: could not compile `nichlink-toolchain` (lib) ...
 
 | 探针 | 命令（副本 `/tmp/t139/13c0b13`） | 原始结果 |
 | --- | --- | --- |
-| 七个旧包名不可解析 | `cargo pkgid -p nichlink-build-method`（run/debug/plugin-host/studio/mcp/cli 同） | **7/7** 报 `did not match any packages` ✓ |
-| 发布表 | `sh tools/nichlink-publish --check-table` | `dependency table matches the manifests (3 crates)`，**exit 0** ✓ |
-| 模块暴露 | 自建 crate `/tmp/t139/probe13c`：`use nichlink_toolchain::{build_time, plugin_host, runtime};` + `features = ["run","build","plugins"]` | **exit 0** ✓（三个模块路径都解析得到；更强的 `probe13b` 只报 `E0603 struct 'Node' is private` ⇒ 模块可达、具体条目私有，符合预期） |
+| 七个旧包名不可解析 | `cargo pkgid -p xirang-build-method`（run/debug/plugin-host/studio/mcp/cli 同） | **7/7** 报 `did not match any packages` ✓ |
+| 发布表 | `sh tools/xirang-publish --check-table` | `dependency table matches the manifests (3 crates)`，**exit 0** ✓ |
+| 模块暴露 | 自建 crate `/tmp/t139/probe13c`：`use xirang_toolchain::{build_time, plugin_host, runtime};` + `features = ["run","build","plugins"]` | **exit 0** ✓（三个模块路径都解析得到；更强的 `probe13b` 只报 `E0603 struct 'Node' is private` ⇒ 模块可达、具体条目私有，符合预期） |
 | 身份红线 | `git diff-tree … -r 13c0b13 -- examples studio/tests/fixtures toolchain/src/studio/tests/fixtures` | `examples/` **16 M（0 R/D）** ✓；`studio/tests/fixtures/` **9 D** + `toolchain/src/studio/tests/fixtures/` **9 A** = fixture 包整体搬迁 ⇒ **与落地记录 §身份结论的“知情接受的偏差”一致**（该 fixture 无落盘身份物）✓ |
-| **包内容半段** | `sh tools/nichlink-package-audit`（副本内） | **exit 1**：`contents failed: nichlink-toolchain` ✗ |
+| **包内容半段** | `sh tools/xirang-package-audit`（副本内） | **exit 1**：`contents failed: xirang-toolchain` ✗ |
 
-**F-13-1（MAJOR）`nichlink-toolchain` 的包内容漏掉 7 个文件（本提交引入，HEAD 仍在）**
+**F-13-1（MAJOR）`xirang-toolchain` 的包内容漏掉 7 个文件（本提交引入，HEAD 仍在）**
 
 我的探针原始输出（`13c0b13` 副本，与 HEAD 逐条相同）：
 
 ```
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/build.rs
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/control.rs
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/object/node_editor/node_editor.rs
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/object/node_editor/object/object.rs
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/object/node_editor/registry_rule/registry_rule.rs
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/registry_rule/registry_rule.rs
-error: nichlink-toolchain does not package src/studio/tests/fixtures/node-editor/src/lib.rs
-  contents failed: nichlink-toolchain
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/build.rs
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/control.rs
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/object/node_editor/node_editor.rs
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/object/node_editor/object/object.rs
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/object/node_editor/registry_rule/registry_rule.rs
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/src/control/registry_rule/registry_rule.rs
+error: xirang-toolchain does not package src/studio/tests/fixtures/node-editor/src/lib.rs
+  contents failed: xirang-toolchain
 exit=1
 ```
 
 - `file`：`toolchain/src/studio/tests/fixtures/node-editor/**`（7 个）+ 判据脚本
-  `tools/nichlink-package-audit`。
+  `tools/xirang-package-audit`。
 - 成因：合并把 fixture 包从 `studio/tests/fixtures/` 搬进了
   `toolchain/**src**/studio/tests/fixtures/`；内容半段的规则是“每个 `src/**/*.rs` 模块都要在包里”，
   而 `cargo package --list` 不会收进一个**嵌套包**（它有自己的 `Cargo.toml`）⇒ 判据与包的规则
   直接冲突。
-- 影响：`nichlink-toolchain` 交付的 tarball 缺这 7 个文件；`prototype-fixtures` 门控的测试目标在
+- 影响：`xirang-toolchain` 交付的 tarball 缺这 7 个文件；`prototype-fixtures` 门控的测试目标在
   打包副本里没有输入。**这是批 3 `cargo publish` 之前必须收口的项**。
 - `requiredFix`：按 `AGENTS.md` 已经写下的目标路径把 fixture 迁出 `src/`
   （`toolchain/studio/tests/fixtures/node-editor/`），并同步 `prototype-fixtures` 测试目标的路径与
   `conventions/src/features.rs` 的 `OFF_BY_DEFAULT` 文句；若选择保留在 `src/` 下，则必须同时改
-  `tools/nichlink-package-audit` 的判据（写明“嵌套包不是本 crate 的模块”）并给出该判据的钉子。
-  两条路都要有**判别性**证据（`sh tools/nichlink-package-audit` ⇒ exit 0）。
+  `tools/xirang-package-audit` 的判据（写明“嵌套包不是本 crate 的模块”）并给出该判据的钉子。
+  两条路都要有**判别性**证据（`sh tools/xirang-package-audit` ⇒ exit 0）。
 
 **F-13-2（MEDIUM）本提交净减 20 个测试的覆盖**
 
@@ -199,16 +199,16 @@ exit=1
 | 探针 | 命令（副本 `/tmp/t139/ddaa33e`） | 原始结果 |
 | --- | --- | --- |
 | 版本线一致 | `grep -rn '^version = "0\.' --include=Cargo.toml .`；四成员 `version.workspace = true` 实查 0 个例外 | 根 `Cargo.toml:7` = **0.2.0** ✓；`kernel`/`macro`/`toolchain`/`conventions` 全部跟随 workspace ✓；两个示例与 fixture 是自己的 0.1.0（非发布面）✓ |
-| 工作区版本 | `sh tools/nichlink-publish --workspace-version` | **0.2.0**，exit 0 ✓ |
-| 发布表 | `sh tools/nichlink-publish --check-table` | `matches the manifests (3 crates)`，exit 0 ✓ |
+| 工作区版本 | `sh tools/xirang-publish --workspace-version` | **0.2.0**，exit 0 ✓ |
+| 发布表 | `sh tools/xirang-publish --check-table` | `matches the manifests (3 crates)`，exit 0 ✓ |
 | **未执行任何发布** | `git diff-tree --no-commit-id --name-status -r ddaa33e`；`git tag`；`find . -name '*.crate'` | diff = **8 文件 / +127 −19**（`CHANGELOG.md`、`Cargo.lock`、根与五个清单、新文档 `docs/merge-batch3-publish.md`）；**0 个 tag** 含该提交；仓库内 **0 个 `.crate`** ✓ |
-| **包内容半段** | `sh tools/nichlink-package-audit`（副本内） | **exit 1**，`contents failed: nichlink-toolchain` ✗（与 F-13-1 同一根因，此提交未修） |
+| **包内容半段** | `sh tools/xirang-package-audit`（副本内） | **exit 1**，`contents failed: xirang-toolchain` ✗（与 F-13-1 同一根因，此提交未修） |
 
-**F-14-1（MAJOR）批 3 的“发布前门禁”不能算全绿**：`tools/nichlink-package-audit` 的内容半段在
+**F-14-1（MAJOR）批 3 的“发布前门禁”不能算全绿**：`tools/xirang-package-audit` 的内容半段在
 **HEAD 也仍是 exit 1**（我在工作树复跑，逐条输出与 §4 相同）。`docs/merge-batch3-publish.md` 与落地
 记录把该工具当作发布前检查之一 ⇒ 真正 `cargo publish` 之前必须先关掉 F-13-1，否则会发出一个
-`src/**` 内容不完整的包（这对 `nichlink-toolchain` 是不可回滚动作）。
-`requiredFix`：先收口 F-13-1，再把 `sh tools/nichlink-package-audit`（exit 0）写进批 3 的前置清单并
+`src/**` 内容不完整的包（这对 `xirang-toolchain` 是不可回滚动作）。
+`requiredFix`：先收口 F-13-1，再把 `sh tools/xirang-package-audit`（exit 0）写进批 3 的前置清单并
 留原始输出。
 
 **F-14-2（LOW）“0.1.6 残留 0”的口径**：落地记录 §判别性证据写“全仓 `version = "0.1.6"` 残留 0”；
@@ -245,11 +245,11 @@ exit=1
 ## 8. 未覆盖 / 边界（如实）
 
 1. 只复核了四个提交的**上述探针面**；未做 Windows/大小写不敏感文件系统面的复核，未跑
-   `cargo test --all-features --doc`（CI 才跑），未跑 `tools/nichlink-external-rehearsal`
+   `cargo test --all-features --doc`（CI 才跑），未跑 `tools/xirang-external-rehearsal`
    （需要把示例复制到检出外，成本高且与本次四个提交的判据无直接关系）。
 2. 批 3 的**实际发布/yank 不可复核**（本机无凭据、且本单只读）⇒ §5 只判“准备面”，不判发布动作。
 3. `13c0b13` 的 `--check-table` 我在**副本**里跑通；本单未在共享工作树上跑它（避免与在编改动互相
-   干扰），HEAD 面的 `tools/nichlink-package-audit` 红我在工作树上复跑过（exit 1）。
-4. 结论里的“跳过的包”是预期行为：`nichlink-macro` / `nichlink-toolchain` 的**打包**半段会因
+   干扰），HEAD 面的 `tools/xirang-package-audit` 红我在工作树上复跑过（exit 1）。
+4. 结论里的“跳过的包”是预期行为：`xirang-macro` / `xirang-toolchain` 的**打包**半段会因
    版本依赖不在 index 上而跳过（离线环境同样如此），**内容**半段对全部 3 个包都生效——
    F-13-1 正是被内容半段抓到的。

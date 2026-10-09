@@ -13,7 +13,7 @@ fn package(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-faces-{label}-{}-{sequence}",
+        "xirang-mcp-faces-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -65,7 +65,7 @@ fn the_faces_name_the_non_default_feature_and_its_required_target() {
 /// Cargo 描述不了的根会说出来，而不是被读成一棵没有面的树。
 #[test]
 fn an_undescribable_root_says_why_instead_of_saying_nothing() {
-    let root = std::env::temp_dir().join(format!("nichlink-mcp-faces-none-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-mcp-faces-none-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).expect("empty root");
     let lines = faces_lines(&root);

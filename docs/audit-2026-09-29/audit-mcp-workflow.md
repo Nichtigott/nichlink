@@ -10,7 +10,7 @@
   因此台账的"是否改变结论"栏只能判**"报告写下的结论是否依赖它"**，不能判"它有没有顺带给出别的东西"。
   标"未被引用"≠"无产出"，只等于"报告没有用它"。
 - **我的重跑装置**：`/tmp/probe/control-button`（t1 的沙箱副本，**已被 t1 改过**：4 个面，`widget` 有一条无人满足的 `requires`），
-  桥二进制 `target/debug/nichlink-mcp`（9-29 17:11，源码未改），驱动 `/tmp/t2_drive.py`（脚本在 /tmp，未入库）。
+  桥二进制 `target/debug/xirang-mcp`（9-29 17:11，源码未改），驱动 `/tmp/t2_drive.py`（脚本在 /tmp，未入库）。
   复算命令与结果都用 `tail`/`head` 截断。
 - **收尾**：`git status --porcelain` = `?? docs/audit-2026-09-29/`（t1 报告 + 本文件），无其它改动。
 
@@ -43,7 +43,7 @@
 | 22 | spec22 | 2 | read | 越界 | 静默夹紧（无提示） | 是 |
 | 23 | spec23 | 3 | registry/search/usages | 收尾 | 辅助 | 部分是 |
 | 24 | spec24 | 4 | mir | JSONL 回环 | X2 复核 | 部分是（2 条未被引用） |
-| 25 | specQ | 7 | callgraph/search/status | ③ 符号题 | C1/C2/W1/W2/I1/I2 的 nichlink 侧 | 是 |
+| 25 | specQ | 7 | callgraph/search/status | ③ 符号题 | C1/C2/W1/W2/I1/I2 的 xirang 侧 | 是 |
 | 26 | specQ2 | 6 | callgraph/inspect/search | ③ 追问 | 同上 | 是 |
 | 27 | specQ3 | 1 | callgraph | C2 闭链第二步 | `entry_rows` → `parse_graft_plan_document` | 是 |
 
@@ -63,7 +63,7 @@ spec24 的 `mir button2.mir against`、`mir foreign.jsonl against`、`mir button
    （17/17 有实现、写入环真跑内核准入、graft/记录/MIR/trace 都读的真实产物）。这一层没有"表演"。
 2. **符号面上 MCP ≈ grep**：`search`/`callgraph` 的名字匹配 + 1 跳，与 `grep -rn` 同类；
    我复算的三大条（R1/R2/R3 见下）**每一条都能用 grep 独立得到同样的数字**。
-   所以第③节里 t1 判"nichlink 更稳"的 W1/W2/I1 三行，本质上是在夸"grep 排好版的输出"——
+   所以第③节里 t1 判"xirang 更稳"的 W1/W2/I1 三行，本质上是在夸"grep 排好版的输出"——
    这是台账里最该写明的一句：**那三行不能当作"比 grep 更好"的证据**。
 
 ## ② 三条手工复算（另加 3 条稳定性复现）
@@ -72,25 +72,25 @@ spec24 的 `mir button2.mir against`、`mir foreign.jsonl against`、`mir button
 |---|---|---|---|
 | R1 | W1：`names_face` 定义在 `declared.rs:138`，callers 7（含测试） | `grep -rn names_face --include=*.rs`（排除 `target/`） | **一致** |
 | R2 | W2：`MirGraph::from_mir_text` 在 `text.rs:23`，callers 4 | 同上 grep + `cargo test --lib -- text::tests` | **一致** |
-| R3 | I2/M6：`DISPATCH` 是常数，nichlink 搜不到；测试存在且通过 | grep + `cargo test --features mcp --lib -- the_dispatch_table_follows_the_catalog` | **一致** |
+| R3 | I2/M6：`DISPATCH` 是常数，xirang 搜不到；测试存在且通过 | grep + `cargo test --features mcp --lib -- the_dispatch_table_follows_the_catalog` | **一致** |
 | R4 | ①对账：注册了没实现 = 0 | grep 全部 `^pub(crate) fn` 逐个归类 | **一致** |
 | R5 | M4：`UNANSWERED` 字面"不可达" | 读 `converge.rs:143-160` 的守卫 | **部分一致** |
 
 **R1 原文证据**：定义 `toolchain/src/build_time/src/graft_view/declared.rs:138`；生产调用点恰 6 处
 （`impact.rs:95`、`studio/app/graft.rs:324`、`graft_plan_check.rs:143`、`plan_rows.rs:160`、`overlay_rows.rs:137`、
 `cli/src/explain_report.rs:183`），测试 1 个函数（`graft_plan_check.rs:307-316`，同一条 `#[test]` 的两组断言）。
-`cargo test -p nichlink-toolchain --offline --lib -- a_string_range_names_both_endpoints_as_data` → `1 passed`。
+`cargo test -p xirang-toolchain --offline --lib -- a_string_range_names_both_endpoints_as_data` → `1 passed`。
 t1 说的"6 生产 + 1 测试 = 7"，与 grep 逐条一致；报告里"6/7 是口径差"的提醒**成立**。
 
 **R2 原文证据**：定义 `kernel/src/registry_core/mir/text.rs:23`；调用点 `text.rs:100`、`text.rs:107`（两条测试）、
 `toolchain/src/mcp/src/mir.rs:291`、`toolchain/src/studio/src/studio/app/lifecycle.rs:403`。
-`cargo test -p nichlink-kernel --offline --all-features --lib -- text::tests` → `2 passed`（`parses_native_textual_mir`、
+`cargo test -p xirang-kernel --offline --all-features --lib -- text::tests` → `2 passed`（`parses_native_textual_mir`、
 `text_that_is_not_mir_yields_an_empty_graph`）⇒ codegraph 的 `⚠️ no covering tests found` 是**假阴性**，且 W2 那一次
 它返回的源码里就有这两条测试，属**同一份返回自相矛盾**。t1 的断言一致。
 
 **R3 原文证据**：`toolchain/src/mcp/src/tools.rs:316` 定义，唯一使用点同文件 `:374`（`tool_call`），测试
-`tools_tests.rs:100`；`cargo test -p nichlink-toolchain --offline --features mcp --lib -- the_dispatch_table_follows_the_catalog`
-→ `1 passed` ⇒ 第三条假阴性也被我亲手证伪。nichlink 侧"搜不到常数"由 `callgraph.rs:23-60`（纯 `load_sources` 名字匹配，
+`tools_tests.rs:100`；`cargo test -p xirang-toolchain --offline --features mcp --lib -- the_dispatch_table_follows_the_catalog`
+→ `1 passed` ⇒ 第三条假阴性也被我亲手证伪。xirang 侧"搜不到常数"由 `callgraph.rs:23-60`（纯 `load_sources` 名字匹配，
 无 MIR、无跳数）与 `search` 只索引 fn/文件/面共同支持，**一致**。
 
 **R4**：`toolchain/src/mcp/src/*.rs` 里的 `^pub(crate) fn` 逐条归类，只有 12 个是工具入口
@@ -114,24 +114,24 @@ t1 用"实测里需求没人满足时 `load_registry` 先失败"推出"字面不
 - **F1 ★ 同一棵树两个"内核结论"**（t1 的 X1）。同一会话、同一棵树，我实测：
   `verify` → `verdict ok (the kernel accepted the tree)`；同刻 `apply`（预览）与 `usages` → `the package's own faces were rejected` +
   `data-flow attachment failed: input 'control.theme' has no provider`；`converge` → `kernel verdict: this package's own faces are rejected`；
-  CLI `./target/debug/nichlink check /tmp/probe/control-button` → `ok`（exit 0）。
+  CLI `./target/debug/xirang check /tmp/probe/control-button` → `ok`（exit 0）。
   机制在源码里：`verify.rs:57` 走的是 `check_for`（静态构建面），`usages/converge/apply` 走 `load_registry` → `register_snapshot_batch`（连接器面）。
   **两边都不是 bug，但"内核接受了这棵树"这句话在错误的那一面上说出了口。** 这是本次最重的一条。
 - **F2 ★ `mir jsonl` 自坏回环**（t1 的 X2）。我用同一份 `button.mir` 重跑：`jsonl: true` 返回 `chars=45496 lines=401`，
-  最后一行是 `… truncated: 501 lines total, 400 shown. pass what this prints to a JSONL-suffixed file and nichlink.mir reads it back.`
+  最后一行是 `… truncated: 501 lines total, 400 shown. pass what this prints to a JSONL-suffixed file and xirang.mir reads it back.`
   （模板在 `mir.rs:467`，`MAX_ROWS = 400` 在 `mir.rs:42`）；把它当文件读回 → `MirParseError { line: 401, message: "record must start with '{'" }`。
   小图（`small.jsonl`）回环正常 ⇒ **只有 >400 行坏**。工具用一句错误的承诺把读者送进自己的解析错误里。
 - **F3 `grafts` 把写坏的计划报成 `declared`**（t1 的 X3）。源码支持：匹配是
   `cut.names_face(&slot.target_path, module_of(slot.target))`（`graft_plan_check.rs:140-144`），`module` 由**能解析的 NodeId** 反推，
   于是 `target` 能解析、`target_path` 自相矛盾的手工计划照样过判；`target_path` 只被打印（`grafts.rs:104`）。
   （t1 的 orphan 计划在其沙箱里已被清理，我只能做**源码级**复核，未能现场重放——这点如实记下。）
-- **F4 假阴性覆盖告警（codegraph 侧，不是 nichlink）**：`⚠️ no covering tests found` 至少 3 处，其中 W2/I2 **同一份返回自相矛盾**。
+- **F4 假阴性覆盖告警（codegraph 侧，不是 xirang）**：`⚠️ no covering tests found` 至少 3 处，其中 W2/I2 **同一份返回自相矛盾**。
   三条测试我全部亲手跑绿（见 R1/R2/R3）⇒ 这是"可信度标记"要处理的标准样本：**在能看见测试的情况下说没有**。
 
 **漏报（该说而没说）**
 - **L1 ★ `search` 的"查不到"没有一句明确的否定**：我在仓库根重跑（`/tmp/t2_drive.py /home/nich/Moirai_N3/nichlink /tmp/t2x3.json`）：
   `query=DISPATCH` 回的是 `fn dispatch -> protocol.rs:246` 加 4 条名字里含 dispatch 的测试 fn——**常数 `DISPATCH`（`tools.rs:316`）找不到，回了一个同名函数**；
-  `query=control.render` 那一整条回复只输出一行 `tree unavailable (… cargo metadata listed 6 workspace member(s); set NICH_LINK_NAMESPACE …)`，
+  `query=control.render` 那一整条回复只输出一行 `tree unavailable (… cargo metadata listed 6 workspace member(s); set XIRANG_NAMESPACE …)`，
   **连 `no matches` 都没有**（而 `grep -rn control\.render --include=*.rs` 有 **69** 处）。
   描述确实写明了它找三类东西（`tools.rs:62`），所以这不是谎报；但读者拿到的是一个同名人或一行无关警告，
   而它该得到的结论是"这三类维度里没有"。**静默缺席比报错危险。**
@@ -161,15 +161,15 @@ t1 已自曝的装置差异（两个客户端、一次调用、`maxFiles=3`、�
    且仍无 hop 序列。我用自己的 codegraph 客户端跑了**逐字同一句**，得到 **20 symbols / 2 files**，源码含 `diagnostic/error.rs` 与 `connector.rs`（终点文件），仍**没有任何 hop 序列**。
    读数：**"C1 答不出链"是工具侧能力边界——这一点成立**；但同一问题同一索引两次返回 9 与 20 个符号、文件集合也不同，
    ⇒ 单次转录**不是可复现的测量**，t1 表里 codegraph 那半列只能当"那一次的样子"。
-2. **提问面与执行面不同构**：nichlink 侧是"工具名 + JSON 参数"，codegraph 侧是自然语言；一边允许换参数重问（C2 用了两次调用闭链），
+2. **提问面与执行面不同构**：xirang 侧是"工具名 + JSON 参数"，codegraph 侧是自然语言；一边允许换参数重问（C2 用了两次调用闭链），
    另一边被钉死在一次、不追问。这不是错，但**不能让"codegraph 少给"直接等于"codegraph 更差"**。
-3. **混了证据源**：W1/W2/I2 三行里，"nichlink 更稳"的部分依据是 codegraph 的假阴性告警被 **cargo 测试**证伪（R1/R2/R3）——
-   方法是对的，但结论是"codegraph 的**报告**不可信"，不是"nichlink 的**查找**更强"（见 ① 结论 2：那三题 grep 就够）。
+3. **混了证据源**：W1/W2/I2 三行里，"xirang 更稳"的部分依据是 codegraph 的假阴性告警被 **cargo 测试**证伪（R1/R2/R3）——
+   方法是对的，但结论是"codegraph 的**报告**不可信"，不是"xirang 的**查找**更强"（见 ① 结论 2：那三题 grep 就够）。
 4. **单裁判、无预注册量表**：题目由 prober 选，"谁更稳"由 prober 判，没有盲评。t1 的自我限定（"不下排名"）是诚实的；
-   本审计也**不重排胜负**，只指出：**C2 与 I2 两行结论最硬**（codegraph 一次给整文件源码 / nichlink 根本没有常数地址），
+   本审计也**不重排胜负**，只指出：**C2 与 I2 两行结论最硬**（codegraph 一次给整文件源码 / xirang 根本没有常数地址），
    **C1/W1/W2/I1 四行是装置相关的方向性信号**。
 
-口径提醒（免得被算错）：`… +21 more` 是 nichlink 被扣掉的**调用点数**（限 40 时列 20 条）；codegraph 的 `+4 more` 从返回里**读不出单位**。
+口径提醒（免得被算错）：`… +21 more` 是 xirang 被扣掉的**调用点数**（限 40 时列 20 条）；codegraph 的 `+4 more` 从返回里**读不出单位**。
 两边的 `names_face` "6/7"是口径差（6 生产 + 1 测试），不是谁漏报。
 
 ## ⑤ 四个设想逐条判（保持原话精神，不美化）
@@ -183,10 +183,10 @@ t1 已自曝的装置差异（两个客户端、一次调用、`maxFiles=3`、�
 - **值不值得做**：**精神值得，字面不值得现在就做。**"标本"要先有"稳"的可计算判据（调用链闭合 + 连接器过 + 有测试钉住），
   而这三样里前两样今天互相矛盾（F1）、第三样 MCP 根本不报。先做它的前置条件，再做汇编。
 - **最小可验证切片**：见 ⑥ 的 S1——把"同一棵树只有一个可读的信任判断"做成一行，而不是先做标本库。
-- **风险**：把"我没测到"标成"稳"（codegraph 的三处假阴性就是现成失败样本，F4）；逐面信任字段一旦落盘进 `.nichlink/` 就是需要版本迁移的格式。
+- **风险**：把"我没测到"标成"稳"（codegraph 的三处假阴性就是现成失败样本，F4）；逐面信任字段一旦落盘进 `.xirang/` 就是需要版本迁移的格式。
 
 ### ② diff 链 / diff 文件
-- **现状**：`nichlink.diff` 已有两种**面级**对照：默认是"源码树 vs 构建清单"（`diff.rs:1-30`、`tree_delta.rs`），
+- **现状**：`xirang.diff` 已有两种**面级**对照：默认是"源码树 vs 构建清单"（`diff.rs:1-30`、`tree_delta.rs`），
   `records: true` 是"外部 graft 记录 vs 源码"。单位是 **face**，没有 hop 的概念。
 - **缺口**：**它的前置不存在**——"diff 链"要先有链，而 `callgraph` 是名字匹配 + 1 跳（`callgraph.rs:23-60`）。
 - **值不值得做**：**现在不值得。**没有稳定面集合，"diff 链"只能退化成文本 diff，那是 git 的活，还会更贵。

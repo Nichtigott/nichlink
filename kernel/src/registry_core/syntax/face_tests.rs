@@ -180,7 +180,7 @@ fn a_macro_invocation_is_read_for_the_paths_it_spells() {
     // 本构建自己的接线由各自的扫描器读取，而 token 全是字面量的调用不可能命名节点：两者都不得
     // 放宽作用域，否则每个真实工程都会失去自动作用域（入口总有 `host!()`，声明宏的内容是元数据）。
     for transparent in [
-        "nichlink_toolchain::run_method::host!();",
+        "xirang_toolchain::run_method::host!();",
         "static_graft_plan!(crate::FRAMEWORK, cut \"root/a\");",
         "fn f() { crate::control_object! { kind: Fake } }",
         "const NAME: &str = env!(\"CARGO_PKG_NAME\");",
@@ -199,7 +199,7 @@ fn a_macro_invocation_is_read_for_the_paths_it_spells() {
 #[test]
 fn a_declaration_keeps_its_cfg_gate() {
     let face = parse_face(
-        "// generated-by=NichLink\n#[cfg(feature = \"optional-face\")]\n\
+        "// generated-by=XiRang\n#[cfg(feature = \"optional-face\")]\n\
              crate::root_object! {\n    kind: Widget,\n}\n",
     )
     .expect("parse")

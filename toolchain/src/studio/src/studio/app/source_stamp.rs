@@ -4,11 +4,11 @@
 //!
 //! One recursive walk per poll, hashed in path/mtime/size order; the hot-reload path
 //! and the call-tree cache both key on it. This module also owns the answer to "which
-//! files count": `nichlink-dev`'s watcher keeps the same name list, by mirror rather
+//! files count": `xirang-dev`'s watcher keeps the same name list, by mirror rather
 //! than by import — the supervisor is a binary, so a `pub(crate)` predicate is not
 //! visible to it (audit `STU-S-09`, `STU-S-26`).
 //! 每次轮询走一趟递归，按路径/修改时间/大小哈希；热重载路径与调用树缓存都以它为键。本模块也
-//! 拥有“哪些文件算数”的答案：`nichlink-dev` 的 watcher 保有同一份名单，靠镜像而不是 import
+//! 拥有“哪些文件算数”的答案：`xirang-dev` 的 watcher 保有同一份名单，靠镜像而不是 import
 //! ——监督器是二进制，看不到 `pub(crate)` 谓词（审计 `STU-S-09`、`STU-S-26`）。
 
 use std::path::Path;
@@ -36,9 +36,9 @@ pub(super) fn is_relevant_source_path(path: &Path) -> bool {
         || path.file_name().is_some_and(|name| {
             // Both plugin locks count, not just the official one: writing `user.lock`
             // changes what the host admits exactly as much as writing `official.lock`.
-            // The same five names are mirrored in `studio/src/bin/nichlink-dev.rs`.
+            // The same five names are mirrored in `studio/src/bin/xirang-dev.rs`.
             // 两个插件锁都算数，不只是官方那个：写 `user.lock` 与写 `official.lock` 一样改变
-            // 宿主准入什么。同一份五个名字镜像在 `studio/src/bin/nichlink-dev.rs`。
+            // 宿主准入什么。同一份五个名字镜像在 `studio/src/bin/xirang-dev.rs`。
             RELEVANT_FILE_NAMES
                 .iter()
                 .any(|known| name.to_str() == Some(known))
@@ -51,12 +51,12 @@ pub(super) fn source_stamp() -> u128 {
     for root in [
         package_root.join("src"),
         package_root.join("toolchain/src/studio/src"),
-        package_root.join(".nichlink/plugins"),
+        package_root.join(".xirang/plugins"),
         // A plan is an authoring record: editing or deleting one must refresh
         // the graft screen, even though the registration tree does not change.
         // 计划是创作记录：编辑或删除它必须刷新 graft 界面，尽管注册树本身没变。
         package_root
-            .join(crate::run_method::lexicon::NICHLINK_DIR)
+            .join(crate::run_method::lexicon::XIRANG_DIR)
             .join(crate::run_method::lexicon::EXTERNAL_GRAFT_DIR),
     ] {
         stamp_directory(&root, &mut files);

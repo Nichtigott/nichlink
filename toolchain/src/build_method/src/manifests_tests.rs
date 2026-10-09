@@ -14,10 +14,10 @@ fn package(label: &str, body: &str) -> (PathBuf, PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-manifests-{label}-{}-{sequence}",
+            "xirang-manifests-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
@@ -139,10 +139,10 @@ fn the_record_carries_the_source_hash_fields_and_calls_a_derivation_agrees_with(
     );
 
     let text = fs::read_to_string(src.join("dial/dial.rs")).expect("the face source");
-    let expected_hash = nichlink_kernel::sha256_hex(text.as_bytes());
-    let mut expected_calls: Vec<String> = nichlink_kernel::source::function_symbols(&text)
+    let expected_hash = xirang_kernel::sha256_hex(text.as_bytes());
+    let mut expected_calls: Vec<String> = xirang_kernel::source::function_symbols(&text)
         .into_iter()
-        .flat_map(|function| nichlink_kernel::source::direct_calls(&function.body, &function.name))
+        .flat_map(|function| xirang_kernel::source::direct_calls(&function.body, &function.name))
         .collect();
     expected_calls.sort();
     expected_calls.dedup();
@@ -254,7 +254,7 @@ fn every_published_column_reads_back() {
     let text = fs::read_to_string(src.join("dial/dial.rs")).expect("the source");
     assert_eq!(
         hash,
-        nichlink_kernel::sha256_hex(text.as_bytes()),
+        xirang_kernel::sha256_hex(text.as_bytes()),
         "and it is the hash of the bytes the build was looking at"
     );
     assert_eq!(

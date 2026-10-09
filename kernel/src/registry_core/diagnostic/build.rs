@@ -213,7 +213,7 @@ impl BuildDiagnostics {
         if self.items.is_empty() {
             return String::new();
         }
-        let mut output = String::from("NICHLink BUILD CHECK FAILED / NichLink 构建检查失败\n");
+        let mut output = String::from("NICHLink BUILD CHECK FAILED / XiRang 构建检查失败\n");
         for (index, diagnostic) in self.iter().enumerate() {
             if index > 0 {
                 output.push('\n');
@@ -244,7 +244,7 @@ impl BuildDiagnostics {
     /// 顺序与 [`BuildDiagnostics::iter`] 相同，因此 JSON 与渲染文本列出的是同一批
     /// 诊断、同一顺序。
     pub fn to_json(&self) -> String {
-        let mut output = String::from("{\"schema\":\"nichlink.build-diagnostics/1\",\"count\":");
+        let mut output = String::from("{\"schema\":\"xirang.build-diagnostics/1\",\"count\":");
         output.push_str(&self.len().to_string());
         output.push_str(",\"diagnostics\":[");
         for (index, diagnostic) in self.iter().enumerate() {
@@ -372,7 +372,7 @@ mod build_diagnostic_tests {
         assert_eq!(diagnostics.iter().count(), 0);
         assert_eq!(
             diagnostics.to_json(),
-            "{\"schema\":\"nichlink.build-diagnostics/1\",\"count\":0,\"diagnostics\":[]}"
+            "{\"schema\":\"xirang.build-diagnostics/1\",\"count\":0,\"diagnostics\":[]}"
         );
 
         diagnostics.push(BuildDiagnostic::new("contract", "second message"));
@@ -387,7 +387,7 @@ mod build_diagnostic_tests {
         assert_eq!(rendered.matches("second message").count(), 1);
 
         let json = diagnostics.to_json();
-        assert!(json.starts_with("{\"schema\":\"nichlink.build-diagnostics/1\",\"count\":2,"));
+        assert!(json.starts_with("{\"schema\":\"xirang.build-diagnostics/1\",\"count\":2,"));
         assert!(json.ends_with("]}"));
         assert_eq!(json.matches("first message").count(), 1);
         assert_eq!(json.matches("second message").count(), 1);

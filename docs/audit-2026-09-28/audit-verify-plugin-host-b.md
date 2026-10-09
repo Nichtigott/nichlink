@@ -79,11 +79,11 @@ Both mutations were reverted; `cmp` against the live tree is byte-identical and
 | non-zero exit prefers stderr | `echo 'plugin-specific detail' >&2; exit 7` | `Err(Process("plugin-specific detail"))` — unchanged |
 
 Author's fault matrix re-run by the verifier / 复核者重跑作者的故障矩阵:
-`cargo test -p nichlink-plugin-host --offline --features process-tools` → **27 passed;
+`cargo test -p xirang-plugin-host --offline --features process-tools` → **27 passed;
 0 failed** (matches the author's claim); the default configuration passes as well (the process
 module is behind `process-tools`, so those tests do not compile there — read `0 passed` as
 "nothing ran").
-`cargo test -p nichlink-plugin-host --offline --features process-tools` → **27 passed /
+`cargo test -p xirang-plugin-host --offline --features process-tools` → **27 passed /
 0 failed**（与作者报数一致）；默认配置同样通过（进程模块门控在 `process-tools` 之后，因此那里
 这些测试不会被编译——把 `0 passed` 读作"什么都没跑"）。
 
@@ -123,10 +123,10 @@ reader wrapper keeps it small) and no public API change.
 
 | gate / 门禁 | result / 结果 |
 | --- | --- |
-| `cargo test -p nichlink-plugin-host --offline` | `0 passed` (process module feature-gated), suites green |
-| `cargo test -p nichlink-plugin-host --offline --features process-tools` | **27 passed, 0 failed** |
-| `cargo test --workspace --offline` | `EXIT=101`, 41 suites ok; the only failure is the known offline-environment case `studio::app::tests::new_project::new_project_and_explicit_root_face_compile` (`failed to select a version for the required nichlink-run-method = "^0.1.6"`); with `-- --skip new_project_and_explicit_root_face_compile` → **`EXIT=0`, 58 suites ok**（唯一失败是已知离线的环境用例；加 `--skip` 后 EXIT=0 / 58 套件全绿） |
-| `cargo test -p nichlink-conventions --offline` | **131 passed, 0 failed** |
+| `cargo test -p xirang-plugin-host --offline` | `0 passed` (process module feature-gated), suites green |
+| `cargo test -p xirang-plugin-host --offline --features process-tools` | **27 passed, 0 failed** |
+| `cargo test --workspace --offline` | `EXIT=101`, 41 suites ok; the only failure is the known offline-environment case `studio::app::tests::new_project::new_project_and_explicit_root_face_compile` (`failed to select a version for the required xirang-run-method = "^0.1.6"`); with `-- --skip new_project_and_explicit_root_face_compile` → **`EXIT=0`, 58 suites ok**（唯一失败是已知离线的环境用例；加 `--skip` 后 EXIT=0 / 58 套件全绿） |
+| `cargo test -p xirang-conventions --offline` | **131 passed, 0 failed** |
 | `cargo clippy --workspace --all-targets --offline -- -D warnings` | `EXIT=0` |
 | `cargo fmt --all -- --check` | `EXIT=0` |
 

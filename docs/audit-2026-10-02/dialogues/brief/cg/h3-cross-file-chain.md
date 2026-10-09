@@ -34,7 +34,7 @@ Now let me try running the test to get the actual failure output — good eviden
 
 Risk: build time. Let me run with a generous timeout and in background if needed. Let me first check if the toolchain builds quickly... Let me just run it with timeoutMs 600000 (10 min) — the harness may move it to background if it exceeds.
 
-Actually, `cargo test --offline` for this host requires building nichlink-toolchain (a big crate with proc-macro deps like syn? maybe). The workspace's own build cache is at /home/nich/Moirai_N3/nichlink/target (the workspace target dir) — a DIFFERENT target dir than my probe cargo-target, so it will rebuild from scratch. Could take several minutes. The deps come from the local registry cache (offline OK).
+Actually, `cargo test --offline` for this host requires building xirang-toolchain (a big crate with proc-macro deps like syn? maybe). The workspace's own build cache is at /home/nich/Moirai_N3/nichlink/target (the workspace target dir) — a DIFFERENT target dir than my probe cargo-target, so it will rebuild from scratch. Could take several minutes. The deps come from the local registry cache (offline OK).
 
 Given the value (only for h1-supply-chain, h3, h2 evidence) — that's 3 questions × maybe 2-5 min = manageable. But if the toolchain build is heavy (it has a proc-macro crate, wasmtime? — plugin_host might pull heavy deps when features are off... default features = build+run, so maybe moderate).
 
@@ -113,8 +113,8 @@ Note that `scope` in build_time collects only faces named by the entry (
 ```
 **host/src/lib.rs** — 98 lines, 3 symbols · no other indexed file depends on it
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -123,7 +123,7 @@ Note that `scope` in build_time collects only faces named by the entry (
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -139,7 +139,7 @@ Note that `scope` in build_time collects only faces named by the entry (
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -160,7 +160,7 @@ Note that `scope` in build_time collects only faces named by the entry (
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -298,8 +298,8 @@ Hmm — but hold on: does the graft plan's `cut(...)` list actually determine th
 ```
 **host/src/lib.rs** — 98 lines, 3 symbols · no other indexed file depends on it
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -308,7 +308,7 @@ Hmm — but hold on: does the graft plan's `cut(...)` list actually determine th
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -324,7 +324,7 @@ Hmm — but hold on: does the graft plan's `cut(...)` list actually determine th
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -345,7 +345,7 @@ Hmm — but hold on: does the graft plan's `cut(...)` list actually determine th
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -474,7 +474,7 @@ Content plan:
 **host/build.rs** — 4 lines, 1 symbol · no other indexed file depends on it
 
 1	fn main() {
-2	    nichlink_toolchain::build_time::run();
+2	    xirang_toolchain::build_time::run();
 3	}
 4
 ```

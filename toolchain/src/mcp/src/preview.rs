@@ -4,24 +4,24 @@
 //! Copying, rather than writing and reverting, is what makes a preview safe: if
 //! anything goes wrong between the two, the project was never touched. The copy
 //! skips the directories that are neither an input to an edit nor small: the build
-//! output `target/`, the version-control store `.git/`, and NichLink's own runtime
-//! data `.nichlink/` — the same three the diff walk skips, because both walks decide
+//! output `target/`, the version-control store `.git/`, and XiRang's own runtime
+//! data `.xirang/` — the same three the diff walk skips, because both walks decide
 //! one thing.
 //! 用复制而不是"先写再回滚"，正是预览安全的原因：两者之间无论哪里出错，项目从未被碰过。副本跳过
-//! 那些既不是编辑输入、又不见得小的目录：构建产物 `target/`、版本库 `.git/`，以及 NichLink 自己的
-//! 运行期数据 `.nichlink/`——与 diff 遍历跳过的是同三个，因为两处遍历决定的是同一件事。
+//! 那些既不是编辑输入、又不见得小的目录：构建产物 `target/`、版本库 `.git/`，以及 XiRang 自己的
+//! 运行期数据 `.xirang/`——与 diff 遍历跳过的是同三个，因为两处遍历决定的是同一件事。
 
 use std::path::{Path, PathBuf};
 
 /// A throwaway copy of the package, so a preview cannot touch the project.
 /// 包的一次性副本，因此预览碰不到项目。
 ///
-/// The build output, the version-control store, and NichLink's own runtime data are
+/// The build output, the version-control store, and XiRang's own runtime data are
 /// skipped: they are not inputs to the edit, and any of the three can be large
 /// (`.git/` alone runs to gigabytes in a real repository). The earlier wording named
 /// only the build output, which is why every preview copied that store too and walked
 /// it into the diff (audit `BR-C2`).
-/// 构建产物、版本库与 NichLink 自己的运行期数据都被跳过：它们不是编辑的输入，而这三者中任何一个
+/// 构建产物、版本库与 XiRang 自己的运行期数据都被跳过：它们不是编辑的输入，而这三者中任何一个
 /// 都可能很大（真实仓库里仅 `.git/` 就常是 GB 级）。早先的措辞只点名了构建产物，于是每一次预览都
 /// 连带复制了那个库、并把它带进 diff（审计 `BR-C2`）。
 pub(crate) fn copy_package(root: &Path) -> Result<PathBuf, String> {
@@ -35,7 +35,7 @@ pub(crate) fn copy_package(root: &Path) -> Result<PathBuf, String> {
         // 自身失败时把半成品留在原地：一次性副本在失败路径上同样该消失，而可预测路径上的既有数据也绝不该
         // 在入口被删掉（审计 `LGC-LG-20`）。
         format!(
-            "nichlink-toolchain-preview-{}-{:016x}-{attempt}",
+            "xirang-toolchain-preview-{}-{:016x}-{attempt}",
             std::process::id(),
             entropy()
         )
@@ -136,7 +136,7 @@ fn copy_into(root: &Path, destination: PathBuf) -> Result<PathBuf, String> {
 /// 只有一份清单，因为两处遍历回答的是同一个问题：副本跳过而 diff 没跳过的目录会被报成删除，反过来
 /// 的目录则从一开始就看不见——两种都会让报告描述一次编辑根本没做过的改动（审计 `BR-C2`、`BR-4`）。
 fn skipped_directory(name: &std::ffi::OsStr) -> bool {
-    name == "target" || name == ".git" || name == nichlink_kernel::lexicon::NICHLINK_DIR
+    name == "target" || name == ".git" || name == xirang_kernel::lexicon::XIRANG_DIR
 }
 
 /// How deep either walk follows directories before refusing to go further.
@@ -223,7 +223,7 @@ pub(crate) fn remove_copy(root: &Path, work: &Path) {
 /// 而目录是**独占**创建的：已存在的路径是一次失败，而不是本次调用会复用或删掉的目录。
 pub(crate) fn work_directory(label: &str) -> Result<PathBuf, String> {
     let destination = std::env::temp_dir().join(format!(
-        "nichlink-toolchain-{label}-{}-{:016x}",
+        "xirang-toolchain-{label}-{}-{:016x}",
         std::process::id(),
         entropy()
     ));
@@ -246,10 +246,10 @@ pub(crate) fn declaration_line(file: &Path, relative: &Path) -> Option<String> {
     let line = text.lines().position(|line| line.contains("! {"))?;
     // Forward slashes, like every other tree-relative path this bridge reports
     // (`FaceView.source`, the diff headers): a caller comparing the anchor with a
-    // path out of `nichlink.registry` must not have to know which platform produced
+    // path out of `xirang.registry` must not have to know which platform produced
     // it. The absolute path in the line above stays native, like `status`'s root.
     // 正斜杠，与本桥报告的每一条树内相对路径一致（`FaceView.source`、diff 头）：把锚点与
-    // `nichlink.registry` 给出的路径相比的调用方，不该需要知道它由哪个平台产生。上面那行的绝对
+    // `xirang.registry` 给出的路径相比的调用方，不该需要知道它由哪个平台产生。上面那行的绝对
     // 路径保持本机写法，与 `status` 的 root 一致。
     let relative = crate::mcp::source_index::portable_path(relative);
     Some(format!("{relative}:{}", line + 1))

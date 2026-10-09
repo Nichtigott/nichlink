@@ -1,22 +1,22 @@
-//! Tests for `nichlink.explain {"overlay": true}`: the published state after a
+//! Tests for `xirang.explain {"overlay": true}`: the published state after a
 //! declared cut replaces its slot.
-//! `nichlink.explain {"overlay": true}` 的测试：已声明切口替换槽位之后的发布态。
+//! `xirang.explain {"overlay": true}` 的测试：已声明切口替换槽位之后的发布态。
 //!
-//! The traversal itself is pinned in `nichlink_build_method`'s own tests, because
+//! The traversal itself is pinned in `xirang_build_method`'s own tests, because
 //! the CLI's `explain --overlay` reads it too. What this file pins is the bridge's
 //! half: that the projection is what the tool renders, that a declared cut shows
 //! up as the slot's replacement, that an unbuilt project is told the scope is
 //! unknown instead of being shown a pruned tree, and that `node` is refused
 //! rather than silently dropped.
-//! 遍历本身钉在 `nichlink_build_method` 自己的测试里，因为 CLI 的 `explain --overlay` 也读它。
+//! 遍历本身钉在 `xirang_build_method` 自己的测试里，因为 CLI 的 `explain --overlay` 也读它。
 //! 本文件钉的是桥的那一半：投影确实是本工具渲染的东西、已声明切口确实表现为该槽位的替换件、没构建过的
 //! 项目会被如实告知作用域未知而不是看到一棵被剪过的树，以及 `node` 会被拒绝而不是被默默丢掉。
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
 use serde_json::json;
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::plugin::graft_document::GraftPlanDocument;
 
 use super::overlay;
 
@@ -49,10 +49,10 @@ fn package(label: &str) -> (PathBuf, String, NodeId) {
     (root, name, id)
 }
 
-/// Write one plan document under `.nichlink/external-grafts/<selector>/graft.plan`.
-/// 在 `.nichlink/external-grafts/<selector>/graft.plan` 下写一份计划文档。
+/// Write one plan document under `.xirang/external-grafts/<selector>/graft.plan`.
+/// 在 `.xirang/external-grafts/<selector>/graft.plan` 下写一份计划文档。
 fn plan(root: &Path, selector: &str, document: &str) {
-    let directory = root.join(".nichlink/external-grafts").join(selector);
+    let directory = root.join(".xirang/external-grafts").join(selector);
     std::fs::create_dir_all(&directory).expect("plan directory");
     std::fs::write(directory.join("graft.plan"), document).expect("plan file");
 }
@@ -100,11 +100,11 @@ fn an_unbuilt_project_reports_an_unknown_scope_and_no_pruning() {
     let (root, _, _) = package("unbuilt");
     let reply = overlay(&root, &json!({})).expect("the projection renders");
     assert!(
-        reply.contains("build stale (run `nichlink check`)"),
+        reply.contains("build stale (run `xirang check`)"),
         "{reply}"
     );
     assert!(
-        reply.contains("scope unknown (no source_scope.tsv; run `nichlink check`)"),
+        reply.contains("scope unknown (no source_scope.tsv; run `xirang check`)"),
         "{reply}"
     );
     assert!(reply.contains("pruned 0:"), "{reply}");
@@ -117,7 +117,7 @@ fn an_unbuilt_project_reports_an_unknown_scope_and_no_pruning() {
 #[test]
 fn a_published_scope_marks_the_slots_it_prunes() {
     let (root, name, _) = package("pruned");
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     crate::build_method::check_for(&root, &out, &name).expect("a valid host checks clean");
     // The fingerprint is over the sources, so replacing the scope manifest models
     // exactly what a narrowed build publishes — without setting a process-wide

@@ -1,5 +1,5 @@
-//! Project scaffolding for new NichLink host crates.
-//! 新 NichLink 宿主 crate 的项目脚手架。
+//! Project scaffolding for new XiRang host crates.
+//! 新 XiRang 宿主 crate 的项目脚手架。
 //!
 //! Three parts live in sibling files: editor snippet generation (which renders the
 //! face-field completion files every editor reads), editor snippet installation

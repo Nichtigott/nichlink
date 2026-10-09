@@ -2,7 +2,7 @@
 //! 构建审计清单。
 //!
 //! The function column is a *declaration* list: it comes from the kernel's lexical
-//! scanner (`nichlink_kernel::source::function_symbols`), which masks comments, strings and
+//! scanner (`xirang_kernel::source::function_symbols`), which masks comments, strings and
 //! macro text before it looks for `fn`. A symbol is therefore `module::name` — the
 //! scanner reports declarations without ownership, so a method carries no `impl`
 //! type prefix. This file used to hold a second, line-based scanner that matched
@@ -13,7 +13,7 @@
 //! function_manifest` finds only the writers — so the change is visible to whoever
 //! starts trusting it, which is exactly why its format is stated here.
 //! 函数列的语义是**声明**清单：它来自内核词法扫描器
-//! （`nichlink_kernel::source::function_symbols`），该扫描器在寻找 `fn` 之前会屏蔽注释、字符串与宏文本。
+//! （`xirang_kernel::source::function_symbols`），该扫描器在寻找 `fn` 之前会屏蔽注释、字符串与宏文本。
 //! 因此符号是 `module::name`——扫描器报告的是不带归属的声明，方法因此不带 `impl` 类型前缀。
 //! 本文件过去带第二套按行的扫描器，它在行的任意位置匹配 `fn `，并用上一个 `impl ` 行猜归属；
 //! 嵌套 impl 与闭包都会污染它。那一列问的正是内核已回答的同一个问题，删掉它正是收掉这份重复。
@@ -172,7 +172,7 @@ impl FaceColumns {
             kind: kind.to_owned(),
             registry_name: spelled(face.string("registry_name")),
             parent: spelled(face.path("parent")),
-            source_hash: nichlink_kernel::sha256_hex(source.as_bytes()),
+            source_hash: xirang_kernel::sha256_hex(source.as_bytes()),
             fields: field_fingerprint(face, kind),
             calls: called_names(source),
             parent_node: resolved_parent(face, modules),
@@ -254,14 +254,14 @@ fn resolved_parent_id(
 /// 里面，因为它是身份输入且并不总被写下来：字段相同、kind 不同的两个面是不同的面，而只散列"写下来的东西"的
 /// 记录会把它们判成相等。
 fn field_fingerprint(face: &FaceSyntax, kind: &str) -> String {
-    let mut declared: Vec<String> = nichlink_kernel::declaration::FACE_FIELD_ORDER
+    let mut declared: Vec<String> = xirang_kernel::declaration::FACE_FIELD_ORDER
         .iter()
         .filter_map(|name| face.field(name).map(|raw| format!("{name}={raw}")))
         .collect();
     declared.push(format!("kind={kind}"));
     declared.sort();
     declared.dedup();
-    nichlink_kernel::sha256_hex(declared.join("\n").as_bytes())
+    xirang_kernel::sha256_hex(declared.join("\n").as_bytes())
 }
 
 /// The names one source file calls directly, sorted and deduplicated (audit `W3-1`).
@@ -272,9 +272,9 @@ fn field_fingerprint(face: &FaceSyntax, kind: &str) -> String {
 /// 规则用的是内核的 `direct_calls`，也就是桥里每个读者用的那一条，因此记录与推导对"这份文件调用了什么"
 /// 不可能给出不同答案。
 fn called_names(source: &str) -> String {
-    let mut calls: Vec<String> = nichlink_kernel::source::function_symbols(source)
+    let mut calls: Vec<String> = xirang_kernel::source::function_symbols(source)
         .into_iter()
-        .flat_map(|function| nichlink_kernel::source::direct_calls(&function.body, &function.name))
+        .flat_map(|function| xirang_kernel::source::direct_calls(&function.body, &function.name))
         .collect();
     calls.sort();
     calls.dedup();
@@ -317,11 +317,11 @@ fn visit_shape_fields(src: &Path, nodes: &[Node], rows: &mut Vec<(String, String
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let mut declared = 0usize;
-                for name in nichlink_kernel::declaration::FACE_FIELD_ORDER {
+                for name in xirang_kernel::declaration::FACE_FIELD_ORDER {
                     if let Some(raw) = face.field(name) {
                         declared += 1;
                         rows.push((relative.clone(), (*name).to_owned(), raw));
@@ -370,7 +370,7 @@ fn visit_file_functions(src: &Path, nodes: &[Node], rows: &mut Vec<(String, Stri
             && let Ok(source) = fs::read_to_string(file)
         {
             let relative = relative_display(src, file);
-            let symbols = nichlink_kernel::source::function_symbols(&source);
+            let symbols = xirang_kernel::source::function_symbols(&source);
             if symbols.is_empty() {
                 rows.push((relative.clone(), "-".to_owned(), "-".to_owned()));
             }
@@ -552,7 +552,7 @@ fn visit_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, St
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let id = super::registry_identity::package_node_id(
@@ -560,7 +560,7 @@ fn visit_function_symbols(src: &Path, nodes: &[Node], rows: &mut Vec<(NodeId, St
                     &face.path("kind").unwrap_or_else(|| node.name.clone()),
                 );
                 let module = source_module_path(&relative);
-                for function in nichlink_kernel::source::function_symbols(&source) {
+                for function in xirang_kernel::source::function_symbols(&source) {
                     rows.push((id, relative.clone(), format!("{module}::{}", function.name)));
                 }
             }
@@ -580,7 +580,7 @@ fn visit_pruning_symbols(
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
@@ -622,7 +622,7 @@ fn visit_face_modules(
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());
@@ -650,7 +650,7 @@ fn visit_face_names(
         if let Some(file) = &node.file {
             let relative = relative_display(src, file);
             if let Ok(source) = fs::read_to_string(file)
-                && !nichlink_kernel::lexicon::is_registration_path(&relative)
+                && !xirang_kernel::lexicon::is_registration_path(&relative)
                 && let Some(face) = parsed_face(&source, &relative)
             {
                 let kind = face.path("kind").unwrap_or_else(|| node.name.clone());

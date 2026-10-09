@@ -1,6 +1,6 @@
-//! Pins for `nichlink.graph`: what it answers from the published graph, what it refuses, and that
+//! Pins for `xirang.graph`: what it answers from the published graph, what it refuses, and that
 //! every answer carries the index line (audit `M7`, P1.3).
-//! `nichlink.graph` 的钉子：它从已发布的图里答什么、拒绝什么，以及每份答案都带索引那一行（审计 `M7`，P1.3）。
+//! `xirang.graph` 的钉子：它从已发布的图里答什么、拒绝什么，以及每份答案都带索引那一行（审计 `M7`，P1.3）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -188,7 +188,7 @@ fn an_unpublished_index_says_what_to_run() {
     let (root, _) = package("absent");
     let answer = super::graph(&root, &json!({})).expect("the answer is a sentence, not a failure");
     assert!(
-        answer.contains("index not published yet: run `nichlink check`"),
+        answer.contains("index not published yet: run `xirang check`"),
         "{answer}"
     );
     assert!(answer.contains("graph  unavailable"), "{answer}");

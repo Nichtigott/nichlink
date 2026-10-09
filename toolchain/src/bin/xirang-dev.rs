@@ -1,13 +1,13 @@
-//! Resident rebuild supervisor for NichLink Studio.
-//! NichLink Studio 的常驻重建监督器。
+//! Resident rebuild supervisor for XiRang Studio.
+//! XiRang Studio 的常驻重建监督器。
 //!
 //! This binary is **workspace-only** (feature `dev-supervisor`): it rebuilds
 //! Studio from a checkout and launches that checkout's `target/debug` binary, so
 //! an installed copy has neither a source tree to rebuild nor a workspace build
-//! to launch. It is therefore not installed by `cargo install nichlink-toolchain`.
+//! to launch. It is therefore not installed by `cargo install xirang-toolchain`.
 //! 本二进制**仅限工作区**（特性 `dev-supervisor`）：它从检出重建 Studio 并启动该检出的
 //! `target/debug` 产物，而安装副本既没有可重建的源码树，也没有可启动的工作区构建，因此
-//! `cargo install nichlink-toolchain` 不会安装它。
+//! `cargo install xirang-toolchain` 不会安装它。
 
 use std::ffi::OsStr;
 use std::io;
@@ -22,7 +22,7 @@ fn main() -> ExitCode {
     match supervise(std::env::args().nth(1).as_deref()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("NichLink Studio: {error}");
+            eprintln!("XiRang Studio: {error}");
             ExitCode::FAILURE
         }
     }
@@ -38,16 +38,16 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
     // 失败、并把修法写进消息，好过让 Cargo 报"找不到清单"、看起来像用户的项目坏了。
     if !studio_root.join("Cargo.toml").is_file() {
         return Err(format!(
-            "this `nichlink-dev` was built from `{}`, which no longer exists; it rebuilds Studio \
+            "this `xirang-dev` was built from `{}`, which no longer exists; it rebuilds Studio \
              from that checkout, so run it from one instead of an installed copy: \
-             `cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch`",
+             `cargo run -p xirang-toolchain --features dev-supervisor --bin xirang-dev -- watch`",
             studio_root.display()
         ));
     }
     let workspace_root = studio_root
         .parent()
         .ok_or_else(|| "Studio manifest has no package parent".to_owned())?;
-    let package_root = std::env::var_os("NICH_LINK_PACKAGE_ROOT")
+    let package_root = std::env::var_os("XIRANG_PACKAGE_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| workspace_root.to_owned());
     let current_exe = std::env::current_exe().ok();
@@ -75,7 +75,7 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
                         child = spawn_child(&executable, query)?;
                     }
                     Err(error) => eprintln!(
-                        "NichLink Studio: build failed; keeping the last good process\n{error}"
+                        "XiRang Studio: build failed; keeping the last good process\n{error}"
                     ),
                 }
             }
@@ -100,7 +100,7 @@ fn supervise(query: Option<&str>) -> Result<(), String> {
 /// 的构建只看那里（而且当同级二进制尚未构建、但已为其他 target 跑过 `cargo build` 时，
 /// 它仍然是正确答案）。
 fn resolve_studio(exe: Option<&Path>, path_env: Option<&OsStr>, workspace_root: &Path) -> PathBuf {
-    let name = format!("nichlink-toolchain{}", std::env::consts::EXE_SUFFIX);
+    let name = format!("xirang-toolchain{}", std::env::consts::EXE_SUFFIX);
     if let Some(candidate) = exe.and_then(Path::parent).map(|dir| dir.join(&name))
         && candidate.is_file()
     {
@@ -139,7 +139,7 @@ fn rebuild(studio_root: &Path) -> Result<(), String> {
     let output = Command::new(cargo)
         .args(["build", "--quiet", "--manifest-path"])
         .arg(studio_root.join("Cargo.toml"))
-        .args(["--bin", "nichlink-toolchain"])
+        .args(["--bin", "xirang-toolchain"])
         .output()
         .map_err(|error| format!("cannot invoke Cargo: {error}"))?;
     if output.status.success() {
@@ -160,7 +160,7 @@ fn spawn_child(executable: &Path, query: Option<&str>) -> Result<Child, String> 
     }
     command.spawn().map_err(|error| {
         format!(
-            "cannot start `{}`: {error}; build it first with `cargo build -p nichlink-toolchain --bin nichlink-toolchain`",
+            "cannot start `{}`: {error}; build it first with `cargo build -p xirang-toolchain --bin xirang-toolchain`",
             executable.display()
         )
     })
@@ -218,7 +218,7 @@ impl SourceWatcher {
             // crate leaves catalog changes invisible until restart.
             // 插件选择文件同样属于源码。只监听 extension crate 会让目录修改
             // 在重启前不可见。
-            package_root.join(".nichlink/plugins"),
+            package_root.join(".xirang/plugins"),
         ] {
             if root.is_dir() {
                 watcher
@@ -295,7 +295,7 @@ mod tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "nichlink-dev-{label}-{}-{sequence}",
+            "xirang-dev-{label}-{}-{sequence}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).expect("fixture dir");
@@ -303,11 +303,11 @@ mod tests {
     }
 
     fn studio_name() -> String {
-        format!("nichlink-toolchain{}", std::env::consts::EXE_SUFFIX)
+        format!("xirang-toolchain{}", std::env::consts::EXE_SUFFIX)
     }
 
     fn dev_name() -> String {
-        format!("nichlink-dev{}", std::env::consts::EXE_SUFFIX)
+        format!("xirang-dev{}", std::env::consts::EXE_SUFFIX)
     }
 
     /// The binary Cargo built next to the supervisor is the one it should start:
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn accepts_plugin_catalog_changes() {
         let catalog = Event::new(EventKind::Modify(notify::event::ModifyKind::Any))
-            .add_path(".nichlink/plugins/official.rs".into());
+            .add_path(".xirang/plugins/official.rs".into());
         assert!(relevant_event(&catalog));
     }
 
@@ -398,7 +398,7 @@ mod tests {
         let renamed = Event::new(EventKind::Modify(notify::event::ModifyKind::Name(
             notify::event::RenameMode::Both,
         )))
-        .add_path(".nichlink/plugins/user.lock".into());
+        .add_path(".xirang/plugins/user.lock".into());
         let cargo = Event::new(EventKind::Modify(notify::event::ModifyKind::Data(
             notify::event::DataChange::Content,
         )))

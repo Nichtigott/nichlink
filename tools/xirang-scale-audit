@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+mkdir -p target/xirang-audit
+if [ -x /usr/bin/time ]; then
+  /usr/bin/time -f 'peak_rss_kb=%M' \
+    cargo run --quiet --release -p xirang-toolchain --example scale_audit -- 10000 100000 \
+    2>target/xirang-audit/scale.time
+  cat target/xirang-audit/scale.time
+else
+  echo "peak_rss_kb=unavailable (install GNU time for RSS measurement)" >&2
+  cargo run --quiet --release -p xirang-toolchain --example scale_audit -- 10000 100000
+fi

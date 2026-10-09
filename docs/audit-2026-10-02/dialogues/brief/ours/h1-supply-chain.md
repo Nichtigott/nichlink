@@ -10,8 +10,8 @@
 
 **工具返回**：
 ```
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
-family root/control · member nichlink-example-control-button · 9 member(s)
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
+family root/control · member xirang-example-control-button · 9 member(s)
   badge                    1 call(s): to_local
   button                   1 call(s): to_local
   dial                     1 call(s): to_local
@@ -25,7 +25,7 @@ family root/control · member nichlink-example-control-button · 9 member(s)
 outliers: 1 of 9
 not covered by this comparison: it reads the **derived** tree's sibling set and each sibling's own text, so a convention that lives in a shared helper, in generated code, or in a parent rule is not visible here; and `api` compares the names called, not the units or the arithmetic — an outlier is a place to look, not a defect; and a call written inside a macro body is not read as a call (the kernel's rule), so an object whose whole body is one macro invocation reads as calling nothing
 next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields
-evidence nichlink.consistency {"parent":"root/control"} → exit 0
+evidence xirang.consistency {"parent":"root/control"} → exit 0
 
 ```
 
@@ -51,14 +51,14 @@ at src/control/object/toggle/toggle.rs:15 — the definition `offset` (lines 15-
              src/control/object/toggle/toggle.rs:14 /// This widget's offset, in the coordinate family its siblings use.
   callers    tests/offsets.rs::the_rendered_offsets_add_up (outside this file's directory (tests))
   pins       a test names `offset`; `check {face}` is the run that shows it still holds
-  adoption   no ledger at .nichlink/adopted/entries in this root
+  adoption   no ledger at .xirang/adopted/entries in this root
   gate       no `#[cfg]` attribute sits directly above this definition at src/control/object/toggle/toggle.rs:15 (a gate on the enclosing module is not read here)
-  scope      scope unknown (no source_scope.tsv; run `nichlink check`)
-  pruning    pruning unknown (no pruning_manifest.tsv; run `nichlink check`)
+  scope      scope unknown (no source_scope.tsv; run `xirang check`)
+  pruning    pruning unknown (no pruning_manifest.tsv; run `xirang check`)
   wiring     declared cut `crate::control::object::toggle::NODE_ID` → `control_button_graft::toggle_fast::NODE_ID` (full=false) at /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/src/lib.rs:48
 not covered here: how a grafted subtree looks at runtime (ask `trace`), and whether the declarations above describe the tree **as it is now** — the scope and pruning lines are the build's own output, and a tree built before the last edit says so on the `scope` line
 next   `check {face}` to run the face that compiles it, `grafts` for every declared cut, `locate {symptom}` for sibling places to compare it with
-evidence nichlink.why {"at":"src/control/object/toggle/toggle.rs:15"} → exit 0
+evidence xirang.why {"at":"src/control/object/toggle/toggle.rs:15"} → exit 0
 
 ```
 
@@ -138,7 +138,7 @@ src/control/object/panel/panel.rs:15 fn offset
 … truncated: 4 of 9 definitions withheld at the limit of 5; pass `path` for one of: `src/control/object/slider/slider.rs`, `src/control/object/spinner/spinner.rs`, `src/control/object/timeline/timeline.rs`, `src/control/object/toggle/toggle.rs`; `limit` raises this cap
 dynamic dispatch, function pointers, FFI, and runtime branches require live CallTrace evidence.
 next   `read {path, line}` for a body, `affected {files}` for what depends on it
-evidence nichlink.callgraph {"function":"offset"} → exit 0
+evidence xirang.callgraph {"function":"offset"} → exit 0
 
 ```
 
@@ -152,7 +152,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host
 tree   14 rust file(s), 24 function(s)
 elapsed 22811 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/xirang/out/check-default.log
 exit   101
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -169,7 +169,7 @@ census: 0 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `base_registry` (src/lib.rs:70)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 3 of 12 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
+evidence xirang.check {"face":"default","timeout_ms":900000} → exit 0
 
 ```
 
@@ -186,7 +186,7 @@ toggle 自己的注释 `:14`（"in the coordinate family its siblings use"）与
 整棵树里没有任何第二个 `to_world` 调用者（`consistency --parent root/control` 的 9 个成员只点 toggle）。
 evidence — ① `cargo test --offline`（root=h1-supply-chain/host，exit **101**）：
 `the_rendered_offsets_add_up ... FAILED`，`assertion left == right failed: the rendered offsets add up to 160, not 136`。
-② `check {face:default}` → `verdict failed (cargo exit 101)`，同上（log `…/host/target/nichlink/out/check-default.log`）。
+② `check {face:default}` → `verdict failed (cargo exit 101)`，同上（log `…/host/target/xirang/out/check-default.log`）。
 ③ `consistency {parent:root/control}` → `badge/button/dial/gauge/panel/slider/spinner/timeline 1 call(s): to_local`、
 `toggle 1 call(s): to_world`、`outlier toggle: does not call to_local … calls to_world, which no sibling calls`、`outliers: 1 of 9`。
 ④ `why {at:toggle.rs:15}` → 契约行 `:14` 仍是"兄弟那族"；callers=`tests/offsets.rs::the_rendered_offsets_add_up`。

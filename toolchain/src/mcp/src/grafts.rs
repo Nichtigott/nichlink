@@ -1,24 +1,24 @@
 //! The external graft plans on disk, and whether the host entry keeps them.
 //! 磁盘上的外部 graft 计划，以及宿主入口是否保住它们。
 //!
-//! A plan under `.nichlink/external-grafts/<selector>/graft.plan` is an authoring record
+//! A plan under `.xirang/external-grafts/<selector>/graft.plan` is an authoring record
 //! the build never opens. When the host entry's `static_graft_plan!` does not name the
 //! slot a plan targets, the release prunes that slot and the record can never take
 //! effect — and the build **fails** rather than warning, naming the plan file and the exact
 //! `cut … graft …` line to declare (measured 2026-10-06: `cargo build` exits 101). A warning a
 //! `cargo` log swallows would be the wrong shape for a record that can never take effect. The CLI
-//! has answered this since `nichlink grafts`; this is the same answer for an agent, and
+//! has answered this since `xirang grafts`; this is the same answer for an agent, and
 //! the rule behind both is `crate::build_method::graft_plan_rows`, so they cannot
 //! disagree. A declaration is about the **slot** a plan targets, not the implementation
 //! the plan selects — that is the build's own question — so each row shows the plan's
 //! target and graft *and* the declaration's own cut and graft, and a difference between
 //! them is visible rather than silently accepted or silently rejected. Read-only: it opens
 //! files and writes nothing.
-//! `.nichlink/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录。宿主入口的
+//! `.xirang/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录。宿主入口的
 //! `static_graft_plan!` 没有点名计划所针对的槽位时，发布态会剪掉那个槽位，这条记录便永远无法生效
 //! ——而构建是**失败**而不是警告，并点名是哪个计划文件、以及该补上的那行 `cut … graft …`（2026-10-06
 //! 实测：`cargo build` 退出码 101）。对一条永远无法生效的记录来说，一条会被 `cargo` 日志吞掉的警告是
-//! 错的形状。CLI 从 `nichlink grafts` 起就在回答这个问题；
+//! 错的形状。CLI 从 `xirang grafts` 起就在回答这个问题；
 //! 这里是给代理的同一个答案，而两者背后的规则是 `crate::build_method::graft_plan_rows`，因此它们
 //! 不可能给出不同答案。声明针对的是计划所瞄准的**槽位**，而不是计划选择的那个实现——那正是构建自己的
 //! 问题——因此每行既给出计划的目标与 graft，也给出声明自己的切口与 graft，两者不同时是**看得见**的，
@@ -42,9 +42,9 @@ const MAX_ROWS: usize = 400;
 /// 报告每条外部 graft 计划，以及宿主入口是否声明了它的槽位。
 ///
 /// A **virtual manifest** is answered as the workspace it is: the plans are records
-/// under a package's own `.nichlink/`, so they are read per member and grouped, with
+/// under a package's own `.xirang/`, so they are read per member and grouped, with
 /// every member's status in the census above them.
-/// **虚拟清单**按它实际的样子——工作区——作答：计划是各包自己 `.nichlink/` 之下的记录，因此逐成员
+/// **虚拟清单**按它实际的样子——工作区——作答：计划是各包自己 `.xirang/` 之下的记录，因此逐成员
 /// 读取并分组，而它们上方是每个成员的状态普查。
 pub(crate) fn grafts(root: &Path, arguments: &Value) -> Result<String, String> {
     match workspace::scope(root)? {
@@ -114,7 +114,7 @@ pub(crate) fn grafts_body(member: &Member, arguments: &Value) -> Result<String, 
     }
     output.push_str(&format!("plans {}\n", rows.len()));
     if rows.is_empty() {
-        output.push_str("no external graft plans under .nichlink/external-grafts/\n");
+        output.push_str("no external graft plans under .xirang/external-grafts/\n");
         return Ok(output);
     }
     // The headline count is over *every* row, not over the rows the bound happened to

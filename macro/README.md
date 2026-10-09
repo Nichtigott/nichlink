@@ -1,25 +1,25 @@
-# nichlink-macro
+# xirang-macro
 
-The compile-time face-field front end for NichLink.
-NichLink 的编译期注册面字段前端。
+The compile-time face-field front end for XiRang.
+XiRang 的编译期注册面字段前端。
 
-`nichlink-macro` is the compile-time front end for NichLink's face-field
+`xirang-macro` is the compile-time front end for XiRang's face-field
 declarations. A `macro_rules!` matcher can only fail with "no rules expected
 `...`": it cannot reorder fields, cannot compare field names, and cannot attach
 a span to a message of its own. This crate receives the author's tokens with
 their spans instead, so it can accept every reasonable spelling and still point
 at the exact token that is wrong.
 
-It is a build detail of `nichlink-toolchain`: host code writes `root_object!` /
+It is a build detail of `xirang-toolchain`: host code writes `root_object!` /
 `<parent>_object!` / `external_object!`, and the runtime macro ladder calls this
 front end only when its strict arms have already declined the declaration.
 
-`nichlink-macro` 是 NichLink 注册面字段声明的编译期前端。`macro_rules!` 匹配失败
+`xirang-macro` 是 XiRang 注册面字段声明的编译期前端。`macro_rules!` 匹配失败
 只会说 "no rules expected `...`"：既不能重排字段、不能比较字段名，也无法把自己的
 消息挂到具体 token 上。本 crate 拿到的则是带 span 的作者 token，因此既能接受各种
 合理写法，又能把错误精确指到出问题的那个 token。
 
-它是 `nichlink-toolchain` 的构建细节：宿主代码写 `root_object!` /
+它是 `xirang-toolchain` 的构建细节：宿主代码写 `root_object!` /
 `<parent>_object!` / `external_object!`，只有当运行期宏阶梯的严格 arm 都不接受时，
 才会走到本前端。
 
@@ -47,12 +47,12 @@ front end only when its strict arms have already declined the declaration.
   仅有一次；它不是 `FaceFields` 成员，因此永远不会进入镜像。
 
 The declaration is re-emitted as
-`::nichlink_toolchain::run_method::__nichlink_object! { … }` (or `__external_object!` for
+`::xirang_toolchain::run_method::__xirang_object! { … }` (or `__external_object!` for
 the external target), so the collector mode the caller chose survives the round
 trip. If reordering produces exactly the tokens it was given, the front end
 reports that a field's *shape* is wrong instead of recursing.
 
-归一化后的声明会重新发出为 `::nichlink_toolchain::run_method::__nichlink_object! { … }`
+归一化后的声明会重新发出为 `::xirang_toolchain::run_method::__xirang_object! { … }`
 （外部目标则为 `__external_object!`），调用方选择的 collector 模式因此得以保留。
 如果重排得到的正是收到的 token，前端会报告"某个字段的写法不对"，而不是无限递归。
 
@@ -102,5 +102,5 @@ token 树的生成别名；与完整前端不同，它容忍作者尚未写完�
 
 ## License / 许可证
 
-MIT. See [LICENSE](https://github.com/Nichtigott/nichlink/blob/main/macro/LICENSE).
-MIT，见 [LICENSE](https://github.com/Nichtigott/nichlink/blob/main/macro/LICENSE)。
+MIT. See [LICENSE](https://github.com/Nichtigott/xirang/blob/main/macro/LICENSE).
+MIT，见 [LICENSE](https://github.com/Nichtigott/xirang/blob/main/macro/LICENSE)。

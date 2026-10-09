@@ -9,7 +9,7 @@
 
 ## 1. 装置（与作者不同）
 
-- 树外探针工程 `/tmp/nk-probe`（`[workspace]` 独立，target 与产物全在 `/tmp`；依赖只**读**检出：`nichlink = { package = "nichlink-core", path = "…/core", features = ["syntax"] }`）。
+- 树外探针工程 `/tmp/nk-probe`（`[workspace]` 独立，target 与产物全在 `/tmp`；依赖只**读**检出：`xirang = { package = "xirang-core", path = "…/core", features = ["syntax"] }`）。
 - 探针 `B11`（我自己的 18 项检查，**不调用作者的测试**）。作者的钉子只作为“变异灵敏度”的对照单独跑，见 §3。
 - 语义断言的做法：把读回的 `OwnedAdmission` 两张列表用 `Box::leak` 还原成运行期 `Admission`（`Admission::new` 需要 `&'static`），再问 `Admission::accepts`。因此断言的是**门禁**，不是字符串：
   - 被 deny 的路径必须仍被否决（`accepts("ui/experimental") == false`）；
@@ -90,7 +90,7 @@ assertion `left == right` failed: reading `crate::Admission::new(&["ui"], &["ui/
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 224 filtered out; finished in 0.00s
 ```
 
-注意：这条钉子**只在 `--features syntax` 下存在**——不带该特性时 `cargo test -p nichlink-core --offline both_lists_survive` 得到 `0 passed; 176 filtered out`（测试根本不在二进制里）。契约里点名这个特性开关是承重的。
+注意：这条钉子**只在 `--features syntax` 下存在**——不带该特性时 `cargo test -p xirang-core --offline both_lists_survive` 得到 `0 passed; 176 filtered out`（测试根本不在二进制里）。契约里点名这个特性开关是承重的。
 
 **还原后的零残留核对（全部通过）**
 
@@ -108,7 +108,7 @@ git diff 哈希一致: YES  (1955a873bd3ac045f4804ceefec115636417ffc4d90d6c7d7cf
 
 静置判定：轮询直到 `find core studio run_method build_method mcp cli -name '*.rs' -newermt '-90 seconds'` 为空 → **18:34:10 静置**；跑完两条门禁后再查“自 18:34:10 起有新写入的文件”为空，且被验证文件的 sha 未变（`admission.rs c14af278…`、`build_method/src/node_id.rs 6ffd5f2c…`、`build_method/src/identity_cache.rs c1d8411e…`）。HEAD 仍 `a524956`。
 
-**门禁 1：`cargo test -p nichlink-core --offline --features syntax`（exit 0）**
+**门禁 1：`cargo test -p xirang-core --offline --features syntax`（exit 0）**
 
 ```text
 test result: ok. 225 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s

@@ -1,13 +1,13 @@
 //! The publish lock: **one writer per tree** (audit `M7`, P3.4-lock).
 //! 发布锁：**一棵树一个写者**（审计 `M7`，P3.4-lock）。
 //!
-//! Two NichLink runs can look at one tree at the same time — the CLI and the MCP bridge, two agent
+//! Two XiRang runs can look at one tree at the same time — the CLI and the MCP bridge, two agent
 //! sessions, or a host's build script and an editor's `check`. Each publish writes a *set* of files
 //! (`pruning_manifest.tsv`, the graph, the manifests, `graph.generation`), and each file is atomic
 //! on its own (`write_if_changed` writes a temp file and renames), but the set is not. Without a
 //! lock the later writer wins file by file, so a reader can find a new fingerprint beside an old
 //! manifest, and a run can silently overwrite a generation another run just published.
-//! 两次 NichLink 运行可能同时看着一棵树——CLI 与 MCP 桥、两个 agent 会话、或者宿主的构建脚本与编辑器的
+//! 两次 XiRang 运行可能同时看着一棵树——CLI 与 MCP 桥、两个 agent 会话、或者宿主的构建脚本与编辑器的
 //! `check`。每次发布写的是一**组**文件（`pruning_manifest.tsv`、图、各清单、`graph.generation`），每份
 //! 文件各自原子（`write_if_changed` 写临时文件再改名），但这一组不是。没有锁时后写者逐份文件取胜，于是
 //! 读者可能读到"新指纹 + 旧清单"，一次运行也可能静默覆盖另一次刚发布的代。
@@ -23,10 +23,10 @@
 //! 锁，下一个写者接管它而不是永远等下去。它**不是**：通用跨进程互斥，也不是给读者的保证——想要一致**一组**
 //! 的读者最后读就绪记录（`graph.generation`），而管线早已正因此把它写在最后。
 //!
-//! The wait is bounded (`NICH_LINK_LOCK_WAIT_MS`, default [`DEFAULT_WAIT_MS`]) because a refusal a
+//! The wait is bounded (`XIRANG_LOCK_WAIT_MS`, default [`DEFAULT_WAIT_MS`]) because a refusal a
 //! caller can read and act on beats a hang: the refusal names the lock file, the holder and the two
 //! ways forward.
-//! 等待是有界的（`NICH_LINK_LOCK_WAIT_MS`，默认 [`DEFAULT_WAIT_MS`]），因为一句调用方读得懂、能照做的拒绝
+//! 等待是有界的（`XIRANG_LOCK_WAIT_MS`，默认 [`DEFAULT_WAIT_MS`]），因为一句调用方读得懂、能照做的拒绝
 //! 胜过挂起：拒绝里点名锁文件、持有者，以及两条出路。
 
 use std::fs::OpenOptions;
@@ -34,7 +34,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 /// How long a publish waits for the lock by default.
 /// 发布默认等这把锁多久。
@@ -273,7 +273,7 @@ fn refusal(path: &Path, waited: Duration) -> String {
         None => "it disappeared while this run waited".to_owned(),
     };
     format!(
-        "another NichLink run is publishing this tree: {} is held and {who}; this run waited {} ms and \
+        "another XiRang run is publishing this tree: {} is held and {who}; this run waited {} ms and \
          published nothing rather than write half a generation.\n\
          way forward: wait for that run to finish (the file is removed when it does), or remove {} if \
          that process is gone — the wait is bounded by {} (milliseconds)",

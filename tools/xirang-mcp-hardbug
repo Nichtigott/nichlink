@@ -5,10 +5,10 @@
 
 Specification and the four recipes are `docs/design-hardbug-bench-spec.md`; the design seed is
 `target/hardbug/BRIEF.md`. This tool is **new and separate** rather than a fourth job inside the
-66 KB `nichlink-mcp-eval`: it reuses that generator's fixtures (the two example host crates are
+66 KB `xirang-mcp-eval`: it reuses that generator's fixtures (the two example host crates are
 copied and repointed) and never edits it.
 
-本工具与 `nichlink-mcp-eval` 分开：规格与四类配方在 `docs/design-hardbug-bench-spec.md`，设计种子在
+本工具与 `xirang-mcp-eval` 分开：规格与四类配方在 `docs/design-hardbug-bench-spec.md`，设计种子在
 `target/hardbug/BRIEF.md`；它复用那套出题器的夹具（复制并重指两个示例宿主 crate），不改那个脚本。
 
 Subcommands / 子命令:
@@ -107,22 +107,22 @@ CLASSES = [
     ),
 ]
 
-USAGE = """nichlink-mcp-hardbug plan                        the four classes and their truth shapes
-nichlink-mcp-hardbug plan --scoring              the scoring rules, verbatim
-nichlink-mcp-hardbug build <dir> <class>         derive, inject, self-prove, write .audit/truth.json
-nichlink-mcp-hardbug score <tree> <answer> [--log <jsonl>]   score one answer
-nichlink-mcp-hardbug tokens <session-dir|session.jsonl.zstd>  per-axis token account, out of band
-nichlink-mcp-hardbug freeze <tree>               pre-freeze checklist: non-source artifacts, outside refs
-nichlink-mcp-hardbug report <log> [--session <dir>]  the four columns and the three axes, one call
+USAGE = """xirang-mcp-hardbug plan                        the four classes and their truth shapes
+xirang-mcp-hardbug plan --scoring              the scoring rules, verbatim
+xirang-mcp-hardbug build <dir> <class>         derive, inject, self-prove, write .audit/truth.json
+xirang-mcp-hardbug score <tree> <answer> [--log <jsonl>]   score one answer
+xirang-mcp-hardbug tokens <session-dir|session.jsonl.zstd>  per-axis token account, out of band
+xirang-mcp-hardbug freeze <tree>               pre-freeze checklist: non-source artifacts, outside refs
+xirang-mcp-hardbug report <log> [--session <dir>]  the four columns and the three axes, one call
 
 Specification: docs/design-hardbug-bench-spec.md
 规格见 docs/design-hardbug-bench-spec.md。
 
-The call log is the bridge's own, written by `nichlink-mcp … --log <file>`; the scoring reads it
+The call log is the bridge's own, written by `xirang-mcp … --log <file>`; the scoring reads it
 rather than guessing from prose:
   {"exit": 0, "request": ["consistency", "--root", ".", "--specimen", "root/control/button"],
    "response": "specimen root/control/button …"}
-判分读的是**桥自己的日志**（`nichlink-mcp … --log <文件>` 写的），不从散文里猜：
+判分读的是**桥自己的日志**（`xirang-mcp … --log <文件>` 写的），不从散文里猜：
   {"exit": 0, "request": ["consistency", "--root", ".", "--specimen", "root/control/button"],
    "response": "specimen root/control/button …"}
 """
@@ -162,12 +162,12 @@ The answer is scored on:
 """
 
 # A command is a tool invocation anywhere on the line, not only at its start: answers write their
-# evidence as `evidence — $ nichlink-mcp …`, and a rule that only looked at column zero would score
+# evidence as `evidence — $ xirang-mcp …`, and a rule that only looked at column zero would score
 # every honestly cited command as absent.
-# 命令是行内任意位置的工具调用，不只在行首：答案把证据写成 `evidence — $ nichlink-mcp …`，而只看第 0 列的
+# 命令是行内任意位置的工具调用，不只在行首：答案把证据写成 `evidence — $ xirang-mcp …`，而只看第 0 列的
 # 规则会把每一条如实引用的命令都判成没写。
 COMMAND_LINE = re.compile(
-    r"(?:^|[\s`$>])(?:cargo|nichlink|nichlink-mcp|rg|grep|git|ls|cat|diff|python3)\s+\S"
+    r"(?:^|[\s`$>])(?:cargo|xirang|xirang-mcp|rg|grep|git|ls|cat|diff|python3)\s+\S"
 )
 EXIT_CODE = re.compile(r"\b(?:exit|exited|rc)\s*[:=]?\s*(\d{1,3})\b")
 
@@ -221,13 +221,13 @@ def graft_face(name, kind):
     """The out-of-project replacement for one sibling, declared with `external_object!`."""
     return f'''//! The out-of-project replacement for `{kind}`.
 
-use nichlink_toolchain::run_method::registry_core::{{
+use xirang_toolchain::run_method::registry_core::{{
     ContractId, FlowContract, NoParts, NoPreset, RegistrationRule, root_node_id,
 }};
 
 pub struct {kind}Fast;
 
-nichlink_toolchain::run_method::external_object! {{
+xirang_toolchain::run_method::external_object! {{
     source: "{name}_fast/{name}_fast.rs",
     kind: {kind}Fast,
     preset: NoPreset,
@@ -298,10 +298,10 @@ def graft_lib():
     return f'''//! An out-of-project crate: it takes no part in the host's generated tree.
 //! 项目外 crate：它不参与宿主那棵生成树。
 
-use nichlink_toolchain::run_method::registry_core::{{FrameworkId, Registry}};
+use xirang_toolchain::run_method::registry_core::{{FrameworkId, Registry}};
 
 /// Must match the host framework, or the overlay rejects this tree.
-pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 
 {modules}
 
@@ -321,7 +321,7 @@ pub fn external_registry() -> Registry {{
 def patch_entry(entry, declared):
     """Replace the entry's graft plan with one cut per declared sibling, in WIDGETS order."""
     text = entry.read_text(encoding="utf-8")
-    marker = "nichlink_toolchain::run_method::static_graft_plan!("
+    marker = "xirang_toolchain::run_method::static_graft_plan!("
     if marker not in text:
         raise SystemExit(f"{entry} no longer declares a graft plan — the example's shape changed")
     start = text.index(marker)
@@ -559,19 +559,19 @@ def bridge_binary():
     hand-rolled approximation would measure the approximation.
     出题台驱动的是它要测的那个工具，而不是它的复制品：对着手搓的近似物判分，量到的是那个近似物。
     """
-    binary = CHECKOUT / "target/debug/nichlink-mcp"
+    binary = CHECKOUT / "target/debug/xirang-mcp"
     if not binary.exists():
         run(
             [
                 "cargo",
                 "build",
                 "-p",
-                "nichlink-toolchain",
+                "xirang-toolchain",
                 "--offline",
                 "--features",
                 "mcp",
                 "--bin",
-                "nichlink-mcp",
+                "xirang-mcp",
             ],
             CHECKOUT,
         )
@@ -579,7 +579,7 @@ def bridge_binary():
 
 
 def cli_binary():
-    """This checkout's CLI, which is what writes `target/nichlink/out` — the scope lines' evidence.
+    """This checkout's CLI, which is what writes `target/xirang/out` — the scope lines' evidence.
 
     Every face class runs it: without those artifacts a tree that has a build-time scope answers
     `scope unknown`, and the third class's decisive fact is exactly that scope. Building the trees
@@ -587,19 +587,19 @@ def cli_binary():
     每个面类都跑它：没有那些产物，一棵**有**构建期作用域的树会答 `scope unknown`，而第三个类的决定性事实
     正是那个作用域。让题树停在未构建态，会让第三个类答不了、另两个类不真实。
     """
-    binary = CHECKOUT / "target/debug/nichlink"
+    binary = CHECKOUT / "target/debug/xirang"
     if not binary.exists():
         run(
             [
                 "cargo",
                 "build",
                 "-p",
-                "nichlink-toolchain",
+                "xirang-toolchain",
                 "--offline",
                 "--features",
                 "cli",
                 "--bin",
-                "nichlink",
+                "xirang",
             ],
             CHECKOUT,
         )
@@ -608,7 +608,7 @@ def cli_binary():
 
 def scope_sources(host):
     """The sources the build selected, read out of the manifest it wrote."""
-    manifest = host / "target/nichlink/out/source_scope.tsv"
+    manifest = host / "target/xirang/out/source_scope.tsv"
     if not manifest.exists():
         raise SystemExit(f"the build wrote no scope at {manifest}")
     rows = []
@@ -624,7 +624,7 @@ def scope_sources(host):
 def graft_plan_line(host):
     """The 1-based line the entry's graft plan starts on."""
     text = (host / "src/lib.rs").read_text(encoding="utf-8")
-    return text[: text.index("nichlink_toolchain::run_method::static_graft_plan!")].count("\n") + 1
+    return text[: text.index("xirang_toolchain::run_method::static_graft_plan!")].count("\n") + 1
 
 
 def mechanism_words(klass):
@@ -802,12 +802,12 @@ def prove(klass, host, truth):
         )
         return (
             {
-                "command": f"nichlink-mcp consistency --root . --specimen {truth['specimen']}",
+                "command": f"xirang-mcp consistency --root . --specimen {truth['specimen']}",
                 "exit": red_exit,
                 "evidence": first_lines(red_out),
             },
             {
-                "command": f"nichlink-mcp conformance --root . --anchor {truth['lapsed']['anchor']}",
+                "command": f"xirang-mcp conformance --root . --anchor {truth['lapsed']['anchor']}",
                 "exit": green_exit,
                 "evidence": first_lines(green_out),
             },
@@ -858,7 +858,7 @@ def prove(klass, host, truth):
 
 def patch_entry_text(text, declared):
     """Replace the graft plan in a **string** the same way `patch_entry` does in a file."""
-    marker = "nichlink_toolchain::run_method::static_graft_plan!("
+    marker = "xirang_toolchain::run_method::static_graft_plan!("
     start = text.index(marker)
     end = text.index("\n);", start) + len("\n);")
     cuts = "\n".join(
@@ -1093,7 +1093,7 @@ def build_algorithms(directory, klass):
         "must_refuse": refusals_for(klass),
         "apparatus": apparatus(directory),
         "red": {
-            "command": "nichlink-mcp check --root . --face default --census",
+            "command": "xirang-mcp check --root . --face default --census",
             "exit": red_exit,
             "evidence": "the default face is green by design; the red is the branch column, which "
             "names the arm this contract forbids",
@@ -1120,11 +1120,11 @@ def durable_root(directory):
     audit — and one cleanup took all of it. The session transcripts survived (they are not in `/tmp`),
     which is why the numbers could be recovered at all, but a frozen set has to be a file, not a
     memory. The tree cannot live inside the checkout instead (cargo absorbs it into the workspace),
-    so the durable choice is a directory outside both: `~/.cache/nichlink-hardbug/<run>` or anywhere
+    so the durable choice is a directory outside both: `~/.cache/xirang-hardbug/<run>` or anywhere
     the user keeps data.
     这条是**付出代价换来的**：W8 整轮都住在 `/tmp` 下——四棵树、两臂日志、审计——一次清理全没了。会话
     记录不在 `/tmp` 所以活了下来（数才挖得回来），但冻结集必须是**文件**而不是记忆。题树也不能放进检出
-    （会被 cargo 吸进工作区），所以耐久的落点是两者之外：`~/.cache/nichlink-hardbug/<run>` 或用户自己
+    （会被 cargo 吸进工作区），所以耐久的落点是两者之外：`~/.cache/xirang-hardbug/<run>` 或用户自己
     放数据的地方。
     """
     directory = Path(directory).resolve()
@@ -1146,11 +1146,11 @@ def freeze(tree):
     cheap to check and expensive to notice:
     D7 — a `cp -a` copy is not independent: its manifest still points at the *original* tree's graft
          directory, so a run in the copy compiles the other arm's crate.
-    D8 — a build-time self-proof leaves `target/nichlink/out/check-default.log` inside the tree; the
+    D8 — a build-time self-proof leaves `target/xirang/out/check-default.log` inside the tree; the
          artifacts have to be listed before the tree is frozen, and scanned for answer-bearing text.
     第一轮的两个装置缺陷，都是对照臂报出来而不是我发现的，都是"检查很便宜、注意到很贵"：
     D7 —— `cp -a` 出来的副本不独立：它的清单仍指向**原件**的 graft 目录，于是在副本里跑会编译另一臂的 crate。
-    D8 —— 构建期自证会在树里留下 `target/nichlink/out/check-default.log`；冻结前必须把这些产物列出来，
+    D8 —— 构建期自证会在树里留下 `target/xirang/out/check-default.log`；冻结前必须把这些产物列出来，
     并扫一遍有没有带答案的文本。
     """
     root = Path(tree).resolve()
@@ -1171,9 +1171,9 @@ def freeze(tree):
             continue
         relative = path.relative_to(root)
         parts = relative.parts
-        if parts[0] in {"target", ".nichlink", ".audit"} or path.suffix not in source:
+        if parts[0] in {"target", ".xirang", ".audit"} or path.suffix not in source:
             artifacts.append(str(relative))
-        if path.suffix in {".toml", ".lock"} or parts[0] == ".nichlink":
+        if path.suffix in {".toml", ".lock"} or parts[0] == ".xirang":
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
             except OSError:
@@ -1198,7 +1198,7 @@ def freeze(tree):
                     outside.append(f"{relative}: {line.strip()[:120]}")
     print(f"tree      {root}")
     print(f"source    {sum(1 for p in root.rglob('*') if p.is_file()) - len(artifacts)} file(s)")
-    print(f"artifacts {len(artifacts)} (non-source or under target/ .nichlink/ .audit/)")
+    print(f"artifacts {len(artifacts)} (non-source or under target/ .xirang/ .audit/)")
     for row in artifacts[:12]:
         print(f"  {row}")
     if len(artifacts) > 12:
@@ -1229,7 +1229,7 @@ def build(directory, klass):
         # 第九个面在两个 crate 里都在、且不在任何切口里：没声明它的是入口。
         entry = host / "src/lib.rs"
         text = entry.read_text(encoding="utf-8")
-        line = text[: text.index("nichlink_toolchain::run_method::static_graft_plan!")].count("\n") + 1
+        line = text[: text.index("xirang_toolchain::run_method::static_graft_plan!")].count("\n") + 1
         write(host / "tests/shipped.rs", shipped_test(WIDGETS + [PRUNED]))
         truth["pruned"] = {
             "face": f"root/control/{PRUNED}",
@@ -1265,7 +1265,7 @@ def build(directory, klass):
             f"2026-09-20T09:00:00+08:00|{','.join(lapsed_files)}|{stale}|"
             "recorded before the panel was rewritten\n"
         )
-        write(host / ".nichlink/adopted/entries", "".join(lines))
+        write(host / ".xirang/adopted/entries", "".join(lines))
         # The declaration this sibling is missing: `handle_contracts`, which every sibling states.
         # 这个兄弟缺的那条声明：`handle_contracts`，每个兄弟都写了它。
         face = host / f"src/control/object/{H2_UNDECLARED}/{H2_UNDECLARED}.rs"
@@ -1348,11 +1348,11 @@ def normalize_log_record(record):
         return {
             "tool": argv[0] if argv else None,
             # `init` is spelled differently by the two clients: the bridge names it after the tool
-            # (`nichlink.init`, or a bare `init`), while codegraph's launcher keeps the tool in
+            # (`xirang.init`, or a bare `init`), while codegraph's launcher keeps the tool in
             # `argv[0]` and the subcommand in `argv[1]` (`codegraph init …`) — the first version only
             # looked at `argv[0]`, so five `codegraph init` calls were counted as answering calls
             # (measured in T-21's review).
-            # `init` 在两个客户端里拼法不同：桥按工具名前缀（`nichlink.init` 或裸 `init`），而 codegraph
+            # `init` 在两个客户端里拼法不同：桥按工具名前缀（`xirang.init` 或裸 `init`），而 codegraph
             # 的启动器把工具名留在 `argv[0]`、子命令放 `argv[1]`（`codegraph init …`）——第一版只看
             # `argv[0]`，于是五次 `codegraph init` 被算成答题调用（T-21 复核里量到的）。
             "init": any(part.split(".")[-1] == "init" for part in argv[:2]),
@@ -1489,10 +1489,10 @@ def report(log_path, session=None):
         following = next((later for later in rows[index + 1:]
                           if normalize_log_record(later)["tool"]), None)
         # The comparison is **normalized on both sides**: the log names the tool the way the protocol
-        # does (`nichlink.check`) while a hint names it the way a reader would type it (`check`), and
+        # does (`xirang.check`) while a hint names it the way a reader would type it (`check`), and
         # comparing the two spellings literally made this column report 0% for every round —
         # measured in T-21: `0/24` literal versus `11/24` normalized on the same logs.
-        # 比对**两侧都要归一化**：日志按协议的写法点名工具（`nichlink.check`），而提示按读者会敲的写法
+        # 比对**两侧都要归一化**：日志按协议的写法点名工具（`xirang.check`），而提示按读者会敲的写法
         # （`check`），逐字比较会让这一栏每一轮都报 0%——T-21 实测：同一批日志逐字 `0/24`、归一化 `11/24`。
         following_tool = None if following is None else normalize_log_record(following)["tool"]
         if following_tool is not None and following_tool.split(".")[-1] in {
@@ -1526,7 +1526,7 @@ def report(log_path, session=None):
     return 0
 
 
-def tokens(target, tool_name="nichlink-mcp"):
+def tokens(target, tool_name="xirang-mcp"):
     """Per-axis token account for one session, read **out of band**.
 
     Nothing about the task changes when this runs: it reads the harness's own session log after the
@@ -1813,7 +1813,7 @@ def main(argv):
     if argv[1] == "tokens":
         if len(argv) < 3:
             raise SystemExit("tokens needs a session directory or a session jsonl.zstd")
-        named = argv[argv.index("--tool") + 1] if "--tool" in argv else "nichlink-mcp"
+        named = argv[argv.index("--tool") + 1] if "--tool" in argv else "xirang-mcp"
         return tokens(argv[2], named)
     if argv[1] == "score":
         if len(argv) < 4:

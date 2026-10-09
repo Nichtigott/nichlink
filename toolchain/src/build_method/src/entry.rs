@@ -9,14 +9,14 @@
 //! 与嫁接视图都经由 [`resolve_host_entry`] 解析入口，因此两者对“哪个文件是宿主”
 //! 绝不会产生分歧。
 //!
-//! `NICH_LINK_ENTRY` is read exactly once per build, in
+//! `XIRANG_ENTRY` is read exactly once per build, in
 //! [`host_entry_from_environment`], and the resolved value is threaded to both
 //! readers. The variable used to reach pruning only: the graft view resolved the
 //! entry on its own and never saw the variable, so with the variable set the
 //! release pruned one file's slots while the generated cut table described
 //! another file's — the runtime then held a table the release had not kept, or
 //! silently lost a slot declared only in the configured file.
-//! `NICH_LINK_ENTRY` 每次构建只读一次（在 [`host_entry_from_environment`] 中），
+//! `XIRANG_ENTRY` 每次构建只读一次（在 [`host_entry_from_environment`] 中），
 //! 解析结果再传给两个读取者。该变量过去只作用于剪枝：嫁接视图自行解析入口、从不看
 //! 这个变量，于是在设置变量时，发布态剪掉的是一个文件的槽位，而生成的切口表描述的
 //! 是另一个文件——运行期于是拿着发布态并未保留的表，或静默丢掉只在被指定文件里声明
@@ -26,7 +26,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::default_entry_source;
 use super::diagnostics::{BuildDiagnostic, BuildDiagnostics};
@@ -169,8 +169,8 @@ fn rejected_entry(src: &Path, file: &Path, line: usize, path: &str, why: &str) -
 /// `src/lib.rs` 的包），那种情况仍然是“没有入口”，而不是错误。
 #[derive(Clone, Debug)]
 pub(crate) enum HostEntry {
-    /// Named by `NICH_LINK_ENTRY`; a relative path resolves against the package root.
-    /// 由 `NICH_LINK_ENTRY` 指定；相对路径相对包根解析。
+    /// Named by `XIRANG_ENTRY`; a relative path resolves against the package root.
+    /// 由 `XIRANG_ENTRY` 指定；相对路径相对包根解析。
     Configured(PathBuf),
     /// Named by the file declaring `application!(entry = …)`.
     /// 由声明 `application!(entry = …)` 的文件指定。
@@ -239,8 +239,8 @@ pub(crate) fn resolve_host_entry(
     resolve_host_entry_reporting(&layout, nodes, configured, &mut BuildDiagnostics::default())
 }
 
-/// Resolve the host entry from an explicit `NICH_LINK_ENTRY` value.
-/// 从明确的 `NICH_LINK_ENTRY` 取值解析宿主入口。
+/// Resolve the host entry from an explicit `XIRANG_ENTRY` value.
+/// 从明确的 `XIRANG_ENTRY` 取值解析宿主入口。
 ///
 /// Taking the value as a parameter instead of reading the environment keeps the
 /// resolution testable: a test can hand it the same value both readers receive
@@ -326,14 +326,14 @@ pub(crate) fn resolve_host_entry_reporting(
 /// Resolve the host entry the build step reads graft declarations from.
 /// 解析构建步骤读取 graft 声明的宿主入口。
 ///
-/// Resolution order matches the build's `resolve_host_entry`: `NICH_LINK_ENTRY`,
+/// Resolution order matches the build's `resolve_host_entry`: `XIRANG_ENTRY`,
 /// then a file declaring `application!(entry = …)`, then the file that calls
 /// `host!()`, then Cargo's `main.rs`/`lib.rs`. Two differences are deliberate: an
 /// authoring surface walks the package's own Rust sources when looking for the
 /// declaration (the build walks the discovered registration folders), and a
 /// source tree it cannot represent is an `Err`, never a panic, because an
 /// authoring surface has to stay alive to say so.
-/// 解析顺序与构建的 `resolve_host_entry` 一致：`NICH_LINK_ENTRY`、声明
+/// 解析顺序与构建的 `resolve_host_entry` 一致：`XIRANG_ENTRY`、声明
 /// `application!(entry = …)` 的文件、调用 `host!()` 的文件、最后按 Cargo 的
 /// `main.rs`/`lib.rs` 约定。两处差异是有意的：创作界面找声明时遍历包自己的 Rust
 /// 源码（构建遍历已发现的注册目录），且无法表示的源码树返回 `Err` 而不是 panic——

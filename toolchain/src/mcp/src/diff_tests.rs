@@ -35,7 +35,7 @@ fn package(label: &str) -> (PathBuf, String) {
 /// Publish a build manifest with exactly the rows given.
 /// 发布一份只含给定行的构建清单。
 fn publish(root: &Path, rows: &[String]) {
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     std::fs::create_dir_all(&out).expect("build output");
     let mut text = String::from("# node\tsource\tsymbol\n");
     for row in rows {
@@ -67,7 +67,7 @@ fn a_matching_build_reports_no_delta() {
 #[test]
 fn an_addition_and_a_removal_are_both_named() {
     let (root, name) = package("delta");
-    let old = nichlink_kernel::identity::NodeId::from_namespaced_path(&name, "old/old.rs", "Old");
+    let old = xirang_kernel::identity::NodeId::from_namespaced_path(&name, "old/old.rs", "Old");
     publish(&root, &[format!("{old}\told/old.rs\t-")]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
     assert!(reply.contains("added since build 1  gone 1"), "{reply}");
@@ -84,7 +84,7 @@ fn a_changed_identity_under_an_unmoved_file_is_reported() {
     let (root, name) = package("reidentified");
     let face = face_views(&root, &name).expect("faces derive")[0].clone();
     let renamed =
-        nichlink_kernel::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
+        xirang_kernel::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
     publish(&root, &[format!("{renamed}\t{}\t-", face.source)]);
     let reply = diff(&root, &json!({})).expect("the diff renders");
     assert!(reply.contains("re-identified 1"), "{reply}");
@@ -99,14 +99,14 @@ fn a_missing_build_asks_for_one_instead_of_diffing_nothing() {
     let (root, _) = package("no-build");
     let reply = diff(&root, &json!({})).expect("the diff renders");
     assert!(reply.contains("no build evidence"), "{reply}");
-    assert!(reply.contains("nichlink check"), "{reply}");
+    assert!(reply.contains("xirang check"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Write one external graft record under `.nichlink/external-grafts/<selector>/graft.plan`.
-/// 在 `.nichlink/external-grafts/<selector>/graft.plan` 下写一条外部 graft 记录。
-fn record(root: &Path, selector: &str, target: nichlink_kernel::identity::NodeId, path: &str) {
-    let directory = root.join(".nichlink/external-grafts").join(selector);
+/// Write one external graft record under `.xirang/external-grafts/<selector>/graft.plan`.
+/// 在 `.xirang/external-grafts/<selector>/graft.plan` 下写一条外部 graft 记录。
+fn record(root: &Path, selector: &str, target: xirang_kernel::identity::NodeId, path: &str) {
+    let directory = root.join(".xirang/external-grafts").join(selector);
     std::fs::create_dir_all(&directory).expect("record directory");
     std::fs::write(
         directory.join("graft.plan"),
@@ -126,12 +126,12 @@ fn record(root: &Path, selector: &str, target: nichlink_kernel::identity::NodeId
 /// That last clause is the fix for `LGC-LG-12`: the declaration question used to be asked only in
 /// the "identity is in the tree" branch, so a record whose identity was absent (the typical
 /// "slot unmoved, identity changed" case) came back `re-identified` or `stale` with `undeclared 0`
-/// — while `nichlink.grafts` reported the same row `[NOT declared by the host entry]` and counted
+/// — while `xirang.grafts` reported the same row `[NOT declared by the host entry]` and counted
 /// it under `unkept plans N`, and the build refused it. One record, two opposite recommendations,
 /// and the optimistic one was the wrong one.
 /// 最后一句就是 `LGC-LG-12` 的修复：那个"是否被声明"的问题过去只在"身份在树里"那一支被问到，因此
 /// 身份缺席的记录（典型的"槽位没动、身份换了"）会带着 `undeclared 0` 回成 `re-identified` 或
-/// `stale`——而 `nichlink.grafts` 把同一行报成 `[NOT declared by the host entry]` 并计入
+/// `stale`——而 `xirang.grafts` 把同一行报成 `[NOT declared by the host entry]` 并计入
 /// `unkept plans N`，构建也拒绝它。一条记录两个相反的建议，而乐观的那个是错的。
 ///
 /// There is no `unmatched` bucket: it existed for "the identity is absent but the plan's path looks
@@ -150,7 +150,7 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
     let (root, name) = package("records");
     let face = face_views(&root, &name).expect("faces derive")[0].clone();
     let stale_identity =
-        nichlink_kernel::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
+        xirang_kernel::identity::NodeId::from_namespaced_path(&name, &face.source, "Renamed");
     // `kept_fast`'s slot is named by the host entry, which is what makes it `ok` rather than
     // `undeclared`: a record no cut names is pruned by the release.
     // `kept_fast` 的槽位由宿主入口点名，这正是它成为 `ok` 而不是 `undeclared` 的原因：没有任何切口
@@ -206,12 +206,12 @@ fn the_record_side_tells_a_stale_record_from_a_re_identified_one() {
 
 /// A record whose identity the tree has is not `ok` unless a `static_graft_plan!` cut names its
 /// slot. `diff {"records":true}` used to read only the identity and report `ok`, while
-/// `nichlink.grafts` reported the same row as `[NOT declared by the host entry]`, counted it under
+/// `xirang.grafts` reported the same row as `[NOT declared by the host entry]`, counted it under
 /// `unkept plans N`, and the build refused it outright: one record, two health conclusions, and the
 /// agent that read the first one would ship it (audit `M1`). The row already carried
 /// `declared`, so the split costs nothing.
 /// 身份在树里的记录，只有在某条 `static_graft_plan!` 切口点名它的槽位时才是 `ok`。
-/// `diff {"records":true}` 过去只读身份就报 `ok`，而 `nichlink.grafts` 把同一行报成
+/// `diff {"records":true}` 过去只读身份就报 `ok`，而 `xirang.grafts` 把同一行报成
 /// `[NOT declared by the host entry]`、计入 `unkept plans N`，构建还直接拒绝它：同一条记录、两个健康
 /// 结论，而读到前者的代理会把它发出去（审计 `M1`）。该行本就携带 `declared`，分流不需额外代价。
 #[test]
@@ -236,7 +236,7 @@ fn an_undeclared_record_is_not_reported_as_ok() {
     );
     assert!(
         reply.contains("the release prunes these slots"),
-        "with the consequence, the same one `nichlink.grafts` reports: {reply}"
+        "with the consequence, the same one `xirang.grafts` reports: {reply}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -247,7 +247,7 @@ fn an_undeclared_record_is_not_reported_as_ok() {
 #[test]
 fn an_unreadable_record_is_counted_and_no_records_is_not_a_verdict() {
     let (root, _) = package("records-unreadable");
-    let directory = root.join(".nichlink/external-grafts/broken_fast");
+    let directory = root.join(".xirang/external-grafts/broken_fast");
     std::fs::create_dir_all(&directory).expect("record directory");
     std::fs::write(directory.join("graft.plan"), "version=9\n").expect("record file");
     let reply = diff(&root, &json!({"records": true})).expect("the diff renders");
@@ -339,7 +339,7 @@ fn two_record_sets_are_compared_as_data() {
     let (root, _name) = package("records-against");
     let id = "bdb4427ce81c9bc51e56bee7667fd2be";
     write_record_set(
-        &root.join("target/nichlink/out"),
+        &root.join("target/xirang/out"),
         "aaaa",
         id,
         "control/control.rs",
@@ -403,7 +403,7 @@ fn records_published_under_another_namespace_are_refused() {
             "mcp::diff::diff_tests::other_domain_child",
             "--nocapture",
         ])
-        .env("NICH_LINK_NAMESPACE", "n52-elsewhere")
+        .env("XIRANG_NAMESPACE", "n52-elsewhere")
         .env("N52_FIXTURE", &root)
         .output()
         .expect("the child runs");

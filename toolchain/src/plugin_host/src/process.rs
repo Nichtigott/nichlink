@@ -202,7 +202,7 @@ fn stage_program(
         .and_then(|extension| extension.to_str())
         .map_or_else(String::new, |extension| format!(".{extension}"));
     let mut staged = Builder::new()
-        .prefix("nichlink-plugin-")
+        .prefix("xirang-plugin-")
         .suffix(&suffix)
         .tempfile()?;
     staged.write_all(bytes)?;

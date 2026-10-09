@@ -6,9 +6,9 @@
 
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::identity::NodeId;
-use nichlink_kernel::plugin::graft_document::GraftPlanDocument;
 use serde_json::json;
+use xirang_kernel::identity::NodeId;
+use xirang_kernel::plugin::graft_document::GraftPlanDocument;
 
 use super::grafts;
 
@@ -46,10 +46,10 @@ fn package(label: &str, declares: bool) -> (PathBuf, String, NodeId) {
     (root, name, id)
 }
 
-/// Write one plan document under `.nichlink/external-grafts/<selector>/graft.plan`.
-/// 在 `.nichlink/external-grafts/<selector>/graft.plan` 下写一份计划文档。
+/// Write one plan document under `.xirang/external-grafts/<selector>/graft.plan`.
+/// 在 `.xirang/external-grafts/<selector>/graft.plan` 下写一份计划文档。
 fn plan(root: &Path, selector: &str, document: &str) {
-    let directory = root.join(".nichlink/external-grafts").join(selector);
+    let directory = root.join(".xirang/external-grafts").join(selector);
     std::fs::create_dir_all(&directory).expect("plan directory");
     std::fs::write(directory.join("graft.plan"), document).expect("plan file");
 }
@@ -118,7 +118,7 @@ fn an_unreadable_plan_carries_its_reason_and_no_plans_says_so() {
     let (bare, _, _) = package("none", false);
     let empty = grafts(&bare, &json!({})).expect("the report renders");
     assert!(
-        empty.contains("no external graft plans under .nichlink/external-grafts/"),
+        empty.contains("no external graft plans under .xirang/external-grafts/"),
         "{empty}"
     );
     let _ = std::fs::remove_dir_all(&root);

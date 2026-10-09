@@ -26,7 +26,7 @@ jobs:
 steps:
   - name: Whatever
     if: github.event_name == 'push'
-    run: tools/nichlink-publish --publish --yes
+    run: tools/xirang-publish --publish --yes
 ";
     let found = findings(text);
     assert!(
@@ -49,7 +49,7 @@ jobs:
 steps:
   - name: Publish
     if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-    run: tools/nichlink-publish --publish --yes
+    run: tools/xirang-publish --publish --yes
 ";
     let found = findings(text);
     assert!(
@@ -73,7 +73,7 @@ jobs:
 steps:
   - name: Rename me
     if: github.event_name == 'push'
-    run: tools/nichlink-publish --publish --yes
+    run: tools/xirang-publish --publish --yes
   - if: github.event_name == 'push'
     run: cargo publish --workspace
 ";
@@ -103,7 +103,7 @@ steps:
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref, 'refs/tags/')
-    run: tools/nichlink-publish --publish --yes
+    run: tools/xirang-publish --publish --yes
 ";
     let found = findings(text);
     assert!(found.is_empty(), "{found:#?}");
@@ -113,20 +113,20 @@ steps:
 /// 第二个工作流文件与第一个一样被读取。
 #[test]
 fn a_second_workflow_is_checked_too() {
-    let root = std::env::temp_dir().join(format!("nichlink-workflows-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-workflows-{}", std::process::id()));
     let workflows = root.join(".github/workflows");
     fs::create_dir_all(&workflows).expect("fixture directory");
     fs::write(
         workflows.join("release.yml"),
         "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
          if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')\n        \
-         run: tools/nichlink-publish --publish --yes\n",
+         run: tools/xirang-publish --publish --yes\n",
     )
     .expect("fixture workflow");
     fs::write(
         workflows.join("extra.yml"),
         "on:\n  push:\n    branches: [\"main\"]\njobs:\n  extra:\n    steps:\n      - \
-         run: tools/nichlink-publish --publish --yes\n",
+         run: tools/xirang-publish --publish --yes\n",
     )
     .expect("fixture workflow");
     let found = workflow_findings(&root);
@@ -165,7 +165,7 @@ fn both_spellings_of_a_negated_tag_test_are_reported() {
     for (name, condition) in fixtures {
         let text = format!(
             "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
-             if: {condition}\n        run: tools/nichlink-publish --publish --yes\n"
+             if: {condition}\n        run: tools/xirang-publish --publish --yes\n"
         );
         let found = findings(&text);
         if !found
@@ -224,7 +224,7 @@ fn shapes_off_the_whitelist_are_reported() {
     for (name, condition) in fixtures {
         let text = format!(
             "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
-             if: {condition}\n        run: tools/nichlink-publish --publish --yes\n"
+             if: {condition}\n        run: tools/xirang-publish --publish --yes\n"
         );
         let found = findings(&text);
         if !found
@@ -266,7 +266,7 @@ fn positive_guard_shapes_are_accepted() {
     for (name, condition) in fixtures {
         let text = format!(
             "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - name: P\n        \
-             if: {condition}\n        run: tools/nichlink-publish --publish --yes\n"
+             if: {condition}\n        run: tools/xirang-publish --publish --yes\n"
         );
         let found = findings(&text);
         assert!(
@@ -291,7 +291,7 @@ jobs:
     steps:
       - name: Publish
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: tools/nichlink-publish --publish --yes
+        run: tools/xirang-publish --publish --yes
       - name: Rehearse
         run: echo \"${{ inputs['publish'] }}\"
 ";
@@ -315,7 +315,7 @@ jobs:
     steps:
       - name: Publish
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: tools/nichlink-publish --publish --yes
+        run: tools/xirang-publish --publish --yes
       - name: Rehearse
         run: ";
     let dotted = format!("{head}echo \"${{{{ inputs.publish }}}}\"\n");
@@ -346,7 +346,7 @@ jobs:
 steps:
   - name: Publish
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    run: tools/nichlink-publish --publish --yes
+    run: tools/xirang-publish --publish --yes
 ";
     let found = findings(text);
     assert_eq!(found.len(), 1, "{found:#?}");
@@ -404,7 +404,7 @@ fn whitespace_and_yaml_spellings_do_not_hide_an_upload() {
 /// `uses: ./.github/actions/publish` 过去都不产生任何发现，而上传就在门禁从未打开的文件里。
 #[test]
 fn a_delegated_upload_is_followed() {
-    let root = std::env::temp_dir().join(format!("nichlink-delegated-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-delegated-{}", std::process::id()));
     let workflows = root.join(".github/workflows");
     let action = root.join(".github/actions/publish");
     fs::create_dir_all(&workflows).expect("fixture directory");
@@ -451,11 +451,11 @@ fn a_delegated_upload_is_followed() {
     // 分支，从而把每一个都报出来。
     fs::write(
         workflows.join("rehearsal.yml"),
-        "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - run: tools/nichlink-publish --check-table\n",
+        "on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n      - run: tools/xirang-publish --check-table\n",
     )
     .expect("fixture workflow");
     fs::write(
-        root.join("tools/nichlink-publish"),
+        root.join("tools/xirang-publish"),
         "#!/bin/sh\nif [ \"$1\" = --publish ]; then cargo publish --workspace; fi\n",
     )
     .expect("the known publisher");

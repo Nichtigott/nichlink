@@ -1,8 +1,8 @@
 {
   "what": "W6-2 acceptance measurement: a 50,000-face workspace tree, read tools, 2026-10-04",
   "tree": "tools/gen_scale_tree.py target/scale/w50 --workspace 20 2500 -> 20 members x 2500 child faces; 50,080 .rs files",
-  "published": "each member ran `verify` (pipeline only, no compiler): records under <member>/target/nichlink/out",
-  "protocol": "bash `time` around `nichlink-mcp --call <tool> --root <workspace>`, three runs, response bytes from the third",
+  "published": "each member ran `verify` (pipeline only, no compiler): records under <member>/target/xirang/out",
+  "protocol": "bash `time` around `xirang-mcp --call <tool> --root <workspace>`, three runs, response bytes from the third",
   "rows": [
     {"tool": "registry", "runs_s": [0.522, 0.463, 0.479], "bytes": 1961,
      "verdict": "met: <3 s and flat (1961 B at 50k faces; the same census is 1966 B on a built 101-face tree)"},

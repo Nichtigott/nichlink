@@ -266,7 +266,7 @@ mod edit_form_tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("nichlink-toolchain-edit-{label}-{suffix}"));
+        let root = std::env::temp_dir().join(format!("xirang-toolchain-edit-{label}-{suffix}"));
         let rule = root.join("src/control/registry_rule/registry_rule.rs");
         std::fs::create_dir_all(rule.parent().expect("rule parent")).expect("fixture dir");
         std::fs::write(&rule, RULE_SOURCE).expect("rule source");

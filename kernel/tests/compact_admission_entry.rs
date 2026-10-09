@@ -4,12 +4,12 @@
 //! Studio needed this rendering and, because the kernel kept it private, wrote a
 //! second copy of the same rules (`FIXR-01`: `studio/src/studio/app/source_index.rs`
 //! rendered the compact form itself). This file is the outside-of-the-crate pin:
-//! it reaches the renderer through `nichlink_kernel::authoring::parse`, which is exactly
+//! it reaches the renderer through `xirang_kernel::authoring::parse`, which is exactly
 //! the path a surface has, so a private renderer cannot satisfy it — the pin stops
 //! compiling with `E0603` instead.
 //! Studio 需要这份渲染，而内核把它设为私有，于是 Studio 写出了同一套规则的第二份副本
 //! （`FIXR-01`：`studio/src/studio/app/source_index.rs` 自己渲染紧凑形式）。本文件是
-//! crate 之外的钉子：它经 `nichlink_kernel::authoring::parse` 取渲染器，这正是执行面拥有的那条路径，
+//! crate 之外的钉子：它经 `xirang_kernel::authoring::parse` 取渲染器，这正是执行面拥有的那条路径，
 //! 因此私有渲染器无法满足它——钉子会以 `E0603` 编译失败，而不是悄悄通过。
 //!
 //! The second half is the proof that the merge changed nothing on the wire: the
@@ -24,10 +24,10 @@
 // 渲染器在解析器的特性之后；没有 `syntax` 时这里无物可调。整工作区构建会经其他成员打开它。
 #![cfg(feature = "syntax")]
 
-use nichlink_kernel::authoring::parse::{
+use xirang_kernel::authoring::parse::{
     compact_admission, parse_admission_expression, parse_admission_owned,
 };
-use nichlink_kernel::declaration::OwnedAdmission;
+use xirang_kernel::declaration::OwnedAdmission;
 
 /// One policy in the owned form the renderer takes, from path spellings.
 /// 一份策略的拥有型形式，由路径拼法构造——渲染器取用的就是它。

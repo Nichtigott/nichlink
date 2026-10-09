@@ -23,7 +23,7 @@ child process per call.
   contract closure before publication.
 - Official plugins require a matching trust policy and signature assurance;
   community and local plugins still require a verified checksum artifact. The host
-  path that applies this is `PluginAdmission` in `nichlink-toolchain`: it reads
+  path that applies this is `PluginAdmission` in `xirang-toolchain`: it reads
   the plugin locks, refuses an unlisted official plugin before any verifier runs,
   and refuses a revoked version before the signature. The signature covers the
   registration that travels with the plugin bytes, not only the manifest.
@@ -60,5 +60,5 @@ narrow is access: the child still reaches the filesystem and the network as the
 host's user, so the environment and the working directory are the two knobs that
 exist rather than a sandbox. The README's plugin section says so and disclaims a
 sandbox; this paragraph is the residual-risk half of that statement. A host that
-runs untrusted process plugins must confine the child outside NichLink — a
+runs untrusted process plugins must confine the child outside XiRang — a
 container, a user, or an OS sandbox — because nothing in this workspace does it.

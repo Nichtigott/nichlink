@@ -246,7 +246,7 @@ fn a_record_without_provenance_fields_does_not_pin_them() {
 #[test]
 fn plugin_lock_parser_rejects_unknown_identity_schema() {
     let error = PluginCatalog::parse_plugin_catalog(
-        "# nichlink-schema=2\n\
+        "# xirang-schema=2\n\
              user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n",
     )
     .unwrap_err()
@@ -262,7 +262,7 @@ fn plugin_lock_parser_rejects_unknown_identity_schema() {
 fn plugin_lock_parser_accepts_canonical_and_legacy_schema_spellings() {
     for schema in ["v3", "3"] {
         let lock = format!(
-            "# nichlink-schema={schema}\n\
+            "# xirang-schema={schema}\n\
                  user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n"
         );
         assert!(
@@ -272,7 +272,7 @@ fn plugin_lock_parser_accepts_canonical_and_legacy_schema_spellings() {
     }
     for schema in ["v4", "V3", "vv3", ""] {
         let lock = format!(
-            "# nichlink-schema={schema}\n\
+            "# xirang-schema={schema}\n\
                  user|com.nichui.editor|local|0.1.0|local_canvas|sha256:b|extension\n"
         );
         assert!(
@@ -351,7 +351,7 @@ fn a_checksum_is_compared_by_its_digest_not_its_spelling() {
 fn a_record_renders_the_line_its_own_parser_reads() {
     let bare = PluginRecord {
         source: PluginSource::Official,
-        framework: "nichlink.default".to_owned(),
+        framework: "xirang.default".to_owned(),
         package: "canvas".to_owned(),
         version: "1.0.0".to_owned(),
         crate_name: "canvas".to_owned(),

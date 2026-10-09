@@ -76,7 +76,7 @@ h2 上那一臂除 15k 字符外，还 `sha256sum` 自己算指纹、并 **`sed 
 
 | # | 状态 | 证据 / 理由 |
 | --- | --- | --- |
-| ① 题目状态可问 | **已落地** `580feb7` | `nichlink-realbug` 自证后**把题目放回盘上**（原先留还原态）+ `truth.json` 写 `tree_state`；实测新树 `util.rs:578` 是缺陷版、`git status` 显示被改 |
+| ① 题目状态可问 | **已落地** `580feb7` | `xirang-realbug` 自证后**把题目放回盘上**（原先留还原态）+ `truth.json` 写 `tree_state`；实测新树 `util.rs:578` 是缺陷版、`git status` 显示被改 |
 | ② 逐文件指纹 | **已落地** `d662f44` | **注释行**（不是第九段——第九段会让更旧的读者拒绝整行，`#` 则被跳过）⇒ 双向兼容；实测：两文件租约动 `b.rs` ⇒ `lapsed at src/b.rs (changed since the confirmation (1 of 2 covered file(s)))` |
 | ③ `search` 多行命中 | **挂起（如实）** | 收益 1 次调用；为此**四次定向 grep 没定位到那段渲染器**（按输出形状、按 `" -> "`、按 `:{}` 都试过）⇒ 不值得继续找，留给下一次从 `--list search` 的描述顺藤摸瓜 |
 | ④ 家族级源码比较 | **不新建，只改通道** `580feb7` | 实测既有 `consistency --parent`（`by: api`）**一次就答了**（`outlier toggle: …calls to_world, which no sibling calls`）⇒ 我写的那段 `family_source` **已撤掉**；表里加一行从"单个对象"指向它 |

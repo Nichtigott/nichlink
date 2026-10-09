@@ -6,9 +6,9 @@
 
 ## 1. 装置
 
-- **题面**：由 `tools/nichlink-chain-eval` 的注入器（种子驱动、程序化选站点、记录真值）在**旧 `base` ＋ 旧 `plan.json`** 上现做三套注入树：`/tmp/agent-sim/round-1`（d=1 `impl`，站点 `kernel/src/registry_core/source/calls.rs`）、`round-11`（d=4 `chain`，`toolchain/src/studio/src/studio/ui/ui.rs`）、`round-13`（d=5 `impl`，`kernel/src/registry_core/tree/graft_ops/overlay.rs`）。每轮另有 `-cg` 副本给对照组。真值只在队长手上（`truth/round-N.json`），成员不可读。
-- **队伍**：`debugger-mcp`（只用 `nichlink-mcp` 桥，stdio JSON-RPC）、`debugger-codegraph`（只用 codegraph CLI 1.5.0 ＋它自己的 MCP `explore`）、`auditor`（不写源码、不跑 cargo）。7 个任务：三轮 × 两组按依赖串行，审计依赖全部六个。
-- **任务书硬约束**：你的工作树是唯一真相源；不许 `diff`/`cmp` 别的检出；不许读 `truth/**` 或 `/tmp/nichlink-eval/**`；不许改断言、加 `#[ignore]`、加 `#[allow]` 让树变绿。
+- **题面**：由 `tools/xirang-chain-eval` 的注入器（种子驱动、程序化选站点、记录真值）在**旧 `base` ＋ 旧 `plan.json`** 上现做三套注入树：`/tmp/agent-sim/round-1`（d=1 `impl`，站点 `kernel/src/registry_core/source/calls.rs`）、`round-11`（d=4 `chain`，`toolchain/src/studio/src/studio/ui/ui.rs`）、`round-13`（d=5 `impl`，`kernel/src/registry_core/tree/graft_ops/overlay.rs`）。每轮另有 `-cg` 副本给对照组。真值只在队长手上（`truth/round-N.json`），成员不可读。
+- **队伍**：`debugger-mcp`（只用 `xirang-mcp` 桥，stdio JSON-RPC）、`debugger-codegraph`（只用 codegraph CLI 1.5.0 ＋它自己的 MCP `explore`）、`auditor`（不写源码、不跑 cargo）。7 个任务：三轮 × 两组按依赖串行，审计依赖全部六个。
+- **任务书硬约束**：你的工作树是唯一真相源；不许 `diff`/`cmp` 别的检出；不许读 `truth/**` 或 `/tmp/xirang-eval/**`；不许改断言、加 `#[ignore]`、加 `#[allow]` 让树变绿。
 - **判分（队长亲自做，不信成员自述）**：① 命中 = 定位的文件:行/符号是否等于真值；② 绿恢复 = 在该树里复跑测试；③ 最小性 = 与**原始树**逐字节 diff（排除 `target`/`.codegraph`）；④ 附带损伤 = 有没有动测试或加豁免。
 
 ## 2. 结果
@@ -33,12 +33,12 @@
 
 ## 4. 审计结论：有没有破坏测量
 
-**没有。** 证据（审计员独立核，队长抽查）：六份报告对 `diff -r|cmp |/home/|truth|nichlink-eval|work/base` **grep 零命中**；`truth/*.json` 与 `work/plan.*` 的 atime 仍是创建时刻、`/tmp/nichlink-eval` 最新 atime 早于调试窗口；**六个病灶文件 sha256 与真值 `sha256_before` 逐一相等**（逐字节还原注入）；`round-N` 与 `round-N-cg` 全树相同；三棵树 `#[allow]` 均 57、`#[ignore]` 均 2 未增；计数自洽（187=184+3、530=521+9、187=170+17）⇒ 没有用 `#[ignore]` 消红。
+**没有。** 证据（审计员独立核，队长抽查）：六份报告对 `diff -r|cmp |/home/|truth|xirang-eval|work/base` **grep 零命中**；`truth/*.json` 与 `work/plan.*` 的 atime 仍是创建时刻、`/tmp/xirang-eval` 最新 atime 早于调试窗口；**六个病灶文件 sha256 与真值 `sha256_before` 逐一相等**（逐字节还原注入）；`round-N` 与 `round-N-cg` 全树相同；三棵树 `#[allow]` 均 57、`#[ignore]` 均 2 未增；计数自洽（187=184+3、530=521+9、187=170+17）⇒ 没有用 `#[ignore]` 消红。
 
 审计发现的要点：
 
 - **F2（高）**：cg-r1 报告"本树 `direct_calls` 只有测试在调用／无生产调用者"是**工具假阴性** ✗ —— `toolchain/src/mcp/src/source_index.rs:217` 就是生产调用者（跨 crate 全限定引用落在 codegraph DB 的 `unresolved_refs`，`status=failed`），而我们桥的 `callgraph callers(7)` **找到了它**。这一格是工具能力差，不是人的差。
-- **F6（中）**：三份驱动脚本的 BIN 指向**主检出**的 `target/debug/nichlink-mcp`（HEAD `709fa6a`，pinned `a23be52b` 的后代；被测文件与 round 树修复态逐字节相同），而 round-N 树自己也有同名二进制 ⇒ r1-mcp 报告里「the defect corrupts the tool's own answer」作为**运行事实不成立**（跑的是干净的桥）。下轮应把 BIN 指向 round-N 自身构建，专门测"桥在剖析含自身畸形副本的仓库"这个形状。
+- **F6（中）**：三份驱动脚本的 BIN 指向**主检出**的 `target/debug/xirang-mcp`（HEAD `709fa6a`，pinned `a23be52b` 的后代；被测文件与 round 树修复态逐字节相同），而 round-N 树自己也有同名二进制 ⇒ r1-mcp 报告里「the defect corrupts the tool's own answer」作为**运行事实不成立**（跑的是干净的桥）。下轮应把 BIN 指向 round-N 自身构建，专门测"桥在剖析含自身畸形副本的仓库"这个形状。
 - **F7（中）**：可审计性不对称——MCP 组有逐条 JSON-RPC 日志（可机核，也是审计抓到 F1 的依据），codegraph 组 CLI 无日志，工具账只能部分用 `.codegraph` DB 反查。
 - **F1**：r1 报告写 `read`×2 而日志是 ×3 = **漏记**（漏 `whole:true` 整文件读；总数 5 正确，决定性调用不受影响）。
 - **F3**：r13"偶发失败"（`plugin_host_fault_matrix::process_faults`，超时/管道缓冲）**未能复现**（队长在 `--test plugin_host_fault_matrix -- process_faults` 连跑 3 次，每次 11 passed/0 failed）⇒ 判装置噪声（时序敏感测试）。
@@ -59,16 +59,16 @@
 - pristine 参照无法物理隐藏（原始检出与 `base` 同盘）⇒ 只能靠规则 + 审计（审计用 grep、atime、sha256 三重证据补上了这一点）。
 - 对照组无命令日志（见 F7）。
 
-## 7. 第 2 轮（按审计 F6/F7 修装置；团队 `nichlink-sim-eval-r2`）
+## 7. 第 2 轮（按审计 F6/F7 修装置；团队 `xirang-sim-eval-r2`）
 
-同题重做一次，只改装置：两棵新的注入树（仍是 round 1 那道，`calls.rs:171` 的 `||`→`&&`，默认面 184/3 已验），`debugger-selfhosted` **必须在自己那棵树里构建并使用 `nichlink-mcp`**，`debugger-logged-codegraph` 同题但**每条命令与原始输出必须落盘**。
+同题重做一次，只改装置：两棵新的注入树（仍是 round 1 那道，`calls.rs:171` 的 `||`→`&&`，默认面 184/3 已验），`debugger-selfhosted` **必须在自己那棵树里构建并使用 `xirang-mcp`**，`debugger-logged-codegraph` 同题但**每条命令与原始输出必须落盘**。
 
 **F6 的答案：工具自身带病时，它会给出"语义上合理"的错边——这一次被察觉了。**
 - 带病桥（从注入树构建）对 `discover_children` 输出：`callers (2): src/build_time/src/source_walk.rs::discover_children, …::discover_root_reporting` 且 `callees: …, discover_children, …`，即**函数把自己列成自己的调用者兼被调用者**（队长独立复读了日志原文 ✓）。
 - 成员察觉的路径是**跨读源码**：同一次 `read calls.rs:139-183` 把第 143 行文档（"the function's own name (self-recursion) is excluded"）与第 171 行病行放在同一屏；再用 `read` 读到测试钉住的期望值 `[]`。它自己的话：这条错边"语义上很合理"（递归真实存在），输出里**没有任何字段提示此边违反了 self-exclusion**，唯一的置信度线索是 `evidence: static-heuristic` ⇒ **只信工具输出的话，这条自指边不会被怀疑**。这是本轮最值钱的一条：工具撒谎的方式是"给出一个看起来对、其实是策略禁止的答案"，而识别它必须靠工具**之外的**事实（文档、被钉的测试、跑一次门禁）。
 - 修复后它**重建桥再问同一个问题**：`callers (1)`、`callees` 里不再有自己 ⇒ 工具随修复转正 ✓。
 
-**F7 的答案：命令日志让对照组的工具账第一次可以被机核**（26 个 `=== CMD:` 标记、`init`/`index`/`callers`/改前改后的 `grep` 都在账上；唯一一处 `/home/nich|truth|nichlink-eval` 命中是成员自己的诚实声明 ✓）。但仍不够严：26 个标记 vs 它自述"22 条命令" vs 实际工具调用约 6 条 —— 数字对不齐；且该树不是 git 检出（`git rev-parse` 129），改动凭证只能靠改前/改后两行 grep（队长的 `diff` 对原始树覆盖了这一点 ✓）。**下一轮**：一次调用一个标记、每条都带 `=== EXIT:`，并让注入树本身是 git 检出。
+**F7 的答案：命令日志让对照组的工具账第一次可以被机核**（26 个 `=== CMD:` 标记、`init`/`index`/`callers`/改前改后的 `grep` 都在账上；唯一一处 `/home/nich|truth|xirang-eval` 命中是成员自己的诚实声明 ✓）。但仍不够严：26 个标记 vs 它自述"22 条命令" vs 实际工具调用约 6 条 —— 数字对不齐；且该树不是 git 检出（`git rev-parse` 129），改动凭证只能靠改前/改后两行 grep（队长的 `diff` 对原始树覆盖了这一点 ✓）。**下一轮**：一次调用一个标记、每条都带 `=== EXIT:`，并让注入树本身是 git 检出。
 
 **两组的结论一致**：这道题是**语义级**缺陷（一个布尔算符），codegraph 只能把行送到眼前、不会报错，识别同样靠"代码与自身文档矛盾"；codegraph 的 `no covering tests found` 覆盖标注不可信（实际有测试）。
 
@@ -78,9 +78,9 @@
 
 ## 8. 下一轮装置协议（第 2 轮的两条教训，已落到工具里）
 
-1. **注入树本身就是 git 检出**（已改 `tools/nichlink-chain-eval-mutate.py`）：注入前先把原始树提交一次、注入后再提交一次，并把 `target/`、`.codegraph/` 写进 `.gitignore`。于是 `git diff HEAD~1` 就是这次注入（实测恰好一处 1 行 hunk），解题方的改动凭证不再只能靠改前/改后两行 grep，审计也能直接要 diff ✓。
+1. **注入树本身就是 git 检出**（已改 `tools/xirang-chain-eval-mutate.py`）：注入前先把原始树提交一次、注入后再提交一次，并把 `target/`、`.codegraph/` 写进 `.gitignore`。于是 `git diff HEAD~1` 就是这次注入（实测恰好一处 1 行 hunk），解题方的改动凭证不再只能靠改前/改后两行 grep，审计也能直接要 diff ✓。
 2. **一次调用一个标记**：对照组的命令日志要**一条调用一个 `=== CMD:` 行、紧跟一条 `=== EXIT:` 行**（第 2 轮是 26 个标记 vs 自述 22 条 vs 实际约 6 次调用，数字对不齐 ✗）。
-3. 题面的症状命令要覆盖缺陷**真正可见**的特性面（第 1 轮第 11 轮的教训；现在 `nichlink.status` 会印特性面，`nichlink.check` 能按面跑）。
+3. 题面的症状命令要覆盖缺陷**真正可见**的特性面（第 1 轮第 11 轮的教训；现在 `xirang.status` 会印特性面，`xirang.check` 能按面跑）。
 
 ## 9. 下一批（按价值排序）
 

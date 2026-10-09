@@ -14,8 +14,8 @@
 
 **工具返回**（逐字）：
 ```
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
-family root/control · member nichlink-example-control-button · 9 member(s)
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
+family root/control · member xirang-example-control-button · 9 member(s)
   badge                    1 call(s): to_local
   button                   1 call(s): to_local
   dial                     1 call(s): to_local
@@ -29,7 +29,7 @@ family root/control · member nichlink-example-control-button · 9 member(s)
 outliers: 1 of 9
 not covered by this comparison: it reads the **derived** tree's sibling set and each sibling's own text, so a convention that lives in a shared helper, in generated code, or in a parent rule is not visible here; and `api` compares the names called, not the units or the arithmetic — an outlier is a place to look, not a defect; and a call written inside a macro body is not read as a call (the kernel's rule), so an object whose whole body is one macro invocation reads as calling nothing
 next   `read {path, line}` for the outlier's body, `explain {node}` for its declared fields
-evidence nichlink.consistency {"parent":"root/control"} → exit 0
+evidence xirang.consistency {"parent":"root/control"} → exit 0
 
 ```
 
@@ -66,7 +66,7 @@ Let me start with h1-supply-chain and h2-claim-unkept.
 ```
 
 **同一步并行发出的其它调用**：
-- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/h2-claim-unkept/host; L=target/round9/logs/h2-claim-unkept.jsonl\necho '===== adopted'; $B --call adopted --root $R --log $L; echo \"EXIT=$?\"\necho '===== conformance button'; $B --call conformance -
+- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/h2-claim-unkept/host; L=target/round9/logs/h2-claim-unkept.jsonl\necho '===== adopted'; $B --call adopted --root $R --log $L; echo \"EXIT=$?\"\necho '===== conformance button'; $B --call conformance -
 …[参数：此处截断，全文 690 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 ### ①2 日志第 2 条 · exit 0 · step 153（turn 1）
@@ -80,14 +80,14 @@ at src/control/object/toggle/toggle.rs:15 — the definition `offset` (lines 15-
              src/control/object/toggle/toggle.rs:14 /// This widget's offset, in the coordinate family its siblings use.
   callers    tests/offsets.rs::the_rendered_offsets_add_up (outside this file's directory (tests))
   pins       a test names `offset`; `check {face}` is the run that shows it still holds
-  adoption   no ledger at .nichlink/adopted/entries in this root
+  adoption   no ledger at .xirang/adopted/entries in this root
   gate       no `#[cfg]` attribute sits directly above this definition at src/control/object/toggle/toggle.rs:15 (a gate on the enclosing module is not read here)
-  scope      scope unknown (no source_scope.tsv; run `nichlink check`)
-  pruning    pruning unknown (no pruning_manifest.tsv; run `nichlink check`)
+  scope      scope unknown (no source_scope.tsv; run `xirang check`)
+  pruning    pruning unknown (no pruning_manifest.tsv; run `xirang check`)
   wiring     declared cut `crate::control::object::toggle::NODE_ID` → `control_button_graft::toggle_fast::NODE_ID` (full=false) at /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/src/lib.rs:48
 not covered here: how a grafted subtree looks at runtime (ask `trace`), and whether the declarations above describe the tree **as it is now** — the scope and pruning lines are the build's own output, and a tree built before the last edit says so on the `scope` line
 next   `check {face}` to run the face that compiles it, `grafts` for every declared cut, `locate {symptom}` for sibling places to compare it with
-evidence nichlink.why {"at":"src/control/object/toggle/toggle.rs:15"} → exit 0
+evidence xirang.why {"at":"src/control/object/toggle/toggle.rs:15"} → exit 0
 
 ```
 
@@ -187,7 +187,7 @@ src/control/object/panel/panel.rs:15 fn offset
 … truncated: 4 of 9 definitions withheld at the limit of 5; pass `path` for one of: `src/control/object/slider/slider.rs`, `src/control/object/spinner/spinner.rs`, `src/control/object/timeline/timeline.rs`, `src/control/object/toggle/toggle.rs`; `limit` raises this cap
 dynamic dispatch, function pointers, FFI, and runtime branches require live CallTrace evidence.
 next   `read {path, line}` for a body, `affected {files}` for what depends on it
-evidence nichlink.callgraph {"function":"offset"} → exit 0
+evidence xirang.callgraph {"function":"offset"} → exit 0
 
 ```
 
@@ -203,7 +203,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host
 tree   14 rust file(s), 24 function(s)
 elapsed 22811 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host/target/xirang/out/check-default.log
 exit   101
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -220,7 +220,7 @@ census: 0 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `base_registry` (src/lib.rs:70)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 3 of 12 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
+evidence xirang.check {"face":"default","timeout_ms":900000} → exit 0
 
 ```
 
@@ -257,8 +257,8 @@ evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
 21:    );
 22:}
 === lib.rs
-1://! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2://! NichLink example: the README Control/Button two-level tree as a real host
+1://! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2://! XiRang example: the README Control/Button two-level tree as a real host
 3://! library.
 4://!
 5://! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -267,7 +267,7 @@ evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
 8://! step generated; face code stays ordinary Rust and no parent keeps a child
 9://! roster.
 10:
-11:nichlink_toolchain::runtime::host!();
+11:xirang_toolchain::runtime::host!();
 12:
 13:// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14:// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -283,7 +283,7 @@ evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
 24:
 25:/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26:/// The example's host identity. A graft requires both sides to share it.
-27:pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27:pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28:
 29:// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30:// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -555,11 +555,11 @@ Let me now run the offsets test to capture raw output + exit code, and also use 
 
 Then h2, h3, h4.
 
-Let me run h1-supply-chain's test. The host depends on nichlink-toolchain via path (the sed pointed it to the checkout) and on the graft crate. Let me run `cargo test --offline` in host/. It may need to compile a lot (the toolchain) — the .cargo-target dir has no h1-supply-chain entry... it has fa fb fd fe g3 h1 r1..r4. So a cold build is needed for this host; that could take minutes. Let me try with a shared target dir per hardbug class: /target/round9/.cargo-target/h1-supply-chain.
+Let me run h1-supply-chain's test. The host depends on xirang-toolchain via path (the sed pointed it to the checkout) and on the graft crate. Let me run `cargo test --offline` in host/. It may need to compile a lot (the toolchain) — the .cargo-target dir has no h1-supply-chain entry... it has fa fb fd fe g3 h1 r1..r4. So a cold build is needed for this host; that could take minutes. Let me try with a shared target dir per hardbug class: /target/round9/.cargo-target/h1-supply-chain.
 
 Actually — to save time, maybe reuse the fa target dir? Different package/deps (graft). Cargo can share a target dir across projects (it keys by fingerprint), so using .cargo-target/fa for h1-supply-chain would reuse the toolchain build artifacts. That's a legit speedup: `CARGO_TARGET_DIR=.../.cargo-target/fa`. Hmm, but it could cause lock contention with other runs; fine.
 
-Let me use a per-class dir but pre-warm by... no, simplest: use the shared `.cargo-target/fa` dir for the hardbug classes (it already has nichlink-toolchain built). Actually different packages → cargo still needs to build the host + graft crates, but the toolchain dependency build is cached. Let me use `.cargo-target/hardbug` as a new shared dir; the first run will rebuild the toolchain (slow, maybe 1-3 min). Reusing fa's dir avoids that. Let me reuse `.cargo-target/fa`.
+Let me use a per-class dir but pre-warm by... no, simplest: use the shared `.cargo-target/fa` dir for the hardbug classes (it already has xirang-toolchain built). Actually different packages → cargo still needs to build the host + graft crates, but the toolchain dependency build is cached. Let me use `.cargo-target/hardbug` as a new shared dir; the first run will rebuild the toolchain (slow, maybe 1-3 min). Reusing fa's dir avoids that. Let me reuse `.cargo-target/fa`.
 
 Hmm, concurrent cargo runs sharing a target dir: cargo takes a lock, so parallel runs serialize. I'll run the 4 hardbug tests sequentially (one command, sequential `cargo test` invocations per class... but that's "several problems in one shell command" → needs a batching.md entry). Hmm! The batching rule applies to "把几道题放进同一条 shell 命令" — for attribution of per-problem tokens. If I run 4 classes' tests in one bash call, I must record it in batching.md. That's fine — I'll record it (it's honest: the 4 hardbug classes shared one shell command for compiling/running their tests). But then "逐题 token 无法归因"... the batching.md line covers it.
 
@@ -567,7 +567,7 @@ Cleaner: keep one problem per bash call, and run them in parallel in the same me
 
 Alternative: the tool's `check` can run the tests; but I still need cargo.
 
-Let me check how big the toolchain build is: the fa check took 23s (incremental, already built). A cold build of nichlink-toolchain + deps... The main workspace target/debug exists; maybe I can point CARGO_TARGET_DIR at /home/nich/Moirai_N3/nichlink/target (the checkout's own target dir) — it already has all the toolchain artifacts! `CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target` for the hardbug trees. Since the toolchain path dep is the checkout itself, the fingerprints should mostly match (different profile features?). The tree's Cargo.toml has features run/authoring — the checkout's target dir has those built (from previous rounds/debug binary). Risk: writing into the main target dir (allowed — it's the workspace). It might also invalidate the checkout's build (different feature unification) — that could slow later builds of the MCP tool (but I'm done building it).
+Let me check how big the toolchain build is: the fa check took 23s (incremental, already built). A cold build of xirang-toolchain + deps... The main workspace target/debug exists; maybe I can point CARGO_TARGET_DIR at /home/nich/Moirai_N3/nichlink/target (the checkout's own target dir) — it already has all the toolchain artifacts! `CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target` for the hardbug trees. Since the toolchain path dep is the checkout itself, the fingerprints should mostly match (different profile features?). The tree's Cargo.toml has features run/authoring — the checkout's target dir has those built (from previous rounds/debug binary). Risk: writing into the main target dir (allowed — it's the workspace). It might also invalidate the checkout's build (different feature unification) — that could slow later builds of the MCP tool (but I'm done building it).
 
 Hmm, safer: use `.cargo-target/hardbug` (new) and accept one cold build (sequential, first class). Then the other three reuse it. To avoid the batching issue, I'll run them one class per bash call, sequentially (each in its own message-ish). But parallel calls in one message would contend for the lock → they'd serialize automatically; each is a separate shell command → no batching entry needed. That's the cleanest: 4 separate bash calls (even if they queue on the cargo lock). Let me do that: 4 parallel bash calls, each with its own tree and CARGO_TARGET_DIR=.cargo-target/<clas
 …[推理：此处截断，全文 7294 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
@@ -576,7 +576,7 @@ Hmm, safer: use `.cargo-target/hardbug` (new) and accept one cold build (sequent
 **同一步并行发出的其它调用**：
 - `bash` → 归属 h1-supply-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -25; echo \"EXIT=${PIPESTATUS[0]}\"", "description": "h1-supply-chain: run offse
 …[参数：此处截断，全文 331 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
-- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"; echo '=== ledger'; grep -n '' .nichlink/ado
+- `bash` → 归属 h2-claim-unkept：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/round9/trees/h2-claim-unkept/host && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/round9/.cargo-target/hardbugs timeout 1200 cargo test --offline 2>&1 | tail -20; echo \"EXIT=${PIPESTATUS[0]}\"; echo '=== ledger'; grep -n '' .xirang/ado
 …[参数：此处截断，全文 397 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `bash`（step 153）：
@@ -631,14 +631,14 @@ Let me run the h1-supply-chain probe (copy + fix + test) and the h4 probe (copy 
 ```
 
 **同一步并行发出的其它调用**：
-- `bash` → 归属 h1-supply-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/nichlink-mcp; R=target/round9/trees/h1-supply-chain/host; L=target/round9/logs/h1-supply-chain.jsonl\necho '===== check default'; $B --call check --root $R --log $L --face default --timeout_ms 900000 2>&1 | sed -n '1,16p'; echo \"EXIT=$
+- `bash` → 归属 h1-supply-chain：`{"command": "cd /home/nich/Moirai_N3/nichlink; B=./target/debug/xirang-mcp; R=target/round9/trees/h1-supply-chain/host; L=target/round9/logs/h1-supply-chain.jsonl\necho '===== check default'; $B --call check --root $R --log $L --face default --timeout_ms 900000 2>&1 | sed -n '1,16p'; echo \"EXIT=$
 …[参数：此处截断，全文 603 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 - `bash` → 归属 h1-supply-chain：`{"command": "rm -rf /tmp/h1sc-probe && cp -r /home/nich/Moirai_N3/nichlink/target/round9/trees/h1-supply-chain /tmp/h1sc-probe && rm -rf /tmp/h1sc-probe/host/target && cd /tmp/h1sc-probe/host && sed -i 's/to_world/to_local/g' src/control/object/toggle/toggle.rs && grep -n \"to_local\\|to_world\" src
 …[参数：此处截断，全文 581 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `write`（step 156）：
 ```
-{"content": "# h1-supply-chain — 同族里一个兄弟调用了与其余兄弟不同的那一族名字\n\nroot cause — `src/control/object/toggle/toggle.rs:16`（调用）＋ `:3`（import）：`to_world(x)`。\n同族其余 8 个（badge/button/dial/gauge/panel/slider/spinner/timeline）在同一位置都是 `to_local(x)`；\n两个族定义在 `src/control/control.rs:5`（`to_local = x + 7`，局部族）与 `:8`（`to_world = x + 31`，世界族）。\n\nmechanism — `tests/offsets.rs:9-17` 把 8 个 `offset(10)` 相加。兄弟各给 17，toggle 给 41 ⇒\n7×17 + 41 = **160**，而\"每个部件都按兄弟那族摆放\"的总和是 8×17 = **136**（差值 24 恰为 31−7）。\ntoggle 自己的注释 `:14`（\"in the coordinate family its siblings use\"）与它的调用相反，所以单看每个文件都\"对\"。\n整棵树里没有任何第二个 `to_world` 调用者（`consistency --parent root/control` 的 9 个成员只点 toggle）。\n\nevidence — ① `cargo test --offline`（root=h1-supply-chain/host，exit **101**）：\n`the_rendered_offsets_add_up ... FAILED`，`assertion left == right failed: the rendered offsets add up to 160, not 136`。\n② `check {face:default}` → `verdict failed (cargo exit 101)`，同上（log `…/host/target/nichlink/out/check-default.log`）。\n③ `consistency {parent:root/control}` → `badge/button/dial/gauge/panel/slider/spinner/timeline 1 call(s): to_local`、\n`toggle 1 call(s): to_world`、`outlier toggle: does not call to_local … calls to_world, which no sibling calls`、`outliers: 1 of 9`。\n④ `why {at:toggle.rs:15}` → 契约行 `:14` 仍是\"兄弟那族\"；callers=`tests/offsets.rs::the_rendered_offsets_add_up`。\n⑤ `callgraph {function:offset}` → 每个兄弟 `callees: to_local -> src/control/control.rs:5`。\n⑥ 算术：8×17=136、7×17+41=160、41−17=24。\n\ncounter-proof — 若错的是别处（例如 `to_local` 本身或另一个部件），则只改 toggle 一处**不会**让总和变 136。\n我在 **/tmp 的副本**（不碰本树）里把 `toggle.rs` 的 `to_world` 全改成 `to_local` 后重跑：\n`the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（exit **0**）。\n另一侧：若两个部件都错，160−136=24 就该是两个差值之和；实测差值恰等于单次 `to_world−to_local`。\n\nfix — 最小改动：`src/control/object/toggle/toggle.rs:3` 与 `:16` 的 `to_world` → `to_local`（同一文件、两处标识符）。\n未改动：`tests/offsets.rs`（不改测试）、`src/control/control.rs`（两个坐标族都是设计的一部分）、\n其余 8 个部件文件、`src/lib.rs` 的 graft 计划（toggle 是槽位，但缺陷在宿主自己的文件里）。\n本树**只
+{"content": "# h1-supply-chain — 同族里一个兄弟调用了与其余兄弟不同的那一族名字\n\nroot cause — `src/control/object/toggle/toggle.rs:16`（调用）＋ `:3`（import）：`to_world(x)`。\n同族其余 8 个（badge/button/dial/gauge/panel/slider/spinner/timeline）在同一位置都是 `to_local(x)`；\n两个族定义在 `src/control/control.rs:5`（`to_local = x + 7`，局部族）与 `:8`（`to_world = x + 31`，世界族）。\n\nmechanism — `tests/offsets.rs:9-17` 把 8 个 `offset(10)` 相加。兄弟各给 17，toggle 给 41 ⇒\n7×17 + 41 = **160**，而\"每个部件都按兄弟那族摆放\"的总和是 8×17 = **136**（差值 24 恰为 31−7）。\ntoggle 自己的注释 `:14`（\"in the coordinate family its siblings use\"）与它的调用相反，所以单看每个文件都\"对\"。\n整棵树里没有任何第二个 `to_world` 调用者（`consistency --parent root/control` 的 9 个成员只点 toggle）。\n\nevidence — ① `cargo test --offline`（root=h1-supply-chain/host，exit **101**）：\n`the_rendered_offsets_add_up ... FAILED`，`assertion left == right failed: the rendered offsets add up to 160, not 136`。\n② `check {face:default}` → `verdict failed (cargo exit 101)`，同上（log `…/host/target/xirang/out/check-default.log`）。\n③ `consistency {parent:root/control}` → `badge/button/dial/gauge/panel/slider/spinner/timeline 1 call(s): to_local`、\n`toggle 1 call(s): to_world`、`outlier toggle: does not call to_local … calls to_world, which no sibling calls`、`outliers: 1 of 9`。\n④ `why {at:toggle.rs:15}` → 契约行 `:14` 仍是\"兄弟那族\"；callers=`tests/offsets.rs::the_rendered_offsets_add_up`。\n⑤ `callgraph {function:offset}` → 每个兄弟 `callees: to_local -> src/control/control.rs:5`。\n⑥ 算术：8×17=136、7×17+41=160、41−17=24。\n\ncounter-proof — 若错的是别处（例如 `to_local` 本身或另一个部件），则只改 toggle 一处**不会**让总和变 136。\n我在 **/tmp 的副本**（不碰本树）里把 `toggle.rs` 的 `to_world` 全改成 `to_local` 后重跑：\n`the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（exit **0**）。\n另一侧：若两个部件都错，160−136=24 就该是两个差值之和；实测差值恰等于单次 `to_world−to_local`。\n\nfix — 最小改动：`src/control/object/toggle/toggle.rs:3` 与 `:16` 的 `to_world` → `to_local`（同一文件、两处标识符）。\n未改动：`tests/offsets.rs`（不改测试）、`src/control/control.rs`（两个坐标族都是设计的一部分）、\n其余 8 个部件文件、`src/lib.rs` 的 graft 计划（toggle 是槽位，但缺陷在宿主自己的文件里）。\n本树**只
 …[参数：此处截断，全文 2266 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -679,7 +679,7 @@ toggle 自己的注释 `:14`（"in the coordinate family its siblings use"）与
 整棵树里没有任何第二个 `to_world` 调用者（`consistency --parent root/control` 的 9 个成员只点 toggle）。
 evidence — ① `cargo test --offline`（root=h1-supply-chain/host，exit **101**）：
 `the_rendered_offsets_add_up ... FAILED`，`assertion left == right failed: the rendered offsets add up to 160, not 136`。
-② `check {face:default}` → `verdict failed (cargo exit 101)`，同上（log `…/host/target/nichlink/out/check-default.log`）。
+② `check {face:default}` → `verdict failed (cargo exit 101)`，同上（log `…/host/target/xirang/out/check-default.log`）。
 ③ `consistency {parent:root/control}` → `badge/button/dial/gauge/panel/slider/spinner/timeline 1 call(s): to_local`、
 `toggle 1 call(s): to_world`、`outlier toggle: does not call to_local … calls to_world, which no sibling calls`、`outliers: 1 of 9`。
 ④ `why {at:toggle.rs:15}` → 契约行 `:14` 仍是"兄弟那族"；callers=`tests/offsets.rs::the_rendered_offsets_add_up`。

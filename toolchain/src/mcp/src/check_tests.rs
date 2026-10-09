@@ -14,7 +14,7 @@ fn scratch(label: &str) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-check-{label}-{}-{sequence}",
+        "xirang-mcp-check-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -94,7 +94,7 @@ fn outcome(code: Option<i32>, timed_out: bool) -> RunOutcome {
         code,
         timed_out,
         elapsed: Duration::from_millis(200),
-        log: PathBuf::from("/tree/target/nichlink/out/check-default.log"),
+        log: PathBuf::from("/tree/target/xirang/out/check-default.log"),
     }
 }
 
@@ -541,7 +541,7 @@ fn the_sample_keeps_the_branch_row_that_names_the_dead_arm() {
 /// 那些是答案、逐行留着；通过的那些折叠，而折叠点名撤销它的开关——因此读者从不必猜是少了一组还是只是被折了。
 #[test]
 fn the_passing_groups_fold_and_verbose_undoes_it() {
-    let root = std::env::temp_dir().join(format!("nichlink-check-fold-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-check-fold-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).expect("scratch");
     let log = root.join("check-default.log");
@@ -623,7 +623,7 @@ fn a_red_routes_by_its_kind_rather_than_to_the_default_hint() {
         Some("tests/offsets.rs:18:5"),
         &[&format!(
             "why    the_rendered_offsets_add_up: assertion failed: {} (160, not 136)",
-            nichlink_kernel::RuntimeCheckSpec::CoordinatesInViewport.name()
+            xirang_kernel::RuntimeCheckSpec::CoordinatesInViewport.name()
         )],
     );
     let next = super::next_step("root/control/object/slider", false, Some(101), &family)

@@ -16,7 +16,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub use nichlink_kernel::authoring::parse::*;
+pub use xirang_kernel::authoring::parse::*;
 
 use super::context::{normalized_path, source_root};
 
@@ -25,7 +25,7 @@ use super::context::{normalized_path, source_root};
 pub(super) fn kind_from_source_path(source: &str) -> Option<String> {
     let path = source_root().join(source);
     let text = fs::read_to_string(path).ok()?;
-    nichlink_kernel::authoring::parse::kind_from_source_text(&text)
+    xirang_kernel::authoring::parse::kind_from_source_text(&text)
 }
 
 /// The `source` a face file records, relative to the package's `src/`.
@@ -74,14 +74,14 @@ mod parse_tests;
 ///
 /// A face with no rule file has no structural requirement, so a missing file is still
 /// `Ok("ANY")` — absence is not a malformed rule. A file that exists is read through
-/// [`nichlink_kernel::authoring::parse::try_rule_syntax_from_text`], which locates the
+/// [`xirang_kernel::authoring::parse::try_rule_syntax_from_text`], which locates the
 /// `REGISTRATION_RULE` const's initializer through the AST: a clause inside a comment is
 /// not part of the rule, and a rule the reader cannot recognize is refused with the face
 /// file, the rule file, and the reason, instead of silently degrading to `ANY` or to a
 /// rule nobody declared (audit `KRN-K-10`; the tolerant/`String` entry is kept only as
 /// published API and this path no longer uses it).
 /// 没有规则文件的注册面没有结构要求，因此文件缺失仍是 `Ok("ANY")`——缺席不是畸形规则。存在的文件经
-/// [`nichlink_kernel::authoring::parse::try_rule_syntax_from_text`] 读取，它经 AST 定位
+/// [`xirang_kernel::authoring::parse::try_rule_syntax_from_text`] 读取，它经 AST 定位
 /// `REGISTRATION_RULE` 常量的初始器：注释里的子句不属于规则，而读取器认不出的规则会被拒绝，并带上
 /// 注册面文件、规则文件与理由，而不是静默降级成 `ANY` 或某条没人声明的规则（审计 `KRN-K-10`；
 /// 宽容的 `String` 入口只作为已发布 API 保留，本路径不再使用）。
@@ -95,7 +95,7 @@ pub(super) fn rule_syntax_for_source(path: &Path) -> Result<String, String> {
         let Ok(text) = fs::read_to_string(candidate) else {
             continue;
         };
-        return nichlink_kernel::authoring::parse::try_rule_syntax_from_text(&text).map_err(
+        return xirang_kernel::authoring::parse::try_rule_syntax_from_text(&text).map_err(
             |error| {
                 format!(
                     "face `{}`: registration rule source `{}` was refused: {error}",

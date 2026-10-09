@@ -11,14 +11,14 @@
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
 /// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
 /// 而展开里的 `crate::` 解析到 crate 根。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 /// A face declared with `collector` and `kind` and nothing else: no `handle`,
 /// no explicit `registry_name`, no `needs_registry`.
 /// 只写 `collector` 与 `kind`、别无其它字段的注册面：没有 `handle`，没有显式
 /// `registry_name`，也没有 `needs_registry`。
 mod kind_only {
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: KindOnlyFace,
     }

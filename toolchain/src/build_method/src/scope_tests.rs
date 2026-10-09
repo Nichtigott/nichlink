@@ -33,10 +33,10 @@ fn selected_sources(
 #[test]
 fn a_typed_cut_narrows_the_scope_to_the_declared_slot() {
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-scope-{}-{}",
+            "xirang-scope-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -94,10 +94,10 @@ fn a_typed_cut_narrows_the_scope_to_the_declared_slot() {
 #[test]
 fn a_configured_entry_drives_the_scope_and_the_cut_table() {
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-scope-configured-{}-{}",
+            "xirang-scope-configured-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -168,10 +168,10 @@ fn a_configured_entry_drives_the_scope_and_the_cut_table() {
 #[test]
 fn an_unplaceable_typed_cut_keeps_the_whole_tree() {
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-scope-unrecognized-{}-{}",
+            "xirang-scope-unrecognized-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -210,9 +210,9 @@ fn an_unplaceable_typed_cut_keeps_the_whole_tree() {
 #[test]
 fn a_refused_scope_value_is_a_diagnostic() {
     let src = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
-        .join("nichlink-scope-diagnostics");
+        .join("xirang-scope-diagnostics");
     let entry = super::HostEntry::Convention(src.join("lib.rs"));
     let cases = [
         (
@@ -251,10 +251,10 @@ fn a_refused_scope_value_is_a_diagnostic() {
 /// Both spellings normalise to the same `::` module path, so the overlap rule can compare a typed
 /// cut with a logical one. Overlap itself is answered by **declaration order** — the later entry wins
 /// and the earlier one is dropped, with a hint naming both (the maintainer's ruling; the end-to-end
-/// behaviour is pinned by `tools/nichlink-graft-matrix`, leg 2).
+/// behaviour is pinned by `tools/xirang-graft-matrix`, leg 2).
 /// 两种拼写都归一到同一个 `::` 模块路径，因此重叠规则能把类型化切口与逻辑切口放在一起比。重叠本身由
 /// **声明顺序**作答——后一条赢、前一条被丢掉，并给一条提示同时点名两者（维护者的裁定；端到端行为由
-/// `tools/nichlink-graft-matrix` 的 leg 2 钉住）。
+/// `tools/xirang-graft-matrix` 的 leg 2 钉住）。
 #[test]
 fn a_cut_names_the_same_subtree_however_it_is_spelled() {
     assert_eq!(
@@ -286,10 +286,10 @@ fn a_cut_names_the_same_subtree_however_it_is_spelled() {
 #[test]
 fn a_full_cut_on_the_root_face_keeps_every_face_live() {
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-scope-root-{}-{}",
+            "xirang-scope-root-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -356,10 +356,10 @@ fn a_full_cut_on_the_root_face_keeps_every_face_live() {
 #[test]
 fn a_crate_claim_keeps_its_subtree_live_next_to_a_graft_slot() {
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-scope-claim-{}-{}",
+            "xirang-scope-claim-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -434,12 +434,12 @@ fn a_crate_claim_keeps_its_subtree_live_next_to_a_graft_slot() {
 #[test]
 fn the_faces_a_plan_leaves_outside_are_named_with_a_clause_to_keep_them() {
     let face = |name: &str| super::super::scope_faces::FaceSource {
-        id: nichlink_kernel::identity::NodeId::from_bytes(name.as_bytes()),
+        id: xirang_kernel::identity::NodeId::from_bytes(name.as_bytes()),
         source: std::path::PathBuf::from(format!("{name}/{name}.rs")),
         module: name.to_owned(),
     };
     let all = vec![face("panel"), face("frame"), face("gauge")];
-    let roots: std::collections::BTreeSet<nichlink_kernel::identity::NodeId> =
+    let roots: std::collections::BTreeSet<xirang_kernel::identity::NodeId> =
         [all[0].id].into_iter().collect();
 
     let lines = super::outside_slots_note(std::path::Path::new("src/lib.rs"), &all, &roots)
@@ -454,7 +454,7 @@ fn the_faces_a_plan_leaves_outside_are_named_with_a_clause_to_keep_them() {
         "the way forward is a clause, not advice: {said}"
     );
     assert!(
-        said.contains("NICH_LINK_SCOPE=all"),
+        said.contains("XIRANG_SCOPE=all"),
         "and keeping the whole tree is one variable away: {said}"
     );
 
@@ -462,7 +462,7 @@ fn the_faces_a_plan_leaves_outside_are_named_with_a_clause_to_keep_them() {
     // declares a cut is noise, and noise is how a real one gets ignored.
     // 否定的那一半：没有面在外面就什么都不说。一条在每次"声明了切口"的构建上都响的警告是噪音，而噪音正是
     // 真警告被忽略的方式。
-    let everything: std::collections::BTreeSet<nichlink_kernel::identity::NodeId> =
+    let everything: std::collections::BTreeSet<xirang_kernel::identity::NodeId> =
         all.iter().map(|face| face.id).collect();
     assert!(
         super::outside_slots_note(std::path::Path::new("src/lib.rs"), &all, &everything).is_none(),

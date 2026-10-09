@@ -76,7 +76,7 @@ fn fixture(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-trace-{label}-{}-{sequence}",
+        "xirang-trace-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -351,7 +351,7 @@ fn from_trace_renders_the_same_document_twice() {
 #[test]
 fn the_artifact_path_prefers_the_override_and_falls_back_to_the_lexicon() {
     let root = Path::new("/pkg");
-    let conventional = Path::new("/pkg/.nichlink/traces/nichlink.trace");
+    let conventional = Path::new("/pkg/.xirang/traces/xirang.trace");
     assert_eq!(resolve_artifact_path(root, None), conventional);
     assert_eq!(
         resolve_artifact_path(root, Some(OsStr::new(""))),
@@ -398,11 +398,11 @@ fn writing_and_reading_an_artifact_round_trips() {
 }
 
 /// The documented pair works on a fresh project: `trace_artifact_path` names a
-/// file whose `.nichlink/traces/` directory does not exist yet, and the writer
+/// file whose `.xirang/traces/` directory does not exist yet, and the writer
 /// creates it. It used to fail with "No such file or directory", naming its own
 /// temporary file instead of the missing directory.
 /// 文档化的那一对在全新的项目里就能用：`trace_artifact_path` 指名的文件所在的
-/// `.nichlink/traces/` 还不存在，由写入方创建它。它过去会以 "No such file or directory" 失败，
+/// `.xirang/traces/` 还不存在，由写入方创建它。它过去会以 "No such file or directory" 失败，
 /// 并且点名的是自己的临时文件而不是缺失的目录。
 #[test]
 fn writing_to_the_convention_path_creates_its_directory() {

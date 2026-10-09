@@ -1,5 +1,5 @@
-//! `nichlink.digest`: one bounded summary of one file, so a multi-algorithm file can be read at all.
-//! `nichlink.digest`：一个文件的**有界**摘要，让"一个文件里好几套算法"也能先看清结构。
+//! `xirang.digest`: one bounded summary of one file, so a multi-algorithm file can be read at all.
+//! `xirang.digest`：一个文件的**有界**摘要，让"一个文件里好几套算法"也能先看清结构。
 //!
 //! The failure this answers is the fourth class the maintainer named: a file holding several
 //! algorithms where one branch of one of them is wrong, and every part locally plausible. Reading

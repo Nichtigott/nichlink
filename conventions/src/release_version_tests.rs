@@ -9,7 +9,7 @@ fn synthetic(root_manifest: &str, members: &[(&str, &str)]) -> std::path::PathBu
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-release-version-{}-{sequence}",
+        "xirang-release-version-{}-{sequence}",
         std::process::id()
     ));
     fs::create_dir_all(&root).expect("fixture root");
@@ -30,11 +30,11 @@ fn synthetic(root_manifest: &str, members: &[(&str, &str)]) -> std::path::PathBu
 fn a_version_line_before_the_release_section_is_reported() {
     let root = synthetic(
         "[workspace]\nmembers = [\"core\"]\n\n\
-         [workspace.dependencies.nichlink-kernel]\npath = \"core\"\nversion = \"0.1.0\"\n\n\
+         [workspace.dependencies.xirang-kernel]\npath = \"core\"\nversion = \"0.1.0\"\n\n\
          [workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "core",
-            "[package]\nname = \"nichlink-kernel\"\nversion.workspace = true\n",
+            "[package]\nname = \"xirang-kernel\"\nversion.workspace = true\n",
         )],
     );
     let found = findings(&root);
@@ -56,7 +56,7 @@ fn a_member_with_its_own_version_is_reported() {
         "[workspace]\nmembers = [\"core\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "core",
-            "[package]\nname = \"nichlink-kernel\"\nversion = \"0.1.0\"\n",
+            "[package]\nname = \"xirang-kernel\"\nversion = \"0.1.0\"\n",
         )],
     );
     let found = findings(&root);
@@ -74,8 +74,8 @@ fn a_multi_line_requirement_with_a_wrong_version_is_reported() {
         "[workspace]\nmembers = [\"macro\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "macro",
-            "[package]\nname = \"nichlink-macro\"\nversion.workspace = true\n\n\
-             [dependencies]\nnichlink-kernel = {\n    path = \"../core\",\n    \
+            "[package]\nname = \"xirang-macro\"\nversion.workspace = true\n\n\
+             [dependencies]\nxirang-kernel = {\n    path = \"../core\",\n    \
              version = \"0.2.0\",\n    features = [\"syntax\"],\n}\n",
         )],
     );
@@ -94,8 +94,8 @@ fn a_published_requirement_without_a_version_is_reported() {
         "[workspace]\nmembers = [\"cli\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "cli",
-            "[package]\nname = \"nichlink-toolchain\"\nversion.workspace = true\n\n\
-             [dependencies]\nnichlink-kernel = { path = \"../core\" }\n",
+            "[package]\nname = \"xirang-toolchain\"\nversion.workspace = true\n\n\
+             [dependencies]\nxirang-kernel = { path = \"../core\" }\n",
         )],
     );
     let found = findings(&root);
@@ -124,7 +124,7 @@ fn an_unpublished_members_stale_requirement_is_reported() {
         &[(
             "host",
             "[package]\nname = \"host\"\nversion.workspace = true\npublish = false\n\n\
-             [dependencies]\nnichlink-kernel = { path = \"../core\", version = \"0.1.5\" }\n",
+             [dependencies]\nxirang-kernel = { path = \"../core\", version = \"0.1.5\" }\n",
         )],
     );
     let found = findings(&root);
@@ -149,7 +149,7 @@ fn an_unpublished_member_may_omit_the_version() {
         &[(
             "demo",
             "[package]\nname = \"demo\"\nversion.workspace = true\npublish = false\n\n\
-             [dependencies]\nnichlink-kernel = { path = \"../core\" }\n",
+             [dependencies]\nxirang-kernel = { path = \"../core\" }\n",
         )],
     );
     let found = findings(&root);
@@ -172,18 +172,18 @@ fn the_shipped_manifests_name_one_version() {
 }
 
 /// A renamed dependency is still a requirement on the package it names. Reading only keys
-/// that start with `nichlink-` let `kernel = { package = "nichlink-kernel", version = … }`
+/// that start with `xirang-` let `kernel = { package = "xirang-kernel", version = … }`
 /// name an internal dependency with a version nothing checked.
-/// 重命名的依赖仍然是对它点名的那个包的要求。只读以 `nichlink-` 开头的键，会让
-/// `kernel = { package = "nichlink-kernel", version = … }` 以没人检查过的版本点名一个内部依赖。
+/// 重命名的依赖仍然是对它点名的那个包的要求。只读以 `xirang-` 开头的键，会让
+/// `kernel = { package = "xirang-kernel", version = … }` 以没人检查过的版本点名一个内部依赖。
 #[test]
 fn a_renamed_internal_requirement_is_reported() {
     let root = synthetic(
         "[workspace]\nmembers = [\"cli\"]\n\n[workspace.package]\nversion = \"0.1.1\"\n",
         &[(
             "cli",
-            "[package]\nname = \"nichlink-toolchain\"\nversion.workspace = true\n\n\
-             [dependencies]\nkernel = { package = \"nichlink-kernel\", path = \"../core\", \
+            "[package]\nname = \"xirang-toolchain\"\nversion.workspace = true\n\n\
+             [dependencies]\nkernel = { package = \"xirang-kernel\", path = \"../core\", \
              version = \"0.0.9\" }\n",
         )],
     );
@@ -194,7 +194,7 @@ fn a_renamed_internal_requirement_is_reported() {
         "the alias does not hide the requirement: {found:#?}"
     );
     assert!(
-        found[0].reason.contains("nichlink-kernel"),
+        found[0].reason.contains("xirang-kernel"),
         "the finding names the package, not the alias: {found:#?}"
     );
     let _ = fs::remove_dir_all(&root);
@@ -208,11 +208,11 @@ fn a_renamed_internal_requirement_is_reported() {
 /// 根里那条本身就是一条被扫描的要求，取值仍被绑到发布线上。根没有点名却要继承，才是那条发现。
 #[test]
 fn an_inherited_requirement_is_legal_when_the_root_names_it() {
-    let member = "[package]\nname = \"nichlink-toolchain\"\nversion.workspace = true\n\n\
-                  [dependencies]\nnichlink-kernel = { workspace = true }\n";
+    let member = "[package]\nname = \"xirang-toolchain\"\nversion.workspace = true\n\n\
+                  [dependencies]\nxirang-kernel = { workspace = true }\n";
     let named = synthetic(
         "[workspace]\nmembers = [\"toolchain\"]\n\n[workspace.package]\nversion = \"0.2.0\"\n\n\
-         [workspace.dependencies]\nnichlink-kernel = { path = \"kernel\", version = \"0.2.0\" }\n",
+         [workspace.dependencies]\nxirang-kernel = { path = \"kernel\", version = \"0.2.0\" }\n",
         &[("toolchain", member)],
     );
     let found = findings(&named);

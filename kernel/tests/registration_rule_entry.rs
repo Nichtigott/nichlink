@@ -6,13 +6,13 @@
 //! family as the admission copy pinned by `core/tests/compact_admission_entry.rs`:
 //! `studio/src/studio/app/source_index.rs` assembled its `preset:/parts:/exports:`
 //! clauses itself). This file is the outside-of-the-crate pin: it reaches the
-//! renderer through `nichlink_kernel::authoring::parse`, which is exactly the path a
+//! renderer through `xirang_kernel::authoring::parse`, which is exactly the path a
 //! surface has, so a private renderer cannot satisfy it — this pin stops compiling
 //! instead.
 //! Studio 需要这份渲染，而内核把“从拥有型取值渲染”的入口设成私有，于是它写出了同一套规则的
 //! 第二份副本（`FIXR-01`，与 `core/tests/compact_admission_entry.rs` 钉的 admission 副本同族：
 //! `studio/src/studio/app/source_index.rs` 自己装配 `preset:/parts:/exports:` 子句）。本文件是
-//! crate 之外的钉子：它经 `nichlink_kernel::authoring::parse` 取渲染器，这正是执行面拥有的那条路径，
+//! crate 之外的钉子：它经 `xirang_kernel::authoring::parse` 取渲染器，这正是执行面拥有的那条路径，
 //! 因此私有渲染器无法满足它——钉子会直接编译失败，而不是悄悄通过。
 //!
 //! The second half is the proof that exposing the renderer changed nothing on the
@@ -29,11 +29,11 @@
 // 渲染器在解析器的特性之后；没有 `syntax` 时这里无物可调。整工作区构建会经其他成员打开它。
 #![cfg(feature = "syntax")]
 
-use nichlink_kernel::authoring::parse::{
+use xirang_kernel::authoring::parse::{
     compact_registration_rule, parse_registration_rule_owned, rule_syntax_from_text,
     try_rule_syntax_from_text,
 };
-use nichlink_kernel::declaration::OwnedRegistrationRule;
+use xirang_kernel::declaration::OwnedRegistrationRule;
 
 /// One rule in the owned form the renderer takes, from field spellings.
 /// 渲染器取用的拥有型规则，由各字段的拼法构造。

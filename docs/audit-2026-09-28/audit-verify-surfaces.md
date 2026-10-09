@@ -9,14 +9,14 @@
 
 ```toml
 [dependencies]
-nichlink-build-method = { path = "/home/nich/Moirai_N3/nichlink/build_method" }
-nichlink-core = { path = "/home/nich/Moirai_N3/nichlink/core" }
+xirang-build-method = { path = "/home/nich/Moirai_N3/nichlink/build_method" }
+xirang-core = { path = "/home/nich/Moirai_N3/nichlink/core" }
 syn = { version = "2", features = ["full", "parsing"] }
 ```
 
-- 子命令：`face_path <root> <package>`（公开 `build_method::face_views`）、`run_for <root> <out_dir> <package>`（公开 `build_method::run_for`）、`syn <depth> <stack_bytes>`（裸 `syn::parse_str::<syn::Path>`，即 `run_method/src/authoring/manifest/face/face.rs:141` 那一行的形状）、`syn_meta <depth> <stack_bytes>`（裸 `syn::parse_str::<syn::Meta>`，`static_plan.rs:158` 的形状）、`guard <depth>` / `guarded_syn <depth>`（内核公开的 `nichlink::registry_core::syntax::guard_nesting`，先守后解）。
+- 子命令：`face_path <root> <package>`（公开 `build_method::face_views`）、`run_for <root> <out_dir> <package>`（公开 `build_method::run_for`）、`syn <depth> <stack_bytes>`（裸 `syn::parse_str::<syn::Path>`，即 `run_method/src/authoring/manifest/face/face.rs:141` 那一行的形状）、`syn_meta <depth> <stack_bytes>`（裸 `syn::parse_str::<syn::Meta>`，`static_plan.rs:158` 的形状）、`guard <depth>` / `guarded_syn <depth>`（内核公开的 `xirang::registry_core::syntax::guard_nesting`，先守后解）。
 - 版本对齐：工作区 `Cargo.lock` 的 `syn = 2.0.119`；探针解析到的也是 `2.0.119`（`/tmp/vs-probe/Cargo.lock`），因此 syn 这一层不是版本差异来源。
-- 作者用 `/tmp/nichlink-probe-surfaces/probe_syn`；我**没有**运行它、没有读它的源码，只用自建探针复现同一行的调用。
+- 作者用 `/tmp/xirang-probe-surfaces/probe_syn`；我**没有**运行它、没有读它的源码，只用自建探针复现同一行的调用。
 - `cargo` 一律 `--offline`；探针 `cargo build` 输出 `Finished dev profile ... in 16.77s`（exit 0）。
 
 关于我引用的行：所有 `x.rs:NNN` 都是我这一轮用 `nl -ba`/`read` 亲自打印过的行；引用时一律写全路径或唯一文件名，不做 `token`（`x.rs:line`）这种配对写法。
@@ -108,7 +108,7 @@ syn = { version = "2", features = ["full", "parsing"] }
 - 成立的一半：
   - `build_method/src/manifests.rs:111-162` 是按行文本扫描（`:125-157` 逐行、`:154` 用 `trimmed == "}"` 结束 impl 归属），`:164-171` 的 `function_name` 用 `line.find("fn ")`，注释/字符串里的 `fn ` 同样命中 —— 我逐行读过，与作者描述一致。
   - 内核那份 `core/src/registry_core/source/source.rs:120` `pub fn function_symbols(source: &str)` 确实存在；消费者确实有：`mcp/src/index.rs:199`、`studio/src/studio/app/source_index.rs:11`（经 `run_method::source` 再导出）与 `:90`、`studio/src/studio/app/graph_queries.rs:56`、`studio/src/studio/app/search_queries.rs:55`。（我第一次 grep 只看到前 10 行、误以为这两个面不消费它，复 grep 后确认作者对。）
-- **被证伪的一半**：作者写"这份产物的树内读者为零（`grep -rn function_manifest` 只命中写入侧…CLI/MCP/Studio 都不读它）"。我 grep 全仓（含 `tools/`）得到**第 5 个命中**：`tools/nichlink-release-audit:38-43` 会 `find target/release/build -name function_manifest.tsv`，把每一份转成 `target/nichlink-audit/release/node_functions.tsv`（`awk 'NR == 1 { next } { print package "\t" $0 }'`）。该工具由 CI 的 `release-audit` 任务运行（`.github/workflows/ci.yml:171`），所以第二套扫描器的输出**会进发布件审计产物**。
+- **被证伪的一半**：作者写"这份产物的树内读者为零（`grep -rn function_manifest` 只命中写入侧…CLI/MCP/Studio 都不读它）"。我 grep 全仓（含 `tools/`）得到**第 5 个命中**：`tools/xirang-release-audit:38-43` 会 `find target/release/build -name function_manifest.tsv`，把每一份转成 `target/xirang-audit/release/node_functions.tsv`（`awk 'NR == 1 { next } { print package "\t" $0 }'`）。该工具由 CI 的 `release-audit` 任务运行（`.github/workflows/ci.yml:171`），所以第二套扫描器的输出**会进发布件审计产物**。
 - 后果：作者两选一的修复建议里，"如果确认无人读这份产物，就在同一轮里删掉写入"**不能照做**（有人读）。正确方向只剩"改成调用内核 `function_symbols`"，并顺带核对 `node_functions.tsv` 的消费方。
 - 严重度：不变（MAJOR）——理由从"随时会被树外读者信任"改成"CI 发布审计正在读一份由另一套扫描器产出的符号表"。
 
@@ -174,7 +174,7 @@ syn = { version = "2", features = ["full", "parsing"] }
 
 - 证据（我打印的两段）：
   - 文档承诺：`run_method/src/macros/face_registration.rs:9-10` "the collector ident selects which linker section receives the registration" ✓（中文同句在 `:12`）。
-  - 三个分支：`:163` `(development; …) => {}`；`:164-167` `(debug; …) => #[cfg(debug_assertions)] ::nichlink_debug_method::submit! { … }`；`:168-171` `(linked; …) => { /* 注释 */ }` → **只有 debug 提交**。
+  - 三个分支：`:163` `(development; …) => {}`；`:164-167` `(debug; …) => #[cfg(debug_assertions)] ::xirang_debug_method::submit! { … }`；`:168-171` `(linked; …) => { /* 注释 */ }` → **只有 debug 提交**。
   - `linked` 是外部形式的默认：`run_method/src/macros/face_external.rs:51` `{ @tokens $($tokens:tt)* } => { $crate::face_fields! { @external collector: linked, $($tokens)* } }` ✓。
 - 备注：作者说 `collector: bogus` 会落到裸 `no rules expected` —— 这属于宏展开诊断，不在我这条的复核范围，未实测。
 - 严重度：不变。
@@ -214,29 +214,29 @@ Ok / Ok / Err(nests 129 … limit of 128) / Err(…)
 
 ### C3 · collector 注释与实现不符 → **证实**（= S9 的注释面）
 
-- 证据同 S9；另外 `face_registration.rs:169-170` 写的是 `nichlink-debug`（C5 的同一条）✓。
+- 证据同 S9；另外 `face_registration.rs:169-170` 写的是 `xirang-debug`（C5 的同一条）✓。
 - 严重度：不变。
 
 ### C4 · `parent` 被标 Required 而实际可选 → **证实**
 
 - 证据：`nl -ba run_method/src/macros/face.rs | sed -n '132,145p'` → `:139-140` "Where this face hangs. Required." / "本面挂在谁下面。必填。"，示例 `parent: crate::control::NODE_ID`。唯一的匹配臂 `run_method/src/macros/face_objects.rs:111` 用 `$crate::__face_expr_or!($crate::root_node_id(env!("CARGO_PKG_NAME")); $($parent)?)` → 省略时取包根 ✓。
-- 运行佐证（我跑的既有测试，不是作者脚本）：`cargo test -p nichlink-run-method --offline --test face_arm_defaults` → `test result: ok. 3 passed; 0 failed`（exit 0）。该测试文件正是作者指出的"已钉住默认值行为"的一处，说明省略 `parent` 的路径是被跑到且绿的。
+- 运行佐证（我跑的既有测试，不是作者脚本）：`cargo test -p xirang-run-method --offline --test face_arm_defaults` → `test result: ok. 3 passed; 0 failed`（exit 0）。该测试文件正是作者指出的"已钉住默认值行为"的一处，说明省略 `parent` 的路径是被跑到且绿的。
 - 严重度：不变。
 
 ### C5 · 两个不存在的 crate 名 → **证实**
 
 - 证据（我的 grep，排除 `-method` 后缀）：
-  - `nichlink-build`：`run_method/src/macros/entry.rs:18`、`:24`、`:63`（`:67` 是其中文半边）。
-  - `nichlink-debug`：`run_method/src/macros/face_registration.rs:169`、`:170`。
-  真实名分别是 `nichlink-build-method` / `nichlink-debug-method`（`build_method/Cargo.toml:2`、`debug_method/Cargo.toml:2`）。
-- 备注：`studio/src/studio/app/tests/project.rs:243` 的 `assert!(manifest.contains("nichlink-build"))` 是子串断言，不构成"名字写错"，不是本条的延伸。
+  - `xirang-build`：`run_method/src/macros/entry.rs:18`、`:24`、`:63`（`:67` 是其中文半边）。
+  - `xirang-debug`：`run_method/src/macros/face_registration.rs:169`、`:170`。
+  真实名分别是 `xirang-build-method` / `xirang-debug-method`（`build_method/Cargo.toml:2`、`debug_method/Cargo.toml:2`）。
+- 备注：`studio/src/studio/app/tests/project.rs:243` 的 `assert!(manifest.contains("xirang-build"))` 是子串断言，不构成"名字写错"，不是本条的延伸。
 - 严重度：不变。
 
 ---
 
 ## 3. MINOR 抽样（10/13）
 
-- **S10 证实**：`run_method/src/macros/face_objects.rs:169` 的容错回退臂用 `::nichlink_run_method::face_fields!`；同文件 `:10`、`face_external.rs:48` 用 `$crate::face_fields!`。作者"只有这一条臂用绝对路径"的说法我按 grep 抽查了 `$crate` 与绝对路径的出现点，一致。
+- **S10 证实**：`run_method/src/macros/face_objects.rs:169` 的容错回退臂用 `::xirang_run_method::face_fields!`；同文件 `:10`、`face_external.rs:48` 用 `$crate::face_fields!`。作者"只有这一条臂用绝对路径"的说法我按 grep 抽查了 `$crate` 与绝对路径的出现点，一致。
 - **S11 证实**：`build_method/src/contracts.rs:193-206` —— `source.find(&marker)`（只取第一处，`:195`）、`args.find(')')`（`:199`）、`split('"')` 取奇数下标（`:201-203`）。三方缺陷（只读第一处 / `)` 截断 / 转义引号错位）与注释/字面量不设防，代码形态完全对应。
 - **S12 证实**：`run_method/src/runtime/trace/artifact/parse.rs:122-124` 局部值的 `function` 用 `frame_functions.get(...).unwrap_or("<local>")`；`:147` 边的 `function` 用 `local_functions.get(&to).copied().unwrap_or("<runtime>")`。文档 `:22-26` 前半句说"记录可以任意顺序出现"、后半句补了依赖关系——作者对"文档两半都在、但行为是静默降级"的表述准确。
 - **S13 证实**：`run_method/src/call_report/call_report.rs:18-19` 文档首句"Render a complete logical call tree"，`:24` 造空 `CallTrace::new()`，真正的 trace 入口是 `:30` 的 `render_call_report_for_trace`。**并且"读环境"那一半也成立**：`CallTrace::new()` 在 `run_method/src/runtime/trace/call_trace.rs:94-96`→ `runtime()`（`:100-102`）→ `with_mode(trace_mode_from_env())`，一个渲染入口因此读进程环境。
@@ -262,7 +262,7 @@ Ok / Ok / Err(nests 129 … limit of 128) / Err(…)
      ```
    - 门槛比 S19 高得多（≈120 KB 源码 vs 601 字节），所以我把它记为**抽查发现，MINOR**，而不是与 S19 同级：手写不可能，但生成式/graft 源码或代理产出的畸形 `#[cfg]` 可以让构建脚本 abort（构建脚本死掉不是一条诊断）。
    - 顺带：`evaluate_cfg`（`:163-193`）对 `not(...)` 自递归，也没有深度上限——同一输入即使过了 `syn`，也可能在这里递归。这条我只做代码阅读佐证，未实测。
-2. **S4 的"树内读者为零"被证伪**：`tools/nichlink-release-audit:38-43` 读 `function_manifest.tsv`（见 S4）。
+2. **S4 的"树内读者为零"被证伪**：`tools/xirang-release-audit:38-43` 读 `function_manifest.tsv`（见 S4）。
 3. **S7 的站点数 5 → 10**，其中 `core/src/registry_core/source/walk.rs:42` 把演示目录名写成了**内核公开字段** `pub skip_compile_error_demo: bool`（跨 crate 边界泄漏）。
 4. **S16 的"16 处"不可复现**（见上）。
 5. **S8 的复核手段不可用**：`source_path_from_file` 是 `pub(super)`，作者建议的"直接调用它"必须是 crate 内测试。

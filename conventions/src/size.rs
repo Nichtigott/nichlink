@@ -39,11 +39,11 @@
 //! Measurement is in *code lines*: blank lines and comment-only lines do not count.
 //! The ratchet bounds the code a maintainer reads, and a comment is not a second copy
 //! of it. The masking that decides what a line is comes from the kernel's one lexical
-//! rule, [`nichlink_kernel::source::mask_non_code`], rather than from a private text
+//! rule, [`xirang_kernel::source::mask_non_code`], rather than from a private text
 //! scraper; [`code_lines`] records the one boundary that rule does not cover.
 //! 度量以**代码行**计：空行与纯注释行不计。棘轮约束的是维护者要读的代码，而注释不是它的第二份
 //! 副本。判断"一行是什么"的掩码来自内核唯一的词法规则
-//! [`nichlink_kernel::source::mask_non_code`]，而不是自己另写一个文本刮取器；[`code_lines`]
+//! [`xirang_kernel::source::mask_non_code`]，而不是自己另写一个文本刮取器；[`code_lines`]
 //! 记录了那条规则不覆盖的一处边界。
 //!
 //! Boundary: every measured file has the budget of its kind, and the kind is proven
@@ -479,13 +479,13 @@ fn is_pre_merge_residue(member: &Path, path: &Path) -> bool {
 /// The number of code lines in `text`: blank lines and comment-only lines do not count.
 /// `text` 中的代码行数：空行与纯注释行不计。
 ///
-/// The decision runs on [`nichlink_kernel::source::mask_non_code`], the workspace's one
+/// The decision runs on [`xirang_kernel::source::mask_non_code`], the workspace's one
 /// lexical rule, so a line comment, a doc comment, a `//!` module comment and a block
 /// comment are all read as what they are rather than matched by prefix. That mask blanks
 /// the contents of comments but keeps the two-character `//` marker, and blanks block-comment
 /// markers outright; a line is a comment line, therefore, when it is empty after masking or
 /// when everything left in it is `/` or `*`.
-/// 这个判断跑在 [`nichlink_kernel::source::mask_non_code`] 上，那是本工作区唯一的词法规则，因此
+/// 这个判断跑在 [`xirang_kernel::source::mask_non_code`] 上，那是本工作区唯一的词法规则，因此
 /// 行注释、文档注释、`//!` 模块注释与块注释都被读成它们本来的东西，而不是按前缀猜。该掩码抹掉
 /// 注释内容但保留两字符的 `//` 标记，而块注释的标记会被整个抹掉；因此一行是注释行，当且仅当掩码
 /// 之后它为空、或剩下的字符全是 `/` 或 `*`。
@@ -499,7 +499,7 @@ fn is_pre_merge_residue(member: &Path, path: &Path) -> bool {
 /// 注释。文件因此可能把体积藏进一个长字符串里。这个方向是有意的——字符串内容不是维护者当作代码
 /// 去读的行——并且记在这里，而不是留待以后发现。
 pub fn code_lines(text: &str) -> usize {
-    let masked = nichlink_kernel::source::mask_non_code(text);
+    let masked = xirang_kernel::source::mask_non_code(text);
     masked.lines().filter(|line| is_code_line(line)).count()
 }
 

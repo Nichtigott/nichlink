@@ -21,10 +21,8 @@ fn whole(root: &Path) -> Result<Vec<String>, String> {
 /// 一个一次性包：一个被重拼的常量、一个没人引用的常量、一个没有任何测试点名的生产函数，以及一个
 /// 测试确实点名的函数。
 fn package(label: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-claims-{label}-{}",
-        std::process::id()
-    ));
+    let root =
+        std::env::temp_dir().join(format!("xirang-mcp-claims-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("src")).expect("fixture dirs");
     std::fs::create_dir_all(root.join("tests")).expect("fixture test dir");
@@ -83,7 +81,7 @@ fn the_census_reports_static_facts_and_says_what_it_did_not_cover() {
 /// 没人到达的函数。
 fn reachability_package(label: &str, unreachable: usize) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-claims-reach-{label}-{}",
+        "xirang-mcp-claims-reach-{label}-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -237,7 +235,7 @@ fn the_boundaries_are_one_line_indexes_under_a_budget() {
 /// 因此拿原始文本而不是内核掩码文本去数的读取会把那一行抹掉。
 fn branch_package(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-claims-branch-{label}-{}",
+        "xirang-mcp-claims-branch-{label}-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -572,7 +570,7 @@ fn a_tree_over_the_function_budget_is_reported_as_skipped() {
 /// 一个包：够不着的函数分住在两个目录里，而根上一个都没有。
 fn split_package(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-claims-split-{label}-{}",
+        "xirang-mcp-claims-split-{label}-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -652,7 +650,7 @@ fn the_whole_table_splits_the_unreachable_column_per_directory() {
 /// 缺的只是合并。
 fn documented_dead_arm_package(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-claims-docdebt-{label}-{}",
+        "xirang-mcp-claims-docdebt-{label}-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);

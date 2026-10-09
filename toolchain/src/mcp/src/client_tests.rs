@@ -23,7 +23,7 @@ fn the_list_is_the_catalogue_one_entry_each() {
         let mut lines = entry.lines();
         let first = lines.next().unwrap_or_default();
         assert!(
-            first.starts_with("nichlink.") || first.starts_with("nichlink_tools — "),
+            first.starts_with("xirang.") || first.starts_with("xirang_tools — "),
             "every entry is namespaced, or is the one catalogue tool: {entry}"
         );
         assert!(
@@ -40,7 +40,7 @@ fn the_list_is_the_catalogue_one_entry_each() {
     assert!(
         entries
             .iter()
-            .any(|entry| entry.starts_with("nichlink.callgraph — Show direct static callers")),
+            .any(|entry| entry.starts_with("xirang.callgraph — Show direct static callers")),
         "{entries:?}"
     );
     // The key line says which names are required, and a branched pair is not starred as if both
@@ -49,7 +49,7 @@ fn the_list_is_the_catalogue_one_entry_each() {
     // `literal`，两个都打星是更响的谎。
     let search = entries
         .iter()
-        .find(|entry| entry.starts_with("nichlink.search — "))
+        .find(|entry| entry.starts_with("xirang.search — "))
         .expect("the search entry");
     assert!(search.contains("keys: "), "{search}");
     // `--list <tool>` is the un-truncated form, because the one-line list is what cost an arm four
@@ -64,7 +64,7 @@ fn the_list_is_the_catalogue_one_entry_each() {
         "{apply}"
     );
     assert!(
-        describe_tool("nichlink.apply").is_some(),
+        describe_tool("xirang.apply").is_some(),
         "the prefix is optional here too"
     );
     assert!(
@@ -147,12 +147,12 @@ fn the_one_line_list_stays_small_and_keeps_the_entry_calls() {
         .collect::<Vec<_>>()
         .join("\n");
     // The bound is per **catalogue size**, not a constant of nature: it was 5000 while there were
-    // twenty-eight tools, `nichlink.graph` is the twenty-ninth, and each entry costs about ninety
+    // twenty-eight tools, `xirang.graph` is the twenty-ninth, and each entry costs about ninety
     // characters (a name, a five-word handle and its keys) — so the number moved with the catalogue
     // rather than the entry being cut to fit it. What the bound is for has not changed: `--list` is
     // read once per session and must stay a screenful. A tool that pushes past this needs the same
     // arithmetic, not a silent bump.
-    // 上限是跟着**目录规模**走的，不是自然常数：二十八个工具时它是 5000，`nichlink.graph` 是第二十九个，
+    // 上限是跟着**目录规模**走的，不是自然常数：二十八个工具时它是 5000，`xirang.graph` 是第二十九个，
     // 而每个条目约九十字符（名字、五个词的手柄、它的键）——因此动的是这个数，而不是把条目削到能塞进去。
     // 它的用途没有变：`--list` 每会话读一次，必须还是一屏。把它再推上去的工具需要同样的算术，而不是偷偷加一个数。
     assert!(
@@ -228,16 +228,16 @@ fn the_check_description_names_the_verdict_line_and_the_exit_code() {
 /// 仍是作答，因此这里客户端仍以 `0` 退出。
 #[test]
 fn the_client_exit_code_says_how_the_call_went() {
-    let temp = std::env::temp_dir().join(format!("nichlink-client-{}", std::process::id()));
+    let temp = std::env::temp_dir().join(format!("xirang-client-{}", std::process::id()));
     std::fs::create_dir_all(&temp).expect("scratch");
     let root = temp.display().to_string();
     let args = |parts: &[&str]| parts.iter().map(|p| (*p).to_owned()).collect::<Vec<_>>();
 
-    match run_client(&args(&["--call", "nichlink.status", "--root", &root])) {
+    match run_client(&args(&["--call", "xirang.status", "--root", &root])) {
         Client::Called(code) => assert_eq!(code, 0, "a tool that answers exits 0"),
         Client::Serve => panic!("--call is a call"),
     }
-    match run_client(&args(&["--call", "nichlink.no_such_tool"])) {
+    match run_client(&args(&["--call", "xirang.no_such_tool"])) {
         Client::Called(code) => assert_eq!(code, 1, "a refusal is exit 1"),
         Client::Serve => panic!("--call is a call"),
     }
@@ -282,34 +282,34 @@ fn the_table_only_advertises_shapes_the_tool_accepts() {
     // The read shapes, called for real: acceptance is a call that is not refused for its arguments.
     // 读形状真调一次：接受 = 这次调用不因为参数而被拒。
     let shapes: Vec<(&str, Value)> = vec![
-        ("nichlink.status", json!({})),
-        ("nichlink.registry", json!({})),
-        ("nichlink.search", json!({"query": "used"})),
-        ("nichlink.search", json!({"literal": "call_used"})),
-        ("nichlink.callgraph", json!({"function": "used"})),
-        ("nichlink.callgraph", json!({"orphans": true})),
-        ("nichlink.read", json!({"path": "src/lib.rs", "line": 1})),
-        ("nichlink.inspect", json!({"path": "src/lib.rs"})),
-        ("nichlink.affected", json!({"files": ["src/lib.rs"]})),
-        ("nichlink.explain", json!({})),
-        ("nichlink.diff", json!({})),
+        ("xirang.status", json!({})),
+        ("xirang.registry", json!({})),
+        ("xirang.search", json!({"query": "used"})),
+        ("xirang.search", json!({"literal": "call_used"})),
+        ("xirang.callgraph", json!({"function": "used"})),
+        ("xirang.callgraph", json!({"orphans": true})),
+        ("xirang.read", json!({"path": "src/lib.rs", "line": 1})),
+        ("xirang.inspect", json!({"path": "src/lib.rs"})),
+        ("xirang.affected", json!({"files": ["src/lib.rs"]})),
+        ("xirang.explain", json!({})),
+        ("xirang.diff", json!({})),
         // The two ledger shapes: a fixture with no ledger is still an answer (the absence is
         // reported), so acceptance here means the arguments were not refused.
         // 两种台账形状：没有台账的夹具仍然是一个答案（缺失会被报出），因此这里的接受指的是"参数没被拒"。
-        ("nichlink.conformance", json!({"anchor": "root/button"})),
-        ("nichlink.consistency", json!({"specimen": "root/button"})),
-        ("nichlink.consistency", json!({"parent": "root/control"})),
+        ("xirang.conformance", json!({"anchor": "root/button"})),
+        ("xirang.consistency", json!({"specimen": "root/button"})),
+        ("xirang.consistency", json!({"parent": "root/control"})),
         // The shapes the seven-scenario table adds. Acceptance here means the arguments were not
         // refused — the table promises these spellings work, and the pin that reads this list is what
         // caught them missing: adding a promise without a check is exactly what it exists to refuse.
         // 七场景表新增的形状。这里的"接受"指参数没被拒——表承诺这些拼法可用，而读这份清单的那条钉子
         // 正是抓出它们缺失的那条：加了承诺却没加检查，正是它存在来拒绝的事。
         (
-            "nichlink.locate",
+            "xirang.locate",
             json!({"symptom": "the offsets do not add up"}),
         ),
-        ("nichlink.why", json!({"at": "src/lib.rs:1"})),
-        ("nichlink.grafts", json!({})),
+        ("xirang.why", json!({"at": "src/lib.rs:1"})),
+        ("xirang.grafts", json!({})),
     ];
     for (tool, arguments) in &shapes {
         let answer = crate::mcp::tools::run_tool(&root, tool, arguments);
@@ -320,7 +320,7 @@ fn the_table_only_advertises_shapes_the_tool_accepts() {
     // 写入形状不真调（预览会在副本上跑真执行器）；要对上那张表的是它的 schema。
     let apply = crate::mcp::tools::tools()
         .into_iter()
-        .find(|tool| tool["name"] == "nichlink.apply")
+        .find(|tool| tool["name"] == "xirang.apply")
         .expect("apply is in the catalogue");
     assert_eq!(apply["inputSchema"]["required"][0], "action", "{apply}");
     let _ = std::fs::remove_dir_all(&root);
@@ -378,7 +378,7 @@ fn the_root_flag_decides_which_tree_is_answered() {
     let alpha = crate::mcp::tools::tools_tests::scratch_package("root-alpha");
     let beta = crate::mcp::tools::tools_tests::scratch_package("root-beta");
     let args = vec![
-        "nichlink.status".to_owned(),
+        "xirang.status".to_owned(),
         "--root".to_owned(),
         alpha.display().to_string(),
     ];
@@ -423,19 +423,19 @@ fn the_table_names_the_adoption_ledger() {
         "the ledger tool is named"
     );
     assert!(
-        super::GUIDANCE.contains(".nichlink/adopted/entries"),
+        super::GUIDANCE.contains(".xirang/adopted/entries"),
         "and so is where it lives"
     );
 }
 
 #[test]
 fn a_bare_flag_means_true() {
-    let temp = std::env::temp_dir().join(format!("nichlink-flag-{}", std::process::id()));
+    let temp = std::env::temp_dir().join(format!("xirang-flag-{}", std::process::id()));
     std::fs::create_dir_all(&temp).expect("scratch");
     let root = temp.display().to_string();
     for parts in [
-        vec!["nichlink.search", "--query", "x", "--converge"],
-        vec!["nichlink.search", "--query", "x", "--converge", "true"],
+        vec!["xirang.search", "--query", "x", "--converge"],
+        vec!["xirang.search", "--query", "x", "--converge", "true"],
     ] {
         let mut args = vec!["--call".to_owned()];
         args.extend(parts.iter().map(|part| (*part).to_owned()));
@@ -759,7 +759,7 @@ fn the_keys_legend_appears_only_when_something_is_starred() {
             .unwrap_or_else(|| panic!("{name} is in the catalogue: {lines:?}"))
             .clone()
     };
-    let conformance = line("nichlink.conformance");
+    let conformance = line("xirang.conformance");
     assert!(
         !conformance.contains("= required"),
         "nothing is starred on this tool, so there is no legend: {conformance}"
@@ -771,7 +771,7 @@ fn the_keys_legend_appears_only_when_something_is_starred() {
     // `check` 从前是这里的例子；它不再给 `face` 打星，因为调用路径把它缺省成 `default`（那一轮量到 12 次
     // 无 face 的调用，其中 6 次离开工具去了 shell）。例子换成**真的必需**键的工具，这条钉子因此仍有牙 ——
     // 一个"到处都丢了图例"的版本会通过上面那条、在这里失败。
-    let apply = line("nichlink.apply");
+    let apply = line("xirang.apply");
     assert!(
         apply.contains("action*") && apply.contains("= required"),
         "and a tool that does star a key keeps its legend: {apply}"
@@ -860,7 +860,7 @@ fn check_says_the_face_may_be_omitted_because_it_is() {
     // 而 keys 行不许把它标成必需。
     let line = list_tool_lines()
         .into_iter()
-        .find(|row| row.contains("nichlink.check"))
+        .find(|row| row.contains("xirang.check"))
         .expect("check is listed");
     assert!(
         !line.contains("face*"),
@@ -1004,34 +1004,34 @@ fn the_answer_shape_routing_is_on_both_pages() {
 /// The catalogue tool is reachable by the name the advertisement uses.
 /// 目录工具按广告里那个名字够得着。
 ///
-/// Audit `W1-1` left `nichlink_tools` advertised and the CLI could not call it: every bare name got
-/// the `nichlink.` prefix, so `--call nichlink_tools` resolved to `nichlink.nichlink_tools` and the
+/// Audit `W1-1` left `xirang_tools` advertised and the CLI could not call it: every bare name got
+/// the `xirang.` prefix, so `--call xirang_tools` resolved to `xirang.xirang_tools` and the
 /// one tool the handshake tells a session to reach everything else with answered `unknown tool`.
 /// The rule is now "an exact catalogue name wins; the prefix is added only when it is needed", and
 /// both halves are pinned — the new name resolves, and the old convenience still does.
-/// 审计 `W1-1` 把 `nichlink_tools` 广告出去了，而命令行调不到它：每个裸名都被补上 `nichlink.` 前缀，
-/// 于是 `--call nichlink_tools` 解析成 `nichlink.nichlink_tools`，而"握手让会话用它去够其余一切"的那个
+/// 审计 `W1-1` 把 `xirang_tools` 广告出去了，而命令行调不到它：每个裸名都被补上 `xirang.` 前缀，
+/// 于是 `--call xirang_tools` 解析成 `xirang.xirang_tools`，而"握手让会话用它去够其余一切"的那个
 /// 工具回的是 `unknown tool`。现在的规则是"精确命中目录名者胜，只在需要时才补前缀"，两半都钉住——新名字
 /// 解析得到，旧的便利也还在。
 #[test]
 fn the_catalogue_tool_resolves_by_its_advertised_name() {
-    assert_eq!(super::resolve_name("nichlink_tools"), "nichlink_tools");
-    assert_eq!(super::resolve_name("callgraph"), "nichlink.callgraph");
-    assert_eq!(super::resolve_name("nichlink.why"), "nichlink.why");
-    assert_eq!(super::resolve_name("why"), "nichlink.why");
+    assert_eq!(super::resolve_name("xirang_tools"), "xirang_tools");
+    assert_eq!(super::resolve_name("callgraph"), "xirang.callgraph");
+    assert_eq!(super::resolve_name("xirang.why"), "xirang.why");
+    assert_eq!(super::resolve_name("why"), "xirang.why");
     let root = crate::mcp::tools::tools_tests::scratch_package("catalogue-name");
-    let listed = super::call_tool(&root, "nichlink_tools", &serde_json::json!({}))
+    let listed = super::call_tool(&root, "xirang_tools", &serde_json::json!({}))
         .expect("the catalogue answers by its advertised name");
     assert!(
-        listed.contains("nichlink.registry — "),
+        listed.contains("xirang.registry — "),
         "and it lists every tool: {listed}"
     );
-    let one = super::call_tool(&root, "nichlink_tools", &serde_json::json!({"tool": "why"}))
+    let one = super::call_tool(&root, "xirang_tools", &serde_json::json!({"tool": "why"}))
         .expect("one tool's page");
     assert!(one.contains("Gather the upstream facts"), "{one}");
     let unknown = super::call_tool(
         &root,
-        "nichlink_tools",
+        "xirang_tools",
         &serde_json::json!({"tool": "no_such_tool"}),
     )
     .expect_err("an unknown name is refused, not invented");

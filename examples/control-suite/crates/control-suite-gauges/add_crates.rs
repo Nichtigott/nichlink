@@ -1,7 +1,7 @@
 //! Which subtrees of this host become crates of their own.
 //! 这个宿主里哪些子树各自成为一个 crate。
 
-use nichlink_toolchain::runtime::{Crate, Shape};
+use xirang_toolchain::runtime::{Crate, Shape};
 
 /// Three crates over three disjoint subtrees; `panel` itself stays with the host.
 /// 三棵互不相邻的子树各自成一个 crate；`panel` 自己留在宿主里。

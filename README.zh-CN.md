@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="./picture/NichLink_wordmark.svg" alt="NichLink ASCII 字标">
+<img src="./picture/XiRang_wordmark.svg" alt="XiRang ASCII 字标">
 
 <p><strong>一种顺应社区扩展本能、服务工程协作与 agentic coding 的 Rust 代码组织模型：被动式递归注册，显式边界合同，任意层级原子替换。</strong></p>
 
-[![license](https://img.shields.io/github/license/Nichtigott/nichlink?style=flat-square)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/nichlink/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/Nichtigott/xirang?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/Nichtigott/xirang/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-Rust%201.96-8250df?style=flat-square)](Cargo.toml)
 
 <p>
@@ -18,15 +18,15 @@
 
 </div>
 
-💬 [Discuss the graft model](https://github.com/Nichtigott/nichlink/discussions)
+💬 [Discuss the graft model](https://github.com/Nichtigott/xirang/discussions)
 
-项目规模越大，一次局部改动越可能波及半个仓库。NichLink 在结构层面处
+项目规模越大，一次局部改动越可能波及半个仓库。XiRang 在结构层面处
 理这件事：对象携带小而明确的边界；替换在接入点完成校验；每个对象的
 源码位置对人和工具保持可见。
 
 AI 辅助与 agentic coding 放大而非制造了这种压力。模型和人类评审者都
 无法对大型代码库保持完整注意力，幻觉与上下文缺失是常态失效而非意外。
-NichLink 因此把通常只存在于约定中的关键假设固化为可检查的结构：原子
+XiRang 因此把通常只存在于约定中的关键假设固化为可检查的结构：原子
 对象、显式合同、源码溯源，以及团队可共同阅读的开发期注册图。同一套
 边界同样服务于代码评审、社区协作与普通 Rust 开发——AI 是这些结构的
 消费者之一，不是架构存在的理由。
@@ -35,7 +35,7 @@ NichLink 因此把通常只存在于约定中的关键假设固化为可检查�
 所替换的边界，由宿主完成 graft 校验；相互竞争的实现可以并存，上游源
 码不必沦为 patch 队列。项目保持自身形态，试验发生在命名合同之内。
 
-NichLink 目前处于早期阶段：核心协议已可用于真实工程，静态分析与运行
+XiRang 目前处于早期阶段：核心协议已可用于真实工程，静态分析与运行
 时证据均显式标注自身覆盖范围。
 
 ## 特性
@@ -59,43 +59,43 @@ NichLink 目前处于早期阶段：核心协议已可用于真实工程，静�
 
 ## 开始使用
 
-有两种方式可以试用 NichLink。
+有两种方式可以试用 XiRang。
 
-### 方式一：安装 NichLink CLI
+### 方式一：安装 XiRang CLI
 
-这种方式不会把 NichLink 源码放进你的应用目录。从 crates.io 安装 CLI，它提供
-`nichlink` 命令（包含 Ratatui Studio 的 `nichlink studio` 子命令）：
+这种方式不会把 XiRang 源码放进你的应用目录。从 crates.io 安装 CLI，它提供
+`xirang` 命令（包含 Ratatui Studio 的 `xirang studio` 子命令）：
 
 ```sh
-cargo install nichlink-toolchain
-nichlink new my-app
-cd my-app && nichlink studio
+cargo install xirang-toolchain
+xirang new my-app
+cd my-app && xirang studio
 ```
 
 已发布的版本都在 crates.io（最新的看 `CHANGELOG.md`）。想要检出里的最新提交而不是已发布版本时，Git 源依然可用：
-`cargo install --git https://github.com/Nichtigott/nichlink nichlink-toolchain`。
-插件二进制同时支持 `cargo nichlink <命令>` 形式。如果要检查已有项目：
+`cargo install --git https://github.com/Nichtigott/xirang xirang-toolchain`。
+插件二进制同时支持 `cargo xirang <命令>` 形式。如果要检查已有项目：
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink studio
+XIRANG_PACKAGE_ROOT=/work/my-app xirang studio
 ```
 
-独立的 `nichlink-toolchain` 二进制仍可单独安装。
+独立的 `xirang-toolchain` 二进制仍可单独安装。
 
 ### 方式二：直接克隆源码运行
 
 适合参与开发或想看最新实现，不会安装全局命令：
 
 ```sh
-git clone https://github.com/Nichtigott/nichlink
-cd nichlink
-cargo run -p nichlink-toolchain -- studio
+git clone https://github.com/Nichtigott/xirang
+cd xirang
+cargo run -p xirang-toolchain -- studio
 ```
 
 从源码仓库检查另一个项目：
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app cargo run -p nichlink-toolchain -- studio
+XIRANG_PACKAGE_ROOT=/work/my-app cargo run -p xirang-toolchain -- studio
 ```
 
 Studio 中按 `n` 可以新建 binary 或 library 项目。向导只写 Cargo 清单、
@@ -103,41 +103,41 @@ Studio 中按 `n` 可以新建 binary 或 library 项目。向导只写 Cargo �
 生成 `control` 树。只有注册面确实需要结构规范时，旁边才会生成
 `registry_rule/` 目录。
 
-### 把 NichLink 接入自己的项目
+### 把 XiRang 接入自己的项目
 
 注册声明属于宿主项目，所以 Cargo 需要一个很薄的构建入口：
 
 ```sh
-# 使用 Git。nichlink-toolchain 必须进入 build-dependencies。
-cargo add nichlink-toolchain --git https://github.com/Nichtigott/nichlink --branch main
-cargo add nichlink-toolchain --build --git https://github.com/Nichtigott/nichlink --branch main
+# 使用 Git。xirang-toolchain 必须进入 build-dependencies。
+cargo add xirang-toolchain --git https://github.com/Nichtigott/xirang --branch main
+cargo add xirang-toolchain --build --git https://github.com/Nichtigott/xirang --branch main
 
 # 或者，在两个本地源码仓库之间联调：
-cargo add nichlink-toolchain --path /path/to/nichlink/run_method
-cargo add nichlink-toolchain --build --path /path/to/nichlink/build_method
+cargo add xirang-toolchain --path /path/to/xirang/run_method
+cargo add xirang-toolchain --build --path /path/to/xirang/build_method
 ```
 
-不要把 `nichlink-toolchain` 同时以一种来源放进 `[dependencies]`、又以另一种
+不要把 `xirang-toolchain` 同时以一种来源放进 `[dependencies]`、又以另一种
 来源放进 `[build-dependencies]`。Cargo 要求同一个包在整份清单中只有一个
 canonical source。
 
 ```rust
 // build.rs
 fn main() {
-    nichlink_toolchain::build_method::run();
+    xirang_toolchain::build_method::run();
 }
 ```
 
 在 crate 根部只接线一次生成计划：
 
 ```rust
-nichlink_toolchain::run_method::host!();
+xirang_toolchain::run_method::host!();
 ```
 
 它展开为 `include!(concat!(env!("OUT_DIR"), "/generated_lib.rs"))`，
-直接书写该 include 是等价的高级写法。`nichlink-toolchain` 再导出整个
+直接书写该 include 是等价的高级写法。`xirang-toolchain` 再导出整个
 kernel，注册面代码中的合同、计划和追踪 API 都通过
-`nichlink_toolchain::run_method::…` 引用。
+`xirang_toolchain::run_method::…` 引用。
 
 不要求必须有 `main.rs`：二进制项目以 `src/main.rs` 作为入口，前端框架
 这类库项目以 `src/lib.rs` 作为入口。构建适配器扫描的是宿主自己的源码；
@@ -155,12 +155,12 @@ pub struct Canvas;
 pub struct CanvasParts;
 pub struct CanvasPreset;
 
-impl nichlink_toolchain::run_method::PresetContract for CanvasPreset {
+impl xirang_toolchain::run_method::PresetContract for CanvasPreset {
     type Output = CanvasParts;
     const REQUIRED_PARTS: &'static [&'static str] = &["paint"];
 }
 
-impl nichlink_toolchain::run_method::PartsContract for CanvasParts {
+impl xirang_toolchain::run_method::PartsContract for CanvasParts {
     type Output = CanvasParts;
     const PROVIDED_PARTS: &'static [&'static str] = &["paint"];
 }
@@ -183,8 +183,8 @@ crate::node_editor_object! {
     needs_registry: false,
     requires: ["viewport" => "layout.viewport"],
     provides: ["canvas.frame"],
-    flow: nichlink_toolchain::run_method::FlowContract::new(
-        nichlink_toolchain::run_method::ContractId::new("canvas.render.v1"),
+    flow: xirang_toolchain::run_method::FlowContract::new(
+        xirang_toolchain::run_method::ContractId::new("canvas.render.v1"),
         1,
         "CanvasInput",
         "CanvasFrame",
@@ -213,7 +213,7 @@ crate::node_editor_object! {
 通过后才执行嫁接：
 
 ```rust
-let plan = nichlink_toolchain::run_method::GraftPlan::command(
+let plan = xirang_toolchain::run_method::GraftPlan::command(
     framework,
     "cut root/canvas graft canvas_fast",
 )?;
@@ -354,7 +354,7 @@ crate::control_object! {
 
 | 检查          | 由谁执行                                                 | 在本例中验证什么                                                                                    |
 | ------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 父子拓扑      | `nichlink-toolchain`                                     | Button 的宏名、目录位置和 `parent` 是否都指向 Control                                               |
+| 父子拓扑      | `xirang-toolchain`                                     | Button 的宏名、目录位置和 `parent` 是否都指向 Control                                               |
 | Rust 类型合同 | rustc                                                    | `ActionParts::Output` 与 `ButtonParts::Output` 是否同为 `ButtonParts`；两个真实 trait impl 是否存在 |
 | 父级注册规范  | 构建聚合诊断、生成代码的 const 检查，以及开发态 Registry | preset、parts、export 和接口是否不少于 Control 的规则                                               |
 | 外部准入      | Registry 连接器                                          | Button 的跨树 `requires` 是否落在 Control 允许的 `admission` 路径内                                 |
@@ -376,7 +376,7 @@ crate::control_object! {
 }
 ```
 
-一次 `cargo check` 会在同一份 NichLink 诊断中列出错误声明的源码位置，以及
+一次 `cargo check` 会在同一份 XiRang 诊断中列出错误声明的源码位置，以及
 缺少的 `ActionParts` preset、`control.render` export、`ControlHandle` 和
 `ActionPartsContract`。如果只从 `BrokenParts::PROVIDED_PARTS` 删除 `action`，
 生成代码的 const 检查会拒绝缺失的结构 part；如果保留
@@ -441,11 +441,11 @@ src/                                    src/
 不构造 `Vec` 或 `String`；构建器会把内容直接写进 `StaticPlan`：
 
 ```rust
-use nichlink_toolchain::run_method::{FrameworkId, Registry};
+use xirang_toolchain::run_method::{FrameworkId, Registry};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("nichui");
 
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut "root/control/button" graft "button_fast",
 );
 
@@ -492,7 +492,7 @@ a1_fast                           A
 需要同时修改多个数据边界时，把切口写在同一个静态声明里：
 
 ```rust
-nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
+xirang_toolchain::run_method::static_graft_plan!(FRAMEWORK,
     cut ["root/canvas"] graft "canvas_fast",
     cut ["root/hit_test"] graft "hit_test_fast",
     cut ["root/layout"] graft "layout_fast",
@@ -505,7 +505,7 @@ nichlink_toolchain::run_method::static_graft_plan!(FRAMEWORK,
 也可以选择同一父 Registry 下的一段兄弟节点：
 
 ```rust
-let plan = nichlink_toolchain::run_method::GraftPlan::command(
+let plan = xirang_toolchain::run_method::GraftPlan::command(
     framework,
     "cut [root/a1 to root/a3] graft replacement",
 )?;
@@ -523,8 +523,8 @@ Studio 的 graft 流程使用 `g`。这里会同时出现三种不同的东西�
 * 宿主入口的 `static_graft_plan!` 是构建步骤读取的**声明**：它让被命名的槽位穿过剪枝
   存活下来，并填充发布态静态计划。它不删除任何代码。
 * `Registry::overlay` 是**应用**：它在运行期校验并返回有效树，原树与外部树都不被改动。
-* `.nichlink/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它是运行期
-  可以叠加在声明之上的创作输入。它不参与编译；`nichlink_toolchain::run_method::apply_recorded_grafts`
+* `.xirang/external-grafts/<selector>/graft.plan` 是界面写下的**记录**：它是运行期
+  可以叠加在声明之上的创作输入。它不参与编译；`xirang_toolchain::run_method::apply_recorded_grafts`
   读取它，`Registry::overlay_recorded` 按 [`docs/graft.zh-CN.md`](docs/graft.zh-CN.md) 中的优先级规则
   对账——记录覆盖字符串形式的 `static_graft_plan!` 切口，类型化切口保持最终，外部注册机
   解析不出的记录选择器回退到声明。界面读回它来列出、打开、改范围和删除计划。
@@ -533,10 +533,10 @@ Studio 的 graft 流程使用 `g`。这里会同时出现三种不同的东西�
 节点的子注册机）或 `full`（替换整棵子树）；用宿主入口已声明的切口校验这个槽位——没有
 任何 `cut` 命名的注册面不会被发布；最后给出可直接粘贴进入口的 `static_graft_plan!`
 子句，因为 Studio 永不重写宿主源码。`s` 写入计划并打开它，`o` 再次打开，`f` 切换
-`full`，`d` 把它移入 `.nichlink/trash/external-grafts/`。系统不存在复制或替换宿主源码
+`full`，`d` 把它移入 `.xirang/trash/external-grafts/`。系统不存在复制或替换宿主源码
 的 graft 路径。
 
-NichLink 不限定对象内部采用哪种编程范式。普通函数、trait、泛型、闭包、
+XiRang 不限定对象内部采用哪种编程范式。普通函数、trait、泛型、闭包、
 依赖注入或消息传递都可以继续使用；注册面只约束它们对外暴露的边界。声明过
 的 `requires/provides` 和 `FlowContract` 会在注册、连接和 graft 时自动校验。
 改动实现本身不会因为“代码和以前不一样”而失败；只有某个输入找不到合法
@@ -546,17 +546,17 @@ provider、跨过 admission 门禁，或替换端无法接回原数据流时才�
 
 ## 发布静态化、性能与两阶段修剪
 
-NichLink 的两阶段修剪解决两个不同问题。
+XiRang 的两阶段修剪解决两个不同问题。
 
 第一阶段发生在 rustc 展开生成模块之前，颗粒度是整个注册面：
 
-1. 宿主 crate 的薄 `build.rs` 调用 `nichlink-toolchain`；
+1. 宿主 crate 的薄 `build.rs` 调用 `xirang-toolchain`；
 2. 构建器读取目录注册面以及 `main.rs`、`lib.rs`、`application!(entry = …)` 或
-   `NICH_LINK_ENTRY` 指定的入口（指不到文件即构建失败；同一个入口同时喂给剪枝与
+   `XIRANG_ENTRY` 指定的入口（指不到文件即构建失败；同一个入口同时喂给剪枝与
    切口表）；
 3. 它保守推导本 crate 需要的注册面——入口可达的面，加上 `static_graft_plan!` 里
    每个 `cut(` 命名的槽位——只把这些面写入生成模块和 `StaticPlan`；没有任何声明的
-   面不会发布（`NICH_LINK_SCOPE` 可刻意放宽作用域）；
+   面不会发布（`XIRANG_SCOPE` 可刻意放宽作用域）；
 4. 遇到无法静态证明的动态分发、生成代码或路径时，回退全树，而不是误删代码。
 
 这一步能减少送进 rustc 的注册面和元数据，但它不是完整 rustc 调用图，也不裁剪
@@ -564,9 +564,9 @@ NichLink 的两阶段修剪解决两个不同问题。
 
 第二阶段由正常 Rust 工具链完成。rustc 的可达性和单态化、LLVM、ThinLTO 与
 链接器垃圾回收继续删除未引用函数和符号。workspace 的 release profile 已启用
-ThinLTO 和单 codegen unit；`tools/nichlink-release-audit` 会检查发布产物、拒绝
+ThinLTO 和单 codegen unit；`tools/xirang-release-audit` 会检查发布产物、拒绝
 残留的 `.inventory` linker section，并可对比 full/minimal 二进制的符号和字节数。
-NichLink 不用源码函数名匹配冒充编译器级精确裁剪。
+XiRang 不用源码函数名匹配冒充编译器级精确裁剪。
 
 发布态也不再启动时重建内置注册树。生成代码把通过检查的拓扑固化成
 `&'static [StaticFace]`，把编译前声明的 graft 固化成同一 `StaticPlan` 内的
@@ -596,8 +596,8 @@ NichLink 不用源码函数名匹配冒充编译器级精确裁剪。
 COW。类似地，Studio、MCP、debug 和 plugin-host 是独立工具或可选依赖，应用
 没有链接它们就不会出现在最终二进制里。
 
-NichLink core 不会重写任意 Rust 调用点。所谓“静态绑定实现”需要框架自己的
-生成层按 selector 选择具体 Rust 类型或函数；NichLink 提供经过验证的静态选择
+XiRang core 不会重写任意 Rust 调用点。所谓“静态绑定实现”需要框架自己的
+生成层按 selector 选择具体 Rust 类型或函数；XiRang 提供经过验证的静态选择
 数据。运行时插件没有可提前链接的实现，所以仍需要一次 overlay。这条区分避免
 为了追求“零开销”而把动态插件能力说成编译期魔法。
 
@@ -605,15 +605,15 @@ NichLink core 不会重写任意 Rust 调用点。所谓“静态绑定实现”
 
 ```sh
 # 构造并索引大树
-cargo run --release -p nichlink-toolchain --example scale_audit -- 100000
+cargo run --release -p xirang-toolchain --example scale_audit -- 100000
 
 # fmt、测试、Clippy、文档、release 产物、符号和 linker section
-tools/nichlink-release-audit
+tools/xirang-release-audit
 
 # 可选：提供两个实际应用产物，生成大小与符号差异
-NICH_LINK_FULL_BINARY=/path/to/full \
-NICH_LINK_MINIMAL_BINARY=/path/to/minimal \
-tools/nichlink-release-audit
+XIRANG_FULL_BINARY=/path/to/full \
+XIRANG_MINIMAL_BINARY=/path/to/minimal \
+tools/xirang-release-audit
 ```
 
 ## Studio 与命令行
@@ -621,7 +621,7 @@ tools/nichlink-release-audit
 Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本。它使用
 备用屏幕，监听项目文件，只有输入、窗口变化或文件事件发生时才重绘。
 
-![NichLink Studio](https://raw.githubusercontent.com/Nichtigott/nichlink/main/picture/NichLink_studio.png)
+![XiRang Studio](https://raw.githubusercontent.com/Nichtigott/xirang/main/picture/XiRang_studio.png)
 
 | 按键             | 操作                                  |
 | ---------------- | ------------------------------------- |
@@ -639,66 +639,66 @@ Studio 是常驻的 Ratatui 界面，不是不断向终端追加文本的脚本�
 开发 Studio 自身时，可以让监督器在源码变化后重建并重启子进程：
 
 ```sh
-NICH_LINK_PACKAGE_ROOT=/work/my-app \
-  cargo run -p nichlink-toolchain --features dev-supervisor --bin nichlink-dev -- watch
+XIRANG_PACKAGE_ROOT=/work/my-app \
+  cargo run -p xirang-toolchain --features dev-supervisor --bin xirang-dev -- watch
 ```
 
-`nichlink-dev` **仅限工作区**：它从本检出重建 Studio，并启动该检出的 `target/debug`
-产物。`dev-supervisor` 特性默认关闭，因此 `cargo install nichlink-toolchain` 装的是 TUI，
+`xirang-dev` **仅限工作区**：它从本检出重建 Studio，并启动该检出的 `target/debug`
+产物。`dev-supervisor` 特性默认关闭，因此 `cargo install xirang-toolchain` 装的是 TUI，
 而不是一个没有东西可重建的监督器。
 
-命令行入口刻意保持精简：`nichlink` 是统一入口——`nichlink new` 生成宿主
-项目，`nichlink check` 不做完整编译即可运行注册发现与校验，`nichlink
-build` 先校验注册树再调用 `cargo build`，`nichlink snippets` 把注册面字段的
+命令行入口刻意保持精简：`xirang` 是统一入口——`xirang new` 生成宿主
+项目，`xirang check` 不做完整编译即可运行注册发现与校验，`xirang
+build` 先校验注册树再调用 `cargo build`，`xirang snippets` 把注册面字段的
 编辑器 snippet 注入项目或编辑器配置（`new` 也会写 VS Code 那份；`--editor
 vscode|nvim|blink` 指定一种，`--editor auto` 把本机探测到的编辑器装到各自的
 用户级位置，跳过模糊匹配 snippet 的引擎——blink.cmp 与 LuaSnip 在值位也会命中字段 trigger，
 需要显式 `--editor blink`/`--editor nvim`——`--stdout` 打印任意一份）。值补全本身不需要
-snippet。`nichlink grafts` 列出 `.nichlink/external-grafts/` 记录以及宿主入口是否声明
-它们的槽位，`nichlink explain <node|path>` 报告单个节点的身份、构建作用域、剪枝状态与
+snippet。`xirang grafts` 列出 `.xirang/external-grafts/` 记录以及宿主入口是否声明
+它们的槽位，`xirang explain <node|path>` 报告单个节点的身份、构建作用域、剪枝状态与
 命名它的切口（`explain --overlay` 渲染构建的静态覆盖投影而不是活的树；真正的有效树是
-宿主侧的 `Registry::dump_effective`）。`nichlink studio` 负责交互式编辑和调试，
-`nichlink mcp` 是给 AI 客户端使用的 JSON-RPC/MCP 桥：源码与注册树查询，加上
+宿主侧的 `Registry::dump_effective`）。`xirang studio` 负责交互式编辑和调试，
+`xirang mcp` 是给 AI 客户端使用的 JSON-RPC/MCP 桥：源码与注册树查询，加上
 除非给出 `apply: true` 否则先预览的创作写入。`cargo
 check` 仍是构建校验命令：
 
 ```sh
 cargo check
-NICH_LINK_PACKAGE_ROOT=/work/my-app nichlink mcp
+XIRANG_PACKAGE_ROOT=/work/my-app xirang mcp
 ```
 
-MCP 提供 `nichlink.search`（面排在最前，按逻辑路径、kind、模块或 `registry_name` 匹配，并标注构建的
+MCP 提供 `xirang.search`（面排在最前，按逻辑路径、kind、模块或 `registry_name` 匹配，并标注构建的
 结论——`ok`、`added since build`、`re-identified` 或 `build unknown`；不再描述这批源码的清单会在这些
-结论之上被说成 `stale (run nichlink check)`——随后才是文件与函数命中）、
-`nichlink.inspect`、`nichlink.callgraph`、
-`nichlink.read`、`nichlink.status` 和 `nichlink.registry`——最后一个报告构建推导出的
-注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `nichlink.explain`（构建发布的
+结论之上被说成 `stale (run xirang check)`——随后才是文件与函数命中）、
+`xirang.inspect`、`xirang.callgraph`、
+`xirang.read`、`xirang.status` 和 `xirang.registry`——最后一个报告构建推导出的
+注册树，因此代理可以直接读注册树，而不是从宏名重建——以及 `xirang.explain`（构建发布的
 作用域与发布剪枝，源码文本答不出来；给出 `overlay: true` 时改为覆盖投影——每条已声明切口替换哪个
-槽位、作用域剪掉哪些面，也就是替换之后的发布态）、`nichlink.diff`（源码与构建之间的面级差异，包括文件没动而
+槽位、作用域剪掉哪些面，也就是替换之后的发布态）、`xirang.diff`（源码与构建之间的面级差异，包括文件没动而
 身份变了的那种；给出 `records: true` 时改为外部 graft 记录与源码的对照——槽位没动而身份变了的记录是
-`re-identified`，而不是被悄悄弄坏）与 `nichlink.trace`（已记录 trace 的调用报告——真正跑了什么——artifact 描述的是
-另一棵树时会被拒绝；给出 `values: true` 时改为报告记录下的值与被观察到的数据边，按捕获它们的帧分组）、`nichlink.mir`（`-Zunpretty=mir` 文本转储或紧凑 JSONL artifact，两种
+`re-identified`，而不是被悄悄弄坏）与 `xirang.trace`（已记录 trace 的调用报告——真正跑了什么——artifact 描述的是
+另一棵树时会被拒绝；给出 `values: true` 时改为报告记录下的值与被观察到的数据边，按捕获它们的帧分组）、`xirang.mir`（`-Zunpretty=mir` 文本转储或紧凑 JSONL artifact，两种
 都能读，`jsonl: true` 时还负责**写出**——那条可移植通道以前在工作区里没有任何东西产出过；它写出的是
 点名自己那棵树的快照，而给出 `against` 时两份快照作差得到调用图差异，外来快照按名拒绝）、
-`nichlink.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
-真实调用在其中确认它的编译器候选，而不是与它并列）、`nichlink.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
-能力记号）、`nichlink.impact`（一次改动的传递爆炸半径：后代、能力消费者与已声明 graft 切口，各带跳数与理由）、
-`nichlink.grafts`（每条外部 graft 计划，以及宿主入口是否声明了它针对的槽位，使未被保住的记录在发布剪掉它之前就可见），以及 `nichlink.converge`（一次调用给出某个面的收敛起点：作用域与剪枝判断、它的邻域、
+`xirang.unified`（把该图与已记录的 trace 经 `debug_method` 自己的 `UnifiedCallGraph` 合并，
+真实调用在其中确认它的编译器候选，而不是与它并列）、`xirang.usages`（一个面的邻域：树边、它能设置的字段读回、别的面双向提到的
+能力记号）、`xirang.impact`（一次改动的传递爆炸半径：后代、能力消费者与已声明 graft 切口，各带跳数与理由）、
+`xirang.grafts`（每条外部 graft 计划，以及宿主入口是否声明了它针对的槽位，使未被保住的记录在发布剪掉它之前就可见），以及 `xirang.converge`（一次调用给出某个面的收敛起点：作用域与剪枝判断、它的邻域、
 每条需求是否有答案、该读哪些文件——并把内核的拒绝当成判断而不是错误报出来；给出 `trace: true` 时它
 从已记录的运行出发，把整棵树收敛到"既声明了面、又真的跑过"的那些文件，并带上那些帧捕获的值与它们
 之间的边）、
-`nichlink.verify`（重跑内核校验并报告那次运行发布的树差异，因此一次编辑是被确认过的，而不只是被写下），还有
-`nichlink.apply`：它经与 Studio 相同的
+`xirang.verify`（重跑内核校验并报告那次运行发布的树差异，因此一次编辑是被确认过的，而不只是被写下），还有
+`xirang.apply`：它经与 Studio 相同的
 authoring 执行器新增、编辑、改名或删除注册面，除非给出 `apply: true`，改动会先在一份一次性副本上
 预览。静态调用图会标为 heuristic；动态调用
 和运行时数值只有在宿主真实记录 `CallTrace` 后才具权威性，而 Studio 从宿主写出的 artifact
 读入它（`docs/design-trace-ingest.md`）；没有 artifact 的会话显示 `TRACE: none`，
 而不是展示它并不拥有的数值；而把已记录的 trace 与编译器的 MIR 候选汇合的，正是
-`nichlink.unified`。
+`xirang.unified`。
 
-## 什么时候值得用 NichLink
+## 什么时候值得用 XiRang
 
-NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对象图由多人或
+XiRang 不是 Rust 模块系统的替代品。它适合这样的项目：对象图由多人或
 工具共同维护；需要替换中间层而不改动相邻节点；或者 AI 需要一份机器能读
 懂的“这个对象接受什么、提供什么”的说明。小型、集中组装的应用通常直接
 使用普通 Rust 更合适。
@@ -711,7 +711,7 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 | `inventory` / `linkme` | 分布式收集静态条目                                                           | 树语义、合同、溯源、原子嫁接                 |
 | Bevy 风格插件          | 显式组合一个应用                                                             | 通用源码路径和中间层合同校验                 |
 | CodeGraph / CodeQL     | 符号和调用证据                                                               | 运行时注册与替换决策                         |
-| NichLink               | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与带预览写入的 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
+| XiRang               | 被动递归注册树、合同、准入、嫁接校验、Studio 视图与带预览写入的 MCP 源码查询 | 动态分发和优化后数值仍受 Rust/编译器边界限制 |
 
 ## 边界
 
@@ -736,9 +736,9 @@ NichLink 不是 Rust 模块系统的替代品。它适合这样的项目：对�
 ## 运行时追踪
 
 ```rust
-let trace = nichlink_toolchain::run_method::CallTrace::runtime(); // debug: errors-only, release: off
-let quiet = nichlink_toolchain::run_method::CallTrace::disabled();
-let detailed = nichlink_toolchain::run_method::CallTrace::full();
+let trace = xirang_toolchain::run_method::CallTrace::runtime(); // debug: errors-only, release: off
+let quiet = xirang_toolchain::run_method::CallTrace::disabled();
+let detailed = xirang_toolchain::run_method::CallTrace::full();
 ```
 
 `errors-only` 只保留失败链路并丢弃成功证据；`full` 保留 frame、局部变量和
@@ -746,48 +746,48 @@ let detailed = nichlink_toolchain::run_method::CallTrace::full();
 
 ## Kernel 与执行面
 
-NichLink 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规则很简单：
+XiRang 把 workspace 分成一个纯 kernel 和一组薄执行面。下沉规则很简单：
 **无 I/O、无 `std::env`、无时间/进程绑定的逻辑一律下沉到 kernel**；凡是
 要读文件系统、起进程或驱动终端的能力，都留在执行面里，由执行面把 kernel
 方法绑定到各自的上下文。
 
-`nichlink-kernel`（lib 名 `nichlink_kernel`）是 kernel：协议名词加纯方法全集——身份、
+`xirang-kernel`（lib 名 `xirang_kernel`）是 kernel：协议名词加纯方法全集——身份、
 声明、解析、树操作、策略、渲染。kernel 内不做任何 I/O，也不绑定环境，因此
 每个工具复用的都是同一套方法。
 
 | Crate                | 目录                       | 执行面职责                                                                                                                                                                   |
 | -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nichlink-toolchain` | `toolchain/build_method/`    | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令                                                                      |
-| `nichlink-toolchain` | `toolchain/runtime/`       | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器                                                                                        |
-| `nichlink-toolchain` | `toolchain/call_evidence/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
-| `nichlink-toolchain` | `toolchain/plugin_host/`   | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表                                                                                                                      |
-| `nichlink-toolchain` | `toolchain/studio/`        | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法                                                                                                              |
-| `nichlink-toolchain` | `toolchain/mcp/`           | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护                                                                                                                          |
-| `nichlink-toolchain` | `toolchain/cli/`           | 进程胶水：argv 分发、cargo 子进程、子命令转发                                                                                                                                |
+| `xirang-toolchain` | `toolchain/build_method/`    | 构建期文件系统与 `OUT_DIR` 编排：扫源、kernel 校验、`generated_lib` 渲染、manifest/缓存写入、cargo 指令                                                                      |
+| `xirang-toolchain` | `toolchain/runtime/`       | 运行期状态与追踪：`CallTrace` 帧栈/数据边、`host!`/`trace_call!` 宏、authoring 执行器                                                                                        |
+| `xirang-toolchain` | `toolchain/call_evidence/` | 观测证据面：MIR 文本/JSONL 解析与合并、`CallTrace` 与数据流模型、tracing/petgraph 适配、`UnifiedCallGraph`（**产出** MIR 的那次 `cargo rustc` 由 Studio 运行，不在本 crate） |
+| `xirang-toolchain` | `toolchain/plugin_host/`   | 插件宿主执行：wasm/进程沙箱实例、世代部署、懒激活槽位表                                                                                                                      |
+| `xirang-toolchain` | `toolchain/studio/`        | TUI 执行面：渲染与键鼠状态机，消费 kernel 查询与 authoring 方法                                                                                                              |
+| `xirang-toolchain` | `toolchain/mcp/`           | AI 代理 stdio 桥：JSON-RPC 循环、工具分发、路径防护                                                                                                                          |
+| `xirang-toolchain` | `toolchain/cli/`           | 进程胶水：argv 分发、cargo 子进程、子命令转发                                                                                                                                |
 
-`nichlink-macro` 是第九个发布的 crate：一个在编译期归一化注册面字段的过程宏
+`xirang-macro` 是第九个发布的 crate：一个在编译期归一化注册面字段的过程宏
 crate（宽容的分隔符与字段顺序、带 span 的诊断、编辑器镜像）。它是构建期前端而不是
 执行面，因此不在上表。
 
 ## 工作区结构
 
 ```text
-kernel/       nichlink-kernel（lib 名 nichlink_kernel）：协议名词 + 纯方法全集——identity、
+kernel/       xirang-kernel（lib 名 xirang_kernel）：协议名词 + 纯方法全集——identity、
               declaration、diagnostic、tree、plugin、mir、requirements、
               release、source、authoring、syntax、json、lexicon
-macro/        nichlink-macro：编译期注册面字段前端（宽容的分隔符与顺序、带 span
+macro/        xirang-macro：编译期注册面字段前端（宽容的分隔符与顺序、带 span
               诊断、编辑器镜像）
-build_method/ nichlink-toolchain：构建期源码发现、缓存、第一阶段 StaticPlan
-run_method/   nichlink-toolchain：运行期 trace 状态、host!/trace_call! 宏、
+build_method/ xirang-toolchain：构建期源码发现、缓存、第一阶段 StaticPlan
+run_method/   xirang-toolchain：运行期 trace 状态、host!/trace_call! 宏、
               authoring 执行器
-debug_method/ nichlink-toolchain：可选 CallTrace 适配、MIR 证据、数据流与图模型
-cli/          nichlink-toolchain：统一入口（nichlink new/check/build/snippets/
-              explain/grafts/studio/mcp、cargo-nichlink）
+debug_method/ xirang-toolchain：可选 CallTrace 适配、MIR 证据、数据流与图模型
+cli/          xirang-toolchain：统一入口（xirang new/check/build/snippets/
+              explain/grafts/studio/mcp、cargo-xirang）
 studio/       Ratatui 编辑、搜索、watch 和源码跳转
 mcp/          面向 AI 的 MCP 桥：查询与带预览的写入
 plugin-host/  可选 Wasm/进程插件和原子部署
 examples/     可运行示例：control-button 宿主与其项目外 graft 实现
-conventions/  nichlink-conventions：遍历本检出的门禁（内核纯净性、模块挂载、
+conventions/  xirang-conventions：遍历本检出的门禁（内核纯净性、模块挂载、
               尺寸棘轮、文档代码块）；不发布
 ```
 
@@ -802,7 +802,7 @@ cargo test --workspace --offline
 cargo clippy --workspace --all-targets --offline -- -D warnings
 ```
 
-NichLink 使用 [MIT License](LICENSE)。欢迎提交真实项目中的失败案例、设计
+XiRang 使用 [MIT License](LICENSE)。欢迎提交真实项目中的失败案例、设计
 质疑和改进 PR，也欢迎在 GitHub Issues / Discussions 讨论边界问题。
 
 [English](README.md) 

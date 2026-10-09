@@ -1,7 +1,7 @@
 # 第六轮 MCP × codegraph 对照评测（记录）
 
 日期：2026-10-01。装置：`/tmp/round6`（33 棵树，每棵 git 单提交）；器具：冻结快照
-`/tmp/r6-bridge-target/debug/nichlink-mcp`（构建自冻结检出 `/tmp/r6-bridge`，= 提交 `ac27b9a`）；
+`/tmp/r6-bridge-target/debug/xirang-mcp`（构建自冻结检出 `/tmp/r6-bridge`，= 提交 `ac27b9a`）；
 题面 `BRIEF.md`（§0–§6）、判分口径与答案键在 `/tmp/round6/.audit/`（**选手不可见**）。每臂 21 题：
 第五轮那 17 题**逐字不变**（保住配对比较）+ 新增四关 g1（没有测试能到达的地方）、g2（伪代码说意图、
 指出与实现的差）、g3（加内部一层而不动注册树/公开路径）、h1（范围型：「检查还有没有别的问题」）。
@@ -58,7 +58,7 @@ mcp **8,144 万字符 ≈ 2,327 万 token 当量（188×）**，cg 5,722 万（1
 
 ## 下一步
 
-1. **输出压缩批次**（团队 `nichlink-output-trim`）：前言段与 census 边界句压缩、`read` 默认窗口
+1. **输出压缩批次**（团队 `xirang-output-trim`）：前言段与 census 边界句压缩、`read` 默认窗口
    40→8、`search` 零命中的替代写法、`registry`/`check` 的默认颗粒度（`--full`/`--census` 展开），
    由独立复测确认"字符下降 × 判据信息不丢"。
 2. **O3-分支级**：两臂各自独立点名了同一处"从不执行的分支"（`Store::post` 的拒绝支、

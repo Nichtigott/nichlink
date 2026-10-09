@@ -252,9 +252,9 @@ impl App {
         }
         // One of Studio's writers, so it needs the project the reader opened, not
         // one resolved from the environment or the working directory: it creates
-        // `.nichlink/plugins/` and appends to a lock file in it.
+        // `.xirang/plugins/` and appends to a lock file in it.
         // Studio 的写入方之一，因此它需要读者打开的那个项目，而不是从环境或工作目录解析出来的
-        // 一个：它会创建 `.nichlink/plugins/` 并往其中的锁文件里追加。
+        // 一个：它会创建 `.xirang/plugins/` 并往其中的锁文件里追加。
         let package_root = match selected_package_root() {
             Ok(root) => root,
             Err(error) => {
@@ -262,7 +262,7 @@ impl App {
                 return;
             }
         };
-        let plugin_root = package_root.join(".nichlink/plugins");
+        let plugin_root = package_root.join(".xirang/plugins");
         let lock_name = if source == "official" {
             "official.lock"
         } else {

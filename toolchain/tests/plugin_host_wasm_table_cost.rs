@@ -41,10 +41,10 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use nichlink_toolchain::plugin_host::{
+use xirang_toolchain::plugin_host::{
     ValidationChannel, WasmBackend, WasmLimits, WasmPluginSlot, WasmPluginTable,
 };
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::run_method::{
     Admission, FlowContract, FrameworkId, LocalizedText, NodeId, ObjectContract, PluginArtifact,
     PluginManifest, PluginMode, PluginSource, PluginTrustPolicy, RegistrationInfo,
     RegistrationRule, RuntimeCheckSpec, SourceLocation, sha256_hex,
@@ -124,7 +124,7 @@ static ALLOCATOR: Counting = Counting;
 fn slot() -> WasmPluginSlot {
     WasmPluginSlot::new(
         "test",
-        FrameworkId::new("nichlink.test"),
+        FrameworkId::new("xirang.test"),
         PluginMode::Extension,
         FlowContract::NONE,
         &[ValidationChannel::Local],
@@ -133,14 +133,14 @@ fn slot() -> WasmPluginSlot {
 
 /// A verified artifact whose module declares a table of `elements` entries.
 /// 一个已验证产物，其模块声明一张有 `elements` 个条目的表。
-fn artifact_with_table(elements: usize) -> nichlink_toolchain::run_method::VerifiedPluginArtifact {
+fn artifact_with_table(elements: usize) -> xirang_toolchain::run_method::VerifiedPluginArtifact {
     let wat = format!(
         r#"(module
           (memory (export "memory") 1)
           (data (i32.const 0) "ok")
           (table {elements} funcref)
-          (func (export "nichlink_health") (param i32 i32) (result i64) (i64.const 2))
-          (func (export "nichlink_probe") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_health") (param i32 i32) (result i64) (i64.const 2))
+          (func (export "xirang_probe") (param i32 i32) (result i64) (i64.const 2))
         )"#
     );
     let bytes = wat::parse_str(&wat).expect("the generated module is valid WAT");
@@ -148,7 +148,7 @@ fn artifact_with_table(elements: usize) -> nichlink_toolchain::run_method::Verif
     let registration = RegistrationInfo {
         namespace: "plugin-test",
         id: NodeId::from_path("plugin.rs", "plugin"),
-        parent: nichlink_toolchain::run_method::ROOT_NODE_ID,
+        parent: xirang_toolchain::run_method::ROOT_NODE_ID,
         kind: "Plugin",
         preset: "",
         parts: "",
@@ -182,7 +182,7 @@ fn artifact_with_table(elements: usize) -> nichlink_toolchain::run_method::Verif
             name: "plugin-test",
             crate_name: "plugin_test",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.test"),
+            framework: FrameworkId::new("xirang.test"),
             source: PluginSource::User,
             mode: PluginMode::Extension,
             checksum,

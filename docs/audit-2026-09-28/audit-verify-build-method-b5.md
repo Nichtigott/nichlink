@@ -17,7 +17,7 @@
 | `an_unused_method_is_empty_and_an_unbalanced_list_reads_to_the_end` | 未被调用的方法 → 空；括号始终不配平 → 读到底（不猜边界） |
 | `the_shipped_rule_sources_still_read_to_their_requirements` | 出厂 3 份源各读出 1 条：`examples/control-button` → `["control.render"]`、studio 根 → `["control.render"]`、studio object → `["node_editor.render"]` |
 
-6 条在修复后的树上**全绿**；`cargo test -p nichlink-build-method --offline` 也随之 EXIT=0。
+6 条在修复后的树上**全绿**；`cargo test -p xirang-build-method --offline` 也随之 EXIT=0。
 
 ## 2. 三条红侧（队长点名的两轴 + 我的补轴）—— 全部先跑红
 
@@ -32,12 +32,12 @@
 ## 3. 反过火
 
 - **出厂规则源**：见 §1 最后一条用例——3 份 `registry_rule.rs` 各读出 1 条需求，值与源码一致（studio object 的是 `node_editor.render`，属正例）。
-- **build_method 现有用例**：`cargo test -p nichlink-build-method --offline` EXIT=0；`cargo test --workspace --offline` EXIT=0（58 个 ok 块），即两个出厂宿主的整条构建链（含规则读取）仍全过。
+- **build_method 现有用例**：`cargo test -p xirang-build-method --offline` EXIT=0；`cargo test --workspace --offline` EXIT=0（58 个 ok 块），即两个出厂宿主的整条构建链（含规则读取）仍全过。
 - **注释抽查（作者主张"一字未删"）**：我读了 `renderer/pass.rs:140-146`（说明"宿主可能开着 `#![warn(missing_docs)]` 且无法编辑生成文件 → 裸静态量保持隐藏、只有宿主真正调用的两个函数带文档"）与 `renderer/tree.rs:78-96`（说明"为什么必须 `#[path]` 而不是 `include!`：保住 `//!` 头、保住 `file!()`；以及为什么 IDE 影子声明必须存在、`cfg(rust_analyzer)` 下 rustc 只读真实声明"）。两段留的都是**为什么**（非直觉取舍），不是复述代码 ✓。其它段落我没逐字比对 `git show HEAD:`，因此"一字未删"这句我只能抽查背书。
 
 ## 4. 门禁（同一批 hash）
 
-`cargo test -p nichlink-build-method --offline` **0**；`cargo test --workspace --offline` **0**（58 ok 块、0 FAILED）；`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**；`cargo test -p nichlink-conventions --offline` **0**（131 passed）；`cargo fmt --all -- --check` **0**（0 行）。
+`cargo test -p xirang-build-method --offline` **0**；`cargo test --workspace --offline` **0**（58 ok 块、0 FAILED）；`cargo clippy --workspace --all-targets --offline -- -D warnings` **0**；`cargo test -p xirang-conventions --offline` **0**（131 passed）；`cargo fmt --all -- --check` **0**（0 行）。
 
 ## 5. 未覆盖 / 新发现
 

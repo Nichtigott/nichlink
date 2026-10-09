@@ -86,7 +86,7 @@
 > | `studio/tests/fixtures/node-editor/src/control/object/node_editor/registry_rule/` | 同上 |
 > | `studio/tests/fixtures/node-editor/src/control/object/node_editor/object/` | 夹具面文件；被 `prototype-fixtures` 门控的测试按路径选中（`studio/tests/fixtures/` 不在 workspace members 里，见 `AGENTS.md` 的 `prototype-fixtures` 段） |
 >
-> **精确说法（不要把机制说过头）**：类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:50`、`:52`）与面**一起编译**，取值会跟着新身份走——**它本身不会"失效"**。真正会失效/需要连带改的是**以身份字符串落盘或按路径字面引用**的东西：用户 checkout 里的 `.nichlink/external-grafts/*/graft.plan`、`registry_rule_path` 字符串、逐字引用 `control/object/button/button.rs` 的测试与 README（`mcp/src/apply_tests.rs:168`、`mcp/README.md:131`、`mcp/README.zh-CN.md:89`）。所以豁免理由是"移动会改身份 + 要连带改一串字面路径"。
+> **精确说法（不要把机制说过头）**：类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:50`、`:52`）与面**一起编译**，取值会跟着新身份走——**它本身不会"失效"**。真正会失效/需要连带改的是**以身份字符串落盘或按路径字面引用**的东西：用户 checkout 里的 `.xirang/external-grafts/*/graft.plan`、`registry_rule_path` 字符串、逐字引用 `control/object/button/button.rs` 的测试与 README（`mcp/src/apply_tests.rs:168`、`mcp/README.md:131`、`mcp/README.zh-CN.md:89`）。所以豁免理由是"移动会改身份 + 要连带改一串字面路径"。
 下文与 D-3 一律用谓词 **A**（34 / 发布面 28）；验收标准是"按 A 收平后为 0"，不再使用 39。
 **保留结论**：`tree/connector/connector.rs`、`plugin/contracts/contracts.rs` 这类**名字重复本身不是缺陷**——它们是约定的一部分，且 `tree/connector/` 等目录里另有测试或子模块时正是该约定的用途。要修的是「目录无载荷」这一半（NAM-07），不是名字本身。
 
@@ -96,8 +96,8 @@
 - **现状**：文件叫 `validation`，内容是 `AuthoringContext`（:47 的 `new(package_root, namespace)`、:56 的 `scope(...)`）与**进程级环境访问器** `authoring_namespace()`（:71）、`package_root()`（:99）、`source_root()`（:120）、`legacy_rule_path_for_source()`（:91）。
 - **判据**：这是本仓 authoring 的**执行上下文与全局状态**实现，不是校验逻辑（真正的校验在 `core/src/registry_core/authoring/validation/validation.rs` 与 `run_method/src/authoring/manifest/parse`）。读者按名字找校验规则会打开错的文件；反过来，想知道「`package_root()` 是谁设的、作用域何时恢复」的人在 `validation` 下也想不到。名字与内容不符 → MAJOR。
 - **最小改法**：`run_method/src/authoring/validation/validation.rs` → `run_method/src/authoring/context.rs`（或 `authoring_context.rs`），模块名 `validation` → `context`。
-- **⚠️ 这是公开路径变更（t27 补的漏项）**：`conventions/src/shims.rs:50` 把 `run_method/src/authoring/validation/validation.rs` 的重导出 `pub use nichlink::authoring::validation::*;` 钉在 `SHIMS` 棘轮里——也就是说 `nichlink_run_method::authoring::validation` 是**下游可写的公开路径**。同一张表（`:27-80`）还钉着 `authoring/parse/parse.rs`、`authoring/face_manifest.rs`、`runtime/evidence.rs`、`runtime/runtime.rs`、`runtime/trace/trace.rs`、`plugin/plugin.rs`、`registry/registry.rs`、`run_method/src/lib.rs`。**凡改这些文件/模块名，必须同时改 `SHIMS` 条目并保留历史路径别名**，否则要么门禁红，要么悄悄移除下游仍在用的路径。
-- **复核手段**：`grep -n "authoring/validation/validation.rs" conventions/src/shims.rs`（→ :50）；`grep -n "pub use nichlink::authoring::validation" run_method/src/authoring/validation/validation.rs`；改名后 `cargo test -p nichlink-conventions --offline`（`shims` 门禁）必须仍绿。
+- **⚠️ 这是公开路径变更（t27 补的漏项）**：`conventions/src/shims.rs:50` 把 `run_method/src/authoring/validation/validation.rs` 的重导出 `pub use xirang::authoring::validation::*;` 钉在 `SHIMS` 棘轮里——也就是说 `xirang_run_method::authoring::validation` 是**下游可写的公开路径**。同一张表（`:27-80`）还钉着 `authoring/parse/parse.rs`、`authoring/face_manifest.rs`、`runtime/evidence.rs`、`runtime/runtime.rs`、`runtime/trace/trace.rs`、`plugin/plugin.rs`、`registry/registry.rs`、`run_method/src/lib.rs`。**凡改这些文件/模块名，必须同时改 `SHIMS` 条目并保留历史路径别名**，否则要么门禁红，要么悄悄移除下游仍在用的路径。
+- **复核手段**：`grep -n "authoring/validation/validation.rs" conventions/src/shims.rs`（→ :50）；`grep -n "pub use xirang::authoring::validation" run_method/src/authoring/validation/validation.rs`；改名后 `cargo test -p xirang-conventions --offline`（`shims` 门禁）必须仍绿。
 
 **NAM-04 / MAJOR / A③ / `build_method/src/cache.rs`**
 - **现状**：文件叫 `cache`，8 个函数里只有一半是缓存：`update_discovery_cache`（:77）、`cached_parent_id`（:184）、`collect_discovery_rows`（:205）；另一半是**作用域判定**与**通用写盘**：`write_if_changed`（:36，全库唯一的通用「变了才写」）、`collect_active_ids`（:44）、`source_is_active`（:216）、`face_source_is_active`（:235）、`module_feature`（:246）。
@@ -109,9 +109,9 @@
 
 > **t27 复核后的修订**：原文用"17 个工具里 16 个各自住同名列，只有 `explain` 例外"支撑 MAJOR。按 dispatch 表复算（§G-2 的 P4）：**同名者 12/17**，例外 **5 个** —— `inspect`（`mcp/src/tools.rs:331`）、`read_source`（`mcp/src/tools.rs:356`）、`status`（`mcp/src/tools.rs:393`）三个 handler 就在 `tools.rs` 里，`unified` 在 `mcp/src/mir.rs:125`（与 `mir` 同文件），只有 `explain` 在 `mcp/src/evidence.rs:65`。另外 `mcp/src/evidence.rs` 的模块文档首行就是 "The build's own evidence for one face, or for the tree it scoped."（`:1`）——**名字与内容相符**。所以原文的 MAJOR 前提不成立。
 
-- **现状**：261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `nichlink.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line`（:169）、`tree_report`（:190）。内容以**构建证据读取器**为主，`explain` 只是其中一个 handler。
+- **现状**：261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `xirang.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line`（:169）、`tree_report`（:190）。内容以**构建证据读取器**为主，`explain` 只是其中一个 handler。
 - **判据（降级后的两条，都是 MINOR）**：
-  1. 工具名 `nichlink.explain` 与文件名 `evidence.rs` 不一致（尽管这在本桥里**不是唯一**：5/17 个工具与文件不同名）；
+  1. 工具名 `xirang.explain` 与文件名 `evidence.rs` 不一致（尽管这在本桥里**不是唯一**：5/17 个工具与文件不同名）；
   2. `evidence` 一词在本仓**一名多义**：`mcp/src/evidence.rs`（构建产物证据）vs `run_method/src/runtime/evidence.rs`（已观测调用证据）vs `studio/src/studio/app/tests/evidence.rs` —— 属 D-9 的实例。
 - **最小改法（与 D-9 统一，采用 t27 倾向）**：`mcp/src/evidence.rs` → **`mcp/src/build_evidence.rs`**（保留词加限定）。**注意落地名分工（t31 裁定）**：`build_evidence` 只用于这个 **mcp 侧文件**；`debug_method` 的模块名是 **`call_evidence`**（特性名仍 `evidence`）。若维护者更看重"一工具一文件"，则拆成两半：读取器 → `build_evidence.rs`，`explain` handler → `explain.rs`；**二选一，不要同时**。
 - **复核手段**：`grep -rn "^pub(crate) fn \(explain\|inspect\|read_source\|status\|unified\)\b" mcp/src` 应给出上表五行；`grep -n "^//! " mcp/src/evidence.rs | head -1`。
@@ -149,7 +149,7 @@
 - **复核手段**：`grep -rn "locals::call_trace\|locals/call_trace" run_method/src`。
 
 **NAM-09 / MINOR / A④ / `run_method/src/authoring/face_manifest.rs` 与 `manifest/face_manifest.rs`**
-- **现状**：`authoring/face_manifest.rs`（89 行，自述「File-backed authoring for NichLink registration faces」，做文件化创作）与 `authoring/manifest/face_manifest.rs`（22 行，自述「Stable registration-face metadata model」，是数据模型）。
+- **现状**：`authoring/face_manifest.rs`（89 行，自述「File-backed authoring for XiRang registration faces」，做文件化创作）与 `authoring/manifest/face_manifest.rs`（22 行，自述「Stable registration-face metadata model」，是数据模型）。
 - **判据**：同一个名字下一个是 I/O、一个是模型；`manifest/` 里的那个才配得上"manifest"这个词，`authoring/` 里那个其实在做**文件读写**。
 - **最小改法**：`authoring/face_manifest.rs` → `authoring/face_file.rs`（或 `face_store.rs`）；`manifest/face_manifest.rs` 保持。
 - **复核手段**：`grep -rn "face_manifest::" run_method/src`。
@@ -168,10 +168,10 @@
   | `evidence` | `mcp/src/evidence.rs`、`run_method/src/runtime/evidence.rs`、`studio/src/studio/app/tests/evidence.rs` | 构建产物证据 / 已观测调用证据 / 前者与后者的测试 |
   | `index` | `core/src/registry_core/tree/index/index.rs`、`mcp/src/index.rs`、`studio/src/studio/app/source_index.rs` | 注册树索引（NodeId→entry）/ 源码文件与函数索引 / 源码索引（Studio 侧，命名更好） |
   | `artifact` | `core/src/registry_core/plugin/artifact/artifact.rs`、`run_method/src/runtime/trace/artifact/artifact.rs` | 插件二进制+manifest / trace 快照 |
-  | `registry` | `core/src/registry_core/tree/registry.rs`、`run_method/src/registry/registry.rs`（shim）、`mcp/src/registry.rs`（工具）、`examples/control-button/tests/registry.rs` | 注册机本体 / 历史路径 / `nichlink.registry` 工具 / 示例测试 |
+  | `registry` | `core/src/registry_core/tree/registry.rs`、`run_method/src/registry/registry.rs`（shim）、`mcp/src/registry.rs`（工具）、`examples/control-button/tests/registry.rs` | 注册机本体 / 历史路径 / `xirang.registry` 工具 / 示例测试 |
 
 - **判据**：这四个词在本仓都**已被载义**（`EvidenceKind`/`CallEvidence`、`NodeId→entry` 索引、插件工件、`Registry` 类型）。第二个含义借用它们时，读者必须打开文件才知道是哪一套。
-- **最小改法**：① `mcp/src/index.rs` → `mcp/src/source_index.rs`（照抄 studio `app/source_index.rs` 的命名，那里已经是对的）；② `run_method/src/runtime/trace/artifact/` → `…/snapshot/`，文件 → `snapshot.rs`（它与插件 artifact 毫无关系）；③ `mcp/src/evidence.rs` 按 NAM-05 改 **`build_evidence.rs`**（**mcp 侧文件名**；`debug_method` 的模块名是 `call_evidence`，见 D-9 的 t31 裁定；不采用 `explain.rs` 单改）；④ `mcp/src/registry.rs` 保留（工具名就是 `nichlink.registry`）。把这四个词列成「保留词表」写进命名共识（见 D）。
+- **最小改法**：① `mcp/src/index.rs` → `mcp/src/source_index.rs`（照抄 studio `app/source_index.rs` 的命名，那里已经是对的）；② `run_method/src/runtime/trace/artifact/` → `…/snapshot/`，文件 → `snapshot.rs`（它与插件 artifact 毫无关系）；③ `mcp/src/evidence.rs` 按 NAM-05 改 **`build_evidence.rs`**（**mcp 侧文件名**；`debug_method` 的模块名是 `call_evidence`，见 D-9 的 t31 裁定；不采用 `explain.rs` 单改）；④ `mcp/src/registry.rs` 保留（工具名就是 `xirang.registry`）。把这四个词列成「保留词表」写进命名共识（见 D）。
 - **复核手段**：`grep -rln "artifact" core/src run_method/src mcp/src studio/src` 与上表对照。
 
 **NAM-12 / MINOR / A④ / `search.rs` 在同一 crate 内四处**
@@ -180,7 +180,7 @@
 - **最小改法**：不动结构，只建议 `ui/search.rs` 的模块文档第一行写明「搜索页入口（见 search/ 子模块）」（部分已有）；`app/state/search.rs`（0 fn）若只是 re-export，按 NAM-10 标注 shim。
 - **复核手段**：`find studio/src -name "search*.rs"`。
 
-**NAM-23 / MINOR / A④ / `pub use nichlink_run_method::PluginChannel as ValidationChannel`**
+**NAM-23 / MINOR / A④ / `pub use xirang_run_method::PluginChannel as ValidationChannel`**
 - **现状**：`plugin-host/src/lazy_wasm.rs:24` 把内核的 `PluginChannel` 重导出为 `ValidationChannel`，文档（:20-23）说明是"保留历史路径"。
 - **判据**：别名 `ValidationChannel` 与本体 `PluginChannel` 不同名不同义（一个像"校验通道"，一个就是"插件通道"）；`plugin-host/tests/fault_matrix.rs` 用的是别名。全仓 `pub use … as` 只有 4 处：`plugin::graft::document as graft_document`（避免与 `graft` 模块冲突，有理由）、`run_method/src/lib.rs:49-50` 的两个宏内部名（有理由）、本条（历史路径）。
 - **最小改法**：保留别名（历史路径是契约），但在契约里补一句「等价于 `PluginChannel`」——最好直接写在文档首行；或在新代码里统一用 `PluginChannel`，别名只留兼容。
@@ -246,7 +246,7 @@
 | 24 | `call` | `trait PluginInstance` | `plugin-host/src/lib.rs:48` | WL（trait 声明） |
 
 - **计数**：全量 24 行 − 白名单 9 行（#1、#5、#6、#14、#16、#21、#22、#23、#24）= **非入口位 15 处**。t27 独立数到 ≥14，与 15 不矛盾（其清单含 trait 声明那一行）。
-- **其它裸动词（有宾语、不计）**：`studio/src/bin/nichlink-dev.rs:169 fn stop(child: &mut Child)`（进程控制助手，宾语在参数里）。
+- **其它裸动词（有宾语、不计）**：`studio/src/bin/xirang-dev.rs:169 fn stop(child: &mut Child)`（进程控制助手，宾语在参数里）。
 - **判据**：`pipeline::run`、`command::run` 在模块语境下勉强可读，但 `TreeDelta::read`（读什么？）、`HotDeployment::load`（返回的其实是快照）、`App::handle`（处理什么？）需要读者回到签名才能懂。不误导，只缺信息 → MINOR。
 - **最小改法**：见上表"判定"列；入口类保留。
 - **复核手段**：§G-2 P5 的命令与输出（本表的 23 行就是它的原样输出 + 白名单标注）。
@@ -305,7 +305,7 @@
 | `quoted_strings` | `core/src/registry_core/authoring/parse/admission.rs:53` | `read_string_literals` |
 | `rule_method_strings` | `build_method/src/contracts.rs:193` | `rule_method_calls`（并见 S11 的行为缺陷） |
 | `argv_strings` | `cli/src/lib.rs:107` | `argv_arguments`（或 `collect_argv`） |
-| `is_nichlink_owned_source` | `run_method/src/authoring/operations/paths.rs:41` | `is_generated_source`（谓词里嵌了实现词 `owned`） |
+| `is_xirang_owned_source` | `run_method/src/authoring/operations/paths.rs:41` | `is_generated_source`（谓词里嵌了实现词 `owned`） |
 
 - **不计入的 17 行及理由**（同一次输出的其余部分）：
   - 领域用词（"字符串字面量"是源码里的东西，不是表示法）：`rust_string`、`json_string`、`push_json_string`、`literal_string`、`raw_string_end`、`path_to_string`、`option_string`、`written_string_list`、`literal_string_expr`、`rule_source_path_string`（返回的是"把路径渲染成文本"，`_string` 在这里说取值形态而不是实现轴）、`render_optional_source`（`optional` 是语法形态）、`parse_optional_source`×2、`parse_optional_id`（同上）。
@@ -378,8 +378,8 @@
 - **复核手段**：`timeout 60 grep -rn "pub use .* as " --include=*.rs core/src run_method/src build_method/src mcp/src studio/src cli/src plugin-host/src debug_method/src macro/src | grep -v _tests`。
 
 **NAM-42 / 结论（干净） / C / 宏生成的模块名**
-- **现状**：`examples/control-button` 的四个面在编译产物里有 `__nichlink_ra_<path>` 与短名两个模块（`control`/`button`/`slider`/`registry_rule`）——这是 IDE 镜像（`cfg(rust_analyzer)` 门控），命名由路径推导，一致。
-- **判据**：见 `audit-inventory.json` 的 `generated_module_names`；与手写模块名不冲突（前缀 `__nichlink_ra_`）。
+- **现状**：`examples/control-button` 的四个面在编译产物里有 `__xirang_ra_<path>` 与短名两个模块（`control`/`button`/`slider`/`registry_rule`）——这是 IDE 镜像（`cfg(rust_analyzer)` 门控），命名由路径推导，一致。
+- **判据**：见 `audit-inventory.json` 的 `generated_module_names`；与手写模块名不冲突（前缀 `__xirang_ra_`）。
 - **最小改法**：无需改。
 
 ---
@@ -417,7 +417,7 @@
 | `STU-S-14`（MINOR） | `app/writers.rs`（42 行）与 `app/mutations.rs`（395 行）职责不清 | **并入 NAM-06（维持 MINOR）**：t27 复核证明 `writers.rs` 自述的是"写入守卫"（`Write guards`，且第二段写明它没有回落根），与内容相符；t25 原写的"自称拥有全部写入"是把名字的褒义读进了文档。修法改为**改名 `write_guard.rs`**，不合并。 |
 | `STU-S-17` / `STU-S-19` / `STU-S-26`（MINOR） | `studio/src/studio/app/navigation.rs` 的死分支与命名、`studio/src/studio/app/keyboard.rs:160-164`（见 `audit-lane-studio.md` 的 STU-S-19）、`studio/src/studio/app/navigation.rs:1-96`（见 STU-S-26） 的位置 | 属**函数内/文件职责**问题（结构轴），本轮不重复；`studio/src/studio/app/navigation.rs` 的文件名本身清晰，不需改。 |
 | `BRG-BR-C6`（MINOR） | 无名三元组 `build_evidence`、半真的 `is_loaded` | **并入 NAM-05**（该文件改名 `build_evidence.rs`；三元组具名属类型问题、不在本轮命名范围）与 D-6（`is_loaded` 是实现名，建议 `is_serving`/`active_generation`，见 t12 对 `lazy_wasm` 的复核）。 |
-| `LGC-LG-01` / `LG-13` / `LG-16` | 身份缓存名不含"命名空间"维度；`NICH_LINK_NAMESPACE` 在两处被解释成两套语义；`compile_error_demo` 魔法目录名当开关 | **LG-16 → D-9 的实例**（用目录名当开关 = 名字承担了协议）；**LG-13 → D-4/D-8 的实例**（同名环境变量两种语义）；**LG-01 → D-2 的实例**（`CACHED_NODE_IDS`/`node_id` 这个名字不表达"按命名空间分桶"）。三条的行为修复在 t15 总账，此处只做命名归因。 |
+| `LGC-LG-01` / `LG-13` / `LG-16` | 身份缓存名不含"命名空间"维度；`XIRANG_NAMESPACE` 在两处被解释成两套语义；`compile_error_demo` 魔法目录名当开关 | **LG-16 → D-9 的实例**（用目录名当开关 = 名字承担了协议）；**LG-13 → D-4/D-8 的实例**（同名环境变量两种语义）；**LG-01 → D-2 的实例**（`CACHED_NODE_IDS`/`node_id` 这个名字不表达"按命名空间分桶"）。三条的行为修复在 t15 总账，此处只做命名归因。 |
 
 **NAM-06 / MINOR（原 MAJOR，t27 复核后降级并改修法） / A③ / `studio/src/studio/app/writers.rs`（归并 STU-S-14）**
 

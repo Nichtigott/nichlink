@@ -324,8 +324,8 @@ impl StaticPlan {
 /// The identity a build baked for a face passes:
 ///
 /// ```
-/// # use nichlink_kernel::registry_core::release::assert_static_identity;
-/// # use nichlink_kernel::registry_core::identity::NodeId;
+/// # use xirang_kernel::registry_core::release::assert_static_identity;
+/// # use xirang_kernel::registry_core::identity::NodeId;
 /// const FACE: NodeId = NodeId::from_bytes(b"face");
 /// const _: () = assert_static_identity(FACE, FACE);
 /// ```
@@ -333,8 +333,8 @@ impl StaticPlan {
 /// A face compiled from another namespace or path does not compile:
 ///
 /// ```compile_fail
-/// # use nichlink_kernel::registry_core::release::assert_static_identity;
-/// # use nichlink_kernel::registry_core::identity::NodeId;
+/// # use xirang_kernel::registry_core::release::assert_static_identity;
+/// # use xirang_kernel::registry_core::identity::NodeId;
 /// const FACE: NodeId = NodeId::from_bytes(b"face");
 /// const _: () = assert_static_identity(FACE, NodeId::from_bytes(b"other"));
 /// ```
@@ -347,7 +347,7 @@ pub const fn assert_static_identity(face: NodeId, planned: NodeId) {
             panic!(
                 "static identity failed: this face compiles an id the build did not bake, so its \
                  namespace or source path differs from the tree this plan came from (see the \
-                 `#[path]` spelling a partitioned crate mounts it through, and `NICHLINK_NAMESPACE`)"
+                 `#[path]` spelling a partitioned crate mounts it through, and `XIRANG_NAMESPACE`)"
             );
         }
         index += 1;
@@ -494,9 +494,9 @@ mod tests {
     static FACES: &[StaticFace] = &[StaticFace::new(CHILD, ROOT, false)];
     static GRAFTS: &[StaticGraftCut] = &[StaticGraftCut::new("root/child", "child_fast", false)];
 
-    // The `static_graft_plan!` macro moved to nichlink-runtime; anchor the same
+    // The `static_graft_plan!` macro moved to xirang-runtime; anchor the same
     // compile-time assertions here without a kernel -> runtime dependency.
-    // `static_graft_plan!` 宏已移至 nichlink-runtime；为避免 kernel 反向依赖，
+    // `static_graft_plan!` 宏已移至 xirang-runtime；为避免 kernel 反向依赖，
     // 这里直接写出等价的编译期断言。
     const _: crate::FrameworkId = FRAMEWORK;
     const _: &str = stringify!(cut "root/child" graft "child_fast");

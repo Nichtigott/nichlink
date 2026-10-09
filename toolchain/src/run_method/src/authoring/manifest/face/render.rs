@@ -123,7 +123,7 @@ impl FaceManifest {
                  rewrite; edit that line in the file by hand"
             ));
         }
-        if !value(nichlink_kernel::lexicon::FACE_FIELD_PLUGIN).is_empty() {
+        if !value(xirang_kernel::lexicon::FACE_FIELD_PLUGIN).is_empty() {
             return Err(
                 "this face declares `plugin:`, which the editor cannot rewrite yet; \
                  edit that line in the file by hand"
@@ -167,9 +167,9 @@ impl FaceManifest {
         };
         // The declaration macro names the registry that owns this face. The
         // generated aliases are emitted by the build crate from the folder
-        // tree; `__nichlink_object!` remains their single hidden implementation.
+        // tree; `__xirang_object!` remains their single hidden implementation.
         // 注册声明的宏名表达当前注册面所属的父注册机。别名由 build crate
-        // 根据文件夹树生成，`__nichlink_object!` 仍是唯一隐藏实现。
+        // 根据文件夹树生成，`__xirang_object!` 仍是唯一隐藏实现。
         let object_macro = if value("parent_source") == "<root>" {
             "root_object".to_owned()
         } else {

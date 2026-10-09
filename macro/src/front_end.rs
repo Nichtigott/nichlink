@@ -11,7 +11,7 @@ use proc_macro2::{
     Delimiter, Group, Ident, Literal, Spacing, Span, TokenStream as Tokens, TokenTree,
 };
 
-use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
+use xirang_kernel::registry_core::declaration::FACE_FIELD_ORDER;
 
 use crate::mirror::{Field, punct};
 

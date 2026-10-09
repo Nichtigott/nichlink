@@ -4,7 +4,7 @@
 //! declares its origin explicitly with `external_object!`, builds a registry in
 //! its own namespace, and the host overlays it.
 
-use nichlink_toolchain::run_method::registry_core::{FrameworkId, Registry};
+use xirang_toolchain::run_method::registry_core::{FrameworkId, Registry};
 
 /// The identity namespace this crate's faces are compiled under.
 /// 本 crate 的注册面编译时所用的身份命名空间。
@@ -14,11 +14,11 @@ use nichlink_toolchain::run_method::registry_core::{FrameworkId, Registry};
 /// (audit `M7`, P3.3) — one place per crate, instead of an `env!` read at every declaration site.
 /// 本 crate 是**外部实现**：它用 `external_object!` 声明注册面，从不调用 `host!()`，因此这个常量由它自己
 /// 拥有。声明宏现在读的就是它（审计 `M7`，P3.3）——每个 crate 一处，而不是每个声明处各读一次 `env!`。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 /// 必须与宿主共享同一个 framework，overlay 才接受这棵外部树。
 /// Must match the host framework; `overlay` rejects a foreign tree.
-pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-suite");
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-suite");
 
 pub mod button_fast;
 pub mod control_fast;
@@ -27,7 +27,7 @@ pub mod slider_fast;
 /// 外部实现自己的注册机（项目外注册）。
 /// The external implementation's own registry (out-of-project registration).
 pub fn external_registry() -> Registry {
-    let mut registry = Registry::root_for_namespace(FRAMEWORK, NICHLINK_NAMESPACE);
+    let mut registry = Registry::root_for_namespace(FRAMEWORK, XIRANG_NAMESPACE);
     registry
         .register_all(&[
             button_fast::REGISTRATION,

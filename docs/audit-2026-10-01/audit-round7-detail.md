@@ -55,7 +55,7 @@ cg 数据 = codegraph **1.5.0**，产自 18:38–19:04；CLI 于 **19:11** 升�
 
 ## s3 — mcp 13 仪器 / cg 20 仪器
 
-- mcp: status(exit0) → callgraph(exit0) → search(exit0) → callgraph(exit0) → callgraph(exit0) → callgraph(exit0) → --json(exit2) → --json(exit2) → callgraph(exit0) → callgraph(exit0) → nichlink-mcp(exit0) → nichlink-mcp(exit0) → nichlink-mcp(exit0)
+- mcp: status(exit0) → callgraph(exit0) → search(exit0) → callgraph(exit0) → callgraph(exit0) → callgraph(exit0) → --json(exit2) → --json(exit2) → callgraph(exit0) → callgraph(exit0) → xirang-mcp(exit0) → xirang-mcp(exit0) → xirang-mcp(exit0)
 - cg : codegraph init s3 | codegraph query --help | codegraph query -p s3 -k function -l 200 -j | codegraph query -p s3 -k method -l 200 -j | codegraph explore -p s3 audit_count audit_unused bucket_lines bucket_name rend | codegraph callers --help | codegraph impact --help | codegraph files --help | codegraph node -p s3 crates/core/src/audit.rs | codegraph callers -p s3 audit_count | codegraph callers -p s3 audit_unused | codegraph callers -p s3 bucket_name | codegraph callers -p s3 bucket_lines | codegraph callers -p s3 render | codegraph callers -p s3 write_count | codegraph callers -p s3 entries | codegraph callers -p s3 matches | codegraph callers -p s3 new | codegraph callers -p s3 post | codegraph callers -p s3 postable
 - mcp 关键行: log-mcp-s3.jsonl: 13 行；exit0=11、exit2=2（两次 `--json` 参数位置写错，与自报一致）；自我复现 `check --census true`：`test-reachable: 1 of 12` + `no test reaches audit_unused (crates/core/src/audit.rs:14)` + `declarations: 4`
 - cg  关键行: log-cg-s3.txt: 20 CMD / 20 EXIT，全 exit 0；`callers audit_count` 只报 `audit_unused`（漏 `tests/audit.rs:25`，cg 自己把这个盲点写进答案）
@@ -123,7 +123,7 @@ cg 数据 = codegraph **1.5.0**，产自 18:38–19:04；CLI 于 **19:11** 升�
 - cg : codegraph init c-adopt-then-extend-cg | codegraph explore -p c-adopt-then-extend-cg control_object static_graft_plan C | codegraph affected -p c-adopt-then-extend-cg src/control/object/toggle/toggle.
 - mcp 关键行: log-mcp-fc.jsonl: 5 行全 exit 0；`adopted` 三次（改前/加面后/全部改动后）
 - cg  关键行: log-cg-fc.txt: 3 CMD / 3 EXIT，全 exit 0
-- **判**: 我自核台账：两树 `.nichlink/adopted/entries` sha256 都是 `541cbe86…38a3`（337 B、1 行、被 git 跟踪），两树 `Cargo.toml` `8d6b35ed…`、`button.rs` `e842be74…` 与 cg 自报逐字吻合；两臂都**没有**伪造新条目、都写清了「新锚不是续期」⇒ **平手**（第六轮此题为 mcp 真赢，本轮两臂都守住了台账）
+- **判**: 我自核台账：两树 `.xirang/adopted/entries` sha256 都是 `541cbe86…38a3`（337 B、1 行、被 git 跟踪），两树 `Cargo.toml` `8d6b35ed…`、`button.rs` `e842be74…` 与 cg 自报逐字吻合；两臂都**没有**伪造新条目、都写清了「新锚不是续期」⇒ **平手**（第六轮此题为 mcp 真赢，本轮两臂都守住了台账）
 
 ## fd — mcp 4 仪器 / cg 2 仪器
 

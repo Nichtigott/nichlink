@@ -61,7 +61,7 @@ pub fn required_roots(root: &Path) -> Vec<String> {
     // The MCP bridge's binary root carries the attribute as well, so removing it
     // is caught too.
     // MCP 桥的二进制根同样带着该属性，因此删掉它也会被抓到。
-    let bridge = root.join("toolchain/src/bin/nichlink-mcp.rs");
+    let bridge = root.join("toolchain/src/bin/xirang-mcp.rs");
     if bridge.is_file() {
         roots.push(relative(root, &bridge));
     }
@@ -141,7 +141,7 @@ pub fn allow_workarounds(root: &Path) -> Vec<String> {
             // 属性。搜索裸名字正是下面那道左边界重要的原因：`disallow(…)` 是另一个函数。
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
-            let masked = nichlink_kernel::source::mask_non_code(&text);
+            let masked = xirang_kernel::source::mask_non_code(&text);
             let mut from = 0usize;
             while let Some(offset) = masked[from..].find(&head) {
                 let at = from + offset;
@@ -339,7 +339,7 @@ mod tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-lint-{}-{}-{sequence}",
+            "xirang-lint-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -402,7 +402,7 @@ mod tests {
             let root = synthetic(&[
                 (
                     "zzprobe/Cargo.toml",
-                    "[package]\nname = \"nichlink-zzprobe\"\n",
+                    "[package]\nname = \"xirang-zzprobe\"\n",
                 ),
                 ("zzprobe/src/lib.rs", source),
             ]);
@@ -430,7 +430,7 @@ mod tests {
             let root = synthetic(&[
                 (
                     "zzprobe/Cargo.toml",
-                    "[package]\nname = \"nichlink-zzprobe\"\n",
+                    "[package]\nname = \"xirang-zzprobe\"\n",
                 ),
                 (
                     "zzprobe/src/lib.rs",
@@ -458,7 +458,7 @@ mod tests {
         let root = synthetic(&[
             (
                 "zzprobe/Cargo.toml",
-                "[package]\nname = \"nichlink-zzprobe\"\n",
+                "[package]\nname = \"xirang-zzprobe\"\n",
             ),
             (
                 "zzprobe/src/lib.rs",
@@ -489,7 +489,7 @@ mod tests {
         let root = synthetic(&[
             (
                 "zzprobe/Cargo.toml",
-                "[package]\nname = \"nichlink-zzprobe\"\n",
+                "[package]\nname = \"xirang-zzprobe\"\n",
             ),
             (
                 "zzprobe/src/lib.rs",

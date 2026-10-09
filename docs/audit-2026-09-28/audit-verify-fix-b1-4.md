@@ -79,12 +79,12 @@ test result: FAILED. 0 passed; 1 failed; … ASSERT_PROBE_EXIT=101
 ## 5. 门禁（静置树，检出内原样输出）
 
 ```
-gate 1  cargo test -p nichlink-studio --offline --all-features            G1_EXIT=0   5 ok-binary / 0 FAILED
+gate 1  cargo test -p xirang-studio --offline --all-features            G1_EXIT=0   5 ok-binary / 0 FAILED
         …::source_index::admission_text_tests::both_lists_survive_the_compact_rendering ... ok
         …::source_index::admission_text_tests::the_kernel_reads_back_every_value_this_renderer_emits ... ok
 gate 2  cargo test --workspace --offline                                  G2_EXIT=0   ok_binaries=52 failed=0
 gate 3  cargo clippy --workspace --all-targets --offline -- -D warnings   G3_EXIT=0   error 计数 0
-gate 4  cargo test -p nichlink-conventions --offline                      G4_EXIT=0   99 passed; 0 failed
+gate 4  cargo test -p xirang-conventions --offline                      G4_EXIT=0   99 passed; 0 failed
 ```
 
 ## 6. 零残留与独立复核的作者主张
@@ -98,4 +98,4 @@ gate 4  cargo test -p nichlink-conventions --offline                      G4_EXI
 - **结论：证实。** B1-4 关闭：在 allow 与 deny 同时非空的声明上，Edit 表单预填与检视器那一行都保住 deny，重建出的运行期门禁仍否决被 deny 的路径，且保存路径写回源码的表达式仍带否决权。三条钉子（`debug_assert` 交内核裁决、交叉测试逐字节互钉规范拼法、5 个畸形子句被内核拒绝）都经变异证明是活的。
 - 未覆盖（不影响本次结论）：① 检视器在**极窄**面板下的换行/截断形态（我在 200×50 的测试终端上断言缓冲文本含 deny 路径；`detail_field` 会按 `inner_width` 换行，但 >143 列的门禁串在真实窄窗口里的可读性未测）；② `debug_assert` 只在 debug/test 构建生效（这是 `debug_assert` 的定义，不是缺陷）：release 构建下“产出值必须可被内核读回”没有运行时保险，只有作者的两条测试在 CI 里把关。
 - 同族遗留（作者在 t52 报告里已提出，本报告只记录、不重开）：内核的紧凑渲染器 `compact_admission` 仍是私有，Studio 侧是第二份实现；本次证据表明两者**当前**逐字节一致（规范拼法复现那一半），但要真正收回一份实现，需要内核公开一个紧凑渲染入口——那是下一轮的结构决策。
-- 证据可复现：`/tmp/nk-b14` 副本 + 我的探针文件即装置；`cd /tmp/nk-b14 && cargo test -p nichlink-studio --offline --all-features b14_` 复现绿，按 §3/§4 改 `admission_text` 复现红，恢复备份复现绿。
+- 证据可复现：`/tmp/nk-b14` 副本 + 我的探针文件即装置；`cd /tmp/nk-b14 && cargo test -p xirang-studio --offline --all-features b14_` 复现绿，按 §3/§4 改 `admission_text` 复现红，恢复备份复现绿。

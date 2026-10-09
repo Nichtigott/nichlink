@@ -31,7 +31,7 @@ fn a_get_that_is_an_option_is_exempt() {
 #[test]
 fn a_bare_verb_is_only_allowed_at_an_entry_position() {
     assert!(violations_in("toolchain/src/build_method/build.rs", "fn run() {}\n").is_empty());
-    assert!(violations_in("toolchain/src/cli/src/bin/nichlink.rs", "fn main() {}\n").is_empty());
+    assert!(violations_in("toolchain/src/cli/src/bin/xirang.rs", "fn main() {}\n").is_empty());
     let found = violations_in("toolchain/src/runtime/src/lib.rs", "pub fn run() {}\n");
     assert_eq!(names(&found), vec!["run".to_owned()]);
 }

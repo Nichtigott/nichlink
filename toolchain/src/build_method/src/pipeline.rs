@@ -8,11 +8,11 @@ use super::{
     write_graft_manifest, write_graph_manifest, write_if_changed, write_pruning_manifest,
     write_shape_manifest, write_source_scope_manifest,
 };
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 /// Whether `entry` is one a later entry superseded (its subtree is in `dropped`).
 /// `entry` 是否被后一条盖住（它的子树在 `dropped` 里）。
-fn is_superseded(entry: &nichlink_kernel::syntax::GraftSyntax, dropped: &[String]) -> bool {
+fn is_superseded(entry: &xirang_kernel::syntax::GraftSyntax, dropped: &[String]) -> bool {
     super::scope::cut_subtree(&entry.cut).is_some_and(|subtree| dropped.contains(&subtree))
 }
 
@@ -64,13 +64,13 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let discovery_fingerprint = super::discovery_fingerprint(src, scan, &nodes);
     // One entry, resolved once, for both readers below. Pruning and the generated
     // cut table must describe the same file, and they silently stopped doing so
-    // when each resolved the entry on its own — `NICH_LINK_ENTRY` reached only
+    // when each resolved the entry on its own — `XIRANG_ENTRY` reached only
     // pruning, so the release could prune one file's slots while the runtime cut
     // table described another's. `host_entry_from_environment` also panics here
     // if the variable names something that is not a file, rather than letting one
     // reader fall back while the other follows it.
     // 入口只解析一次，供下面两个读取者共用。剪枝与生成的切口表必须描述同一个文件，
-    // 而它们各自解析入口时就静默地不再一致——`NICH_LINK_ENTRY` 只作用于剪枝，发布态
+    // 而它们各自解析入口时就静默地不再一致——`XIRANG_ENTRY` 只作用于剪枝，发布态
     // 可能剪掉一个文件的槽位，运行期切口表却在描述另一个文件。若变量指的不是文件，
     // `host_entry_from_environment` 也在这里直接 panic，而不是让一个读取者回退、另一个
     // 跟随。
@@ -197,10 +197,10 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
             })
             .collect();
         let (superseded, overlaps) =
-            nichlink_kernel::registry_core::shape::superseded_by_later(&pairs);
+            xirang_kernel::registry_core::shape::superseded_by_later(&pairs);
         for (earlier, later) in &overlaps {
             eprintln!(
-                "nichlink: two graft cuts overlap: `{earlier}` (earlier, ignored) and `{later}` \
+                "xirang: two graft cuts overlap: `{earlier}` (earlier, ignored) and `{later}` \
                  (later, wins); the later entry answers, so `{later}` replaces its subtree"
             );
         }
@@ -555,7 +555,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     }
     if !write_errors.is_empty() {
         let message = format!(
-            "nichlink could not write its generated tree: {}",
+            "xirang could not write its generated tree: {}",
             write_errors.join("; ")
         );
         if input.emit_cargo_directives {
@@ -603,7 +603,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         println!(
             "cargo:rerun-if-changed={}",
             manifest
-                .join(lexicon::NICHLINK_DIR)
+                .join(lexicon::XIRANG_DIR)
                 .join(lexicon::EXTERNAL_GRAFT_DIR)
                 .display()
         );
@@ -620,7 +620,7 @@ fn build_output_is_verbose() -> bool {
 }
 
 fn cache_status_line(cache_state: &str, fingerprint: &str, verbose: bool) -> Option<String> {
-    verbose.then(|| format!("nichlink discovery cache {cache_state} ({fingerprint})"))
+    verbose.then(|| format!("xirang discovery cache {cache_state} ({fingerprint})"))
 }
 
 /// Keep the generated diagnostic stream deterministic and compact.

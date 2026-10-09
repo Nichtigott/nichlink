@@ -71,11 +71,11 @@ fn with_temp_root<T>(operation: impl FnOnce(&Path) -> T) -> T {
         .as_nanos();
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-external-graft-{}-{stamp}-{sequence}",
+        "xirang-external-graft-{}-{stamp}-{sequence}",
         std::process::id()
     ));
     fs::create_dir_all(&root).expect("create root");
-    let result = AuthoringContext::new(root.clone(), "nichlink.test").scope(|| operation(&root));
+    let result = AuthoringContext::new(root.clone(), "xirang.test").scope(|| operation(&root));
     let _ = std::fs::remove_dir_all(&root);
     result
 }
@@ -88,10 +88,10 @@ fn registry_with_button() -> Registry {
         OwnedSourceLocation, RegistrationRule, RegistrationSnapshot, root_node_id,
     };
 
-    let namespace = "nichlink.test";
+    let namespace = "xirang.test";
     let kind = "Button";
     let mut registry = Registry::root_for_namespace(
-        crate::run_method::FrameworkId::new("nichlink.test"),
+        crate::run_method::FrameworkId::new("xirang.test"),
         namespace,
     );
     registry
@@ -156,10 +156,10 @@ fn button_target(registry: &Registry) -> NodeId {
 
 /// Creating a plan whose selector would land outside the record directory is an
 /// error, and it creates nothing on the way: `..` used to be accepted, written to
-/// `<pkg>/.nichlink/graft.plan`, and then never listed — a record the runtime
+/// `<pkg>/.xirang/graft.plan`, and then never listed — a record the runtime
 /// never applied and the author could not see.
 /// 用会落到记录目录之外的选择器创建计划是错误，而且过程中不创建任何东西：`..` 过去会被接受、
-/// 写到 `<pkg>/.nichlink/graft.plan`，然后又永远不会被列出——一份运行期从不应用、作者也看不到
+/// 写到 `<pkg>/.xirang/graft.plan`，然后又永远不会被列出——一份运行期从不应用、作者也看不到
 /// 的记录。
 #[test]
 fn a_selector_that_escapes_the_record_directory_creates_nothing() {
@@ -230,7 +230,7 @@ fn a_created_plan_round_trips_is_listed_and_moves_to_trash() {
         let trash = remove_external_graft("button_graft").expect("remove");
         assert!(
             trash.starts_with(
-                root.join(lexicon::NICHLINK_DIR)
+                root.join(lexicon::XIRANG_DIR)
                     .join("trash")
                     .join(lexicon::EXTERNAL_GRAFT_DIR),
             )

@@ -6,13 +6,13 @@
 和代码质量更好条理更加清晰）以此作为测试方向编制测试项目，设计真实 bug，预设完美 debug 路径，测试我们的
 思维链的拟合程度」。
 
-So this tool builds a **purpose-built project** (not a mutated copy of nichlink), with **real bugs**
+So this tool builds a **purpose-built project** (not a mutated copy of xirang), with **real bugs**
 designed by hand, and — the new part — a **preset ideal debug path** for each bug: the sequence of
 decisive steps that a perfect run would take, each naming the question it answers and the tool that
 answers it. The evaluation then measures how closely an agent's actual reasoning chain fits that
 path, and how long the chain was.
 
-因此本工具构建一个**专门编写的项目**（不是改 nichlink 的副本），bug 是手工设计的**真实**缺陷，而新的
+因此本工具构建一个**专门编写的项目**（不是改 xirang 的副本），bug 是手工设计的**真实**缺陷，而新的
 一部分是每个 bug 的**预设理想调试路径**：一次完美运行会走的那些决定性步骤，每一步点名它回答的问题以及
 回答它的工具。评测随后度量代理真实思维链对这条路径的拟合程度，以及链有多长。
 
@@ -1021,29 +1021,29 @@ SCENARIOS = {
 # 机械判据，不靠人读。
 PROBES = {
     1: {
-        "ours": [["--call", "nichlink.callgraph", "--function", "post"]],
+        "ours": [["--call", "xirang.callgraph", "--function", "post"]],
         "expect_ours": ["report"],
         "codegraph": [["callers", "post"]],
         "expect_codegraph": ["report"],
     },
     2: {
         "ours": [
-            ["--call", "nichlink.status"],
-            ["--call", "nichlink.check", "--face", "audit"],
+            ["--call", "xirang.status"],
+            ["--call", "xirang.check", "--face", "audit"],
         ],
         "expect_ours": ["audit"],
         "codegraph": [["--help"]],
         "expect_codegraph": ["NO-EQUIVALENT-EXPECTED"],
     },
     3: {
-        "ours": [["--call", "nichlink.callgraph", "--orphans"]],
+        "ours": [["--call", "xirang.callgraph", "--orphans"]],
         "expect_ours": ["audit_unused"],
         "codegraph": [["callers", "audit_unused"]],
         "expect_codegraph": ["no callers"],
     },
     4: {
         "ours": [
-            ["--call", "nichlink.affected", "--json", '{"files": ["crates/core/src/model.rs"]}']
+            ["--call", "xirang.affected", "--json", '{"files": ["crates/core/src/model.rs"]}']
         ],
         "expect_ours": ["report"],
         "codegraph": [
@@ -1054,8 +1054,8 @@ PROBES = {
     },
     5: {
         "ours": [
-            ["--call", "nichlink.callgraph", "--function", "matches"],
-            ["--call", "nichlink.callgraph", "--function", "render"],
+            ["--call", "xirang.callgraph", "--function", "matches"],
+            ["--call", "xirang.callgraph", "--function", "render"],
         ],
         "expect_ours": ["amount > min", "write_count"],
         "codegraph": [
@@ -1065,8 +1065,8 @@ PROBES = {
     },
     6: {
         "ours": [
-            ["--call", "nichlink.search", "--query", "postable"],
-            ["--call", "nichlink.read", "--path", "crates/core/src/model.rs", "--line", "35"],
+            ["--call", "xirang.search", "--query", "postable"],
+            ["--call", "xirang.read", "--path", "crates/core/src/model.rs", "--line", "35"],
         ],
         "expect_ours": ["has_receipt", "amount != 0"],
         "codegraph": [["explore", "postable receipt zero entry contract"]],

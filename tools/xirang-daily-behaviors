@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""日常编码行为的矩阵：把一份 nichlink 仓库**当作没有 crate 来维护**会不会有阻碍。
+"""日常编码行为的矩阵：把一份 xirang 仓库**当作没有 crate 来维护**会不会有阻碍。
 
 维护者的问题（2026-10-08）：日常行为在"无声明"的状态下能否照旧，以及**切分之后**同样行为是否照旧。
 本工具在一个**真宿主**上逐个施加日常改动，每种改动在**自己的副本**上做（累积会让一步的失败污染后面
-每一步——这不是假设，是第一次跑的实测），每步真跑 `nichlink check` + `cargo build`（有声明时加
+每一步——这不是假设，是第一次跑的实测），每步真跑 `xirang check` + `cargo build`（有声明时加
 `crates --check`），并分别跑"无声明"与"发布形状切分之后"两个阶段。
 
 每一行都带**期望**（`check` 是过还是拒、宿主 `build` 成不成功），本工具因此是一道自检门禁而不是一份报告
@@ -17,8 +17,8 @@
 
 装置上踩过的坑，写在这里免得再犯：
 ① **每个用例必须在自己的副本上做**（第一步曾累积施加，第 5 步之后的每一行都是同一个 cargo 报错）；
-② **写出来的注册面必须用生成树真的提供的宏拼写**——`crate::__nichlink_face!` 从来不存在，于是
-"加一个面"那两行报的是 `error[E0433]: cannot find __nichlink_face in crate`，把装置缺陷记成了产品
+② **写出来的注册面必须用生成树真的提供的宏拼写**——`crate::__xirang_face!` 从来不存在，于是
+"加一个面"那两行报的是 `error[E0433]: cannot find __xirang_face in crate`，把装置缺陷记成了产品
 缺陷。正确的拼写是父面名字那个别名（`panel` 的子面用 `crate::panel_object!`）。
 
 **未闭合的实测发现（8b：删掉某个被认领子树里唯一的面）**：切分之后删掉 `panel/frame/widget/widget.rs`
@@ -31,28 +31,28 @@
 容器（旁边那份 `registry_rule` 就是它的子节点，渲染器为该节点发射 `SUBTREE`），因此这句理由对这个形状
 并不准确，出路（改成认领 `panel`）也不是显然正确的那条。
 
-用法：tools/nichlink-daily-behaviors
+用法：tools/xirang-daily-behaviors
 """
 import os, re, shutil, subprocess, sys, pathlib
 
 # 检出根从脚本自己的位置推出来，而不是写死一条绝对路径：写死的那一版只能在写它的那台机器上跑，于是
 # "在全新副本里把整件事做一遍"这条验证路径对它关着——而那正是发现 `host/target/` 里陈旧产物一类问题的唯一办法。
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-NICHLINK = ROOT / "target/debug/nichlink"
+XIRANG = ROOT / "target/debug/xirang"
 BASE = ROOT / "examples/control-suite"
 # `--offline` 是本检出的开发默认；CI 有网络、注册表缓存是冷的，它会把这个变量置空（同其它演练工具）。
-CARGO_FLAGS = os.environ.get("NICHLINK_BEHAVIORS_CARGO_FLAGS", "--offline")
+CARGO_FLAGS = os.environ.get("XIRANG_BEHAVIORS_CARGO_FLAGS", "--offline")
 
 # 自己构建本工具要驱动的二进制，而不是假设别人已经构建过：全新检出不带它，而在"有人手工构建过"的机器上才
-# 通过的闸门，恰好在最要紧的那台机器上失败（同 `tools/nichlink-graft-matrix`；CI 实测过一次）。每次都构建
+# 通过的闸门，恰好在最要紧的那台机器上失败（同 `tools/xirang-graft-matrix`；CI 实测过一次）。每次都构建
 # 也是对的：矩阵每一行都要跑 `check` + `cargo build`，前提是这个二进制与库来自同一次提交。
 def build_cli():
     print("building the CLI this matrix drives", file=sys.stderr)
     command = ["cargo", "build"] + CARGO_FLAGS.split() + [
-        "-p", "nichlink-toolchain", "--features", "cli", "--bin", "nichlink"]
+        "-p", "xirang-toolchain", "--features", "cli", "--bin", "xirang"]
     built = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
-    if built.returncode != 0 or not NICHLINK.exists():
-        print(f"cannot build {NICHLINK}\n{built.stdout[-2000:]}\n{built.stderr[-2000:]}",
+    if built.returncode != 0 or not XIRANG.exists():
+        print(f"cannot build {XIRANG}\n{built.stdout[-2000:]}\n{built.stderr[-2000:]}",
               file=sys.stderr)
         sys.exit(1)
 
@@ -71,13 +71,13 @@ def probe(host, label, expect, rows, with_decl):
     """
     check_want, build_want = expect
     env = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
-    rc_check, out = run(f"{NICHLINK} check .", host, env)
+    rc_check, out = run(f"{XIRANG} check .", host, env)
     rc_build, bout = run(f"cargo build {CARGO_FLAGS}", host, env)
     rc_crates = "-"
     if with_decl:
         # 有声明的那一阶段，磁盘上是**发布形状**（本工具开局就 `--release --write` 过），因此这里问的是
         # 与之匹配的那份计划。问错形状会被形状守卫拒绝——那正是下一步在 phase-2 里单独钉住的行为。
-        rc_crates, _ = run(f"{NICHLINK} crates --release --check .", host, env)
+        rc_crates, _ = run(f"{XIRANG} crates --release --check .", host, env)
     check_ok = rc_check == 0
     build_ok = rc_build == 0
     wanted = check_ok == (check_want == "ok") and build_ok == build_want
@@ -218,14 +218,14 @@ for phase in ("no-declaration", "after-split"):
         (host / "add_crates.rs").unlink(missing_ok=True)
     else:
         env = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
-        run(f"{NICHLINK} check .", host, env)
-        rc, out = run(f"{NICHLINK} crates --release --write .", host, env)
+        run(f"{XIRANG} check .", host, env)
+        rc, out = run(f"{XIRANG} crates --release --write .", host, env)
         rows.append(("0 baseline split", "-", 0, 0, 0, "PASS" if rc == 0 else "FAIL", out.splitlines()[0][:90] if out else ""))
         # 形状指纹的钉子（B 轴缺口：`crates --check` 不比对形状指纹）：磁盘上现在是**发布形状**，因此
         # ① 请求与之匹配的发布计划必须通过（守卫不是见谁都拒）；
         # ② 请求**开发**计划必须点名拒绝——这正是"手跑一次开发 `--write` 落在入库发布形状上"的成因。
-        rc_release, release_out = run(f"{NICHLINK} crates --release --check .", host, env)
-        rc_dev, dev_out = run(f"{NICHLINK} crates --check .", host, env)
+        rc_release, release_out = run(f"{XIRANG} crates --release --check .", host, env)
+        rc_dev, dev_out = run(f"{XIRANG} crates --check .", host, env)
         shape_ok = rc_release == 0 and rc_dev == 1 and "written as the release shape" in dev_out
         rows.append((
             "0b shape fingerprint vs --check",
@@ -254,8 +254,8 @@ for phase in ("no-declaration", "after-split"):
         else:
             env2 = dict(os.environ, CARGO_TARGET_DIR="/tmp/behave-target")
             shutil.copy(host / "add_crates.rs", h2 / "add_crates.rs")
-            run(f"{NICHLINK} check .", h2, env2)
-            run(f"{NICHLINK} crates --release --write .", h2, env2)
+            run(f"{XIRANG} check .", h2, env2)
+            run(f"{XIRANG} crates --release --write .", h2, env2)
         (w2 / "Cargo.toml").write_text('[workspace]\nresolver = "3"\nmembers = ["host", "graft"]\n')
         for m in w2.rglob("Cargo.toml"):
             if "target" not in m.parts:

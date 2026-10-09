@@ -66,9 +66,9 @@ use std::path::{Path, PathBuf};
 /// 公开是因为**写入**执行面需要与构建相同的答案:桥创作到构建会读的那棵树里,而在那里猜 `src/`
 /// 会写下一个构建永远看不见的注册面。
 pub struct SourceLayout {
-    /// The package root: the base a configured `NICH_LINK_ENTRY` resolves against,
+    /// The package root: the base a configured `XIRANG_ENTRY` resolves against,
     /// and the directory a target path is joined to.
-    /// 包根：配置的 `NICH_LINK_ENTRY` 所相对的基准，也是目标路径拼接的起点。
+    /// 包根：配置的 `XIRANG_ENTRY` 所相对的基准，也是目标路径拼接的起点。
     pub package_root: PathBuf,
     /// The directory the discovery walk reads.
     /// 发现遍历读取的目录。

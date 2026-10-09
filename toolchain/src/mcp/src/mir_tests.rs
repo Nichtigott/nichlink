@@ -61,16 +61,10 @@ fn emit(directory: &Path, source: &str, target: &str) -> String {
 /// 记录一份唯一调用边是 `crate::mcp::outer -> crate::mcp::inner` 的 trace。
 fn record_trace(directory: &Path) {
     let mut trace = CallTrace::full();
-    let outer = nichlink_kernel::identity::NodeId::from_namespaced_path(
-        "mcp-mir",
-        "outer/outer.rs",
-        "Outer",
-    );
-    let inner = nichlink_kernel::identity::NodeId::from_namespaced_path(
-        "mcp-mir",
-        "inner/inner.rs",
-        "Inner",
-    );
+    let outer =
+        xirang_kernel::identity::NodeId::from_namespaced_path("mcp-mir", "outer/outer.rs", "Outer");
+    let inner =
+        xirang_kernel::identity::NodeId::from_namespaced_path("mcp-mir", "inner/inner.rs", "Inner");
     trace.with(outer, "crate::outer", |trace| {
         trace.with(inner, "crate::inner", |_| {});
     });
@@ -306,7 +300,7 @@ fn asking_to_emit_and_compare_at_once_is_refused() {
 fn foreign_snapshot() -> String {
     format!(
         "{{\"kind\":\"snapshot\",\"namespace\":\"somewhere-else\",\"root\":\"{}\"}}\n{{\"kind\":\"call\",\"caller\":\"a\",\"callee\":\"b\",\"mir_line\":1}}\n",
-        nichlink_kernel::root_node_id("somewhere-else")
+        xirang_kernel::root_node_id("somewhere-else")
     )
 }
 
@@ -430,13 +424,9 @@ fn a_chain_comparison_names_both_sides_and_the_evidence_that_differs() {
     // 的判断都不同。
     record_trace(&directory);
     let mut second = CallTrace::full();
-    let outer = nichlink_kernel::identity::NodeId::from_namespaced_path(
-        "mcp-mir",
-        "outer/outer.rs",
-        "Outer",
-    );
-    let new =
-        nichlink_kernel::identity::NodeId::from_namespaced_path("mcp-mir", "new/new.rs", "New");
+    let outer =
+        xirang_kernel::identity::NodeId::from_namespaced_path("mcp-mir", "outer/outer.rs", "Outer");
+    let new = xirang_kernel::identity::NodeId::from_namespaced_path("mcp-mir", "new/new.rs", "New");
     second.with(outer, "crate::outer", |trace| {
         trace.with(new, "crate::new", |_| {});
     });

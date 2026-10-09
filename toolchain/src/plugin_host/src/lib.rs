@@ -1,5 +1,5 @@
-//! Isolated execution and atomic deployment for NichLink plugins.
-//! NichLink 插件的隔离执行与原子部署。
+//! Isolated execution and atomic deployment for XiRang plugins.
+//! XiRang 插件的隔离执行与原子部署。
 
 // The published surface must be readable on docs.rs without leaving the page,
 // so the lint is on for the whole crate; `clippy -D warnings` makes a new

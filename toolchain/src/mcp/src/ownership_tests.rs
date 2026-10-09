@@ -55,7 +55,7 @@ fn workspace(label: &str) -> Workspace {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-ownership-{label}-{}-{sequence}",
+        "xirang-mcp-ownership-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -164,13 +164,13 @@ fn files(root: &Path) -> Vec<String> {
 fn a_face_naming_tool_answers_every_member_on_a_virtual_root() {
     let fixture = workspace("nodes");
     for tool in [
-        "nichlink.impact",
-        "nichlink.usages",
-        "nichlink.explain",
-        "nichlink.verify",
+        "xirang.impact",
+        "xirang.usages",
+        "xirang.explain",
+        "xirang.verify",
     ] {
         // `verify` takes no subject; the other three name the host member's one face.
-        let arguments = if tool == "nichlink.verify" {
+        let arguments = if tool == "xirang.verify" {
             json!({})
         } else {
             json!({"node": "root/button"})
@@ -240,7 +240,7 @@ fn a_face_naming_tool_answers_every_member_on_a_virtual_root() {
         // The member that derived its tree but whose own body refused is named with its
         // reason, so "1 of 3" is actionable rather than a number.
         // 推导出了树、而主体拒绝的成员被连原因一起点名，因此"三个里一个"是可据以行动的东西而不是一个数字。
-        if tool != "nichlink.verify" {
+        if tool != "xirang.verify" {
             assert!(
                 text.contains(&format!("declined {}:", fixture.framework))
                     && text.contains("no registration face at"),
@@ -266,7 +266,7 @@ fn a_node_no_member_owns_says_so() {
     let fixture = workspace("unowned");
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.impact",
+        "xirang.impact",
         json!({"node": "root/nowhere"}),
     );
     assert!(!failed, "{text}");
@@ -296,7 +296,7 @@ fn a_path_naming_tool_is_answered_by_the_member_that_owns_it() {
     let fixture = workspace("paths");
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.read",
+        "xirang.read",
         json!({"path": "host/src/lib.rs"}),
     );
     assert!(!failed, "{text}");
@@ -321,7 +321,7 @@ fn a_path_no_member_owns_says_so() {
     let fixture = workspace("no-owner");
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.read",
+        "xirang.read",
         json!({"path": "nowhere/src/lib.rs"}),
     );
     assert!(!failed, "{text}");
@@ -344,7 +344,7 @@ fn paths_from_two_members_are_refused_by_name() {
     let fixture = workspace("ambiguous");
     let (text, failed) = crate::mcp::ownership::dispatch(
         &fixture.root,
-        "nichlink.mir",
+        "xirang.mir",
         &json!({"path": "host/mir.jsonl", "against": "framework/baseline.jsonl"}),
         echo,
     )
@@ -362,7 +362,7 @@ fn the_owning_member_gets_its_own_root_and_a_relative_path() {
     let fixture = workspace("redirect");
     let text = crate::mcp::ownership::dispatch(
         &fixture.root,
-        "nichlink.read",
+        "xirang.read",
         &json!({"path": "host/src/button/button.rs"}),
         echo,
     )
@@ -390,12 +390,12 @@ fn apply_refuses_a_virtual_root_without_writing() {
     let before = files(&fixture.root);
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.apply",
+        "xirang.apply",
         json!({"action": "add", "apply": true, "fields": {"module": "src/gadget/gadget.rs", "kind": "Gadget"}}),
     );
     assert!(!failed, "{text}");
     assert!(
-        text.contains("REFUSED: nichlink.apply needs one package"),
+        text.contains("REFUSED: xirang.apply needs one package"),
         "the write path says why it will not run: {text}"
     );
     assert!(
@@ -428,7 +428,7 @@ fn a_write_subject_with_one_owner_is_answered_by_it() {
     let fixture = workspace("unique");
     let text = crate::mcp::ownership::dispatch(
         &fixture.root,
-        "nichlink.apply",
+        "xirang.apply",
         &json!({"action": "add", "parent": "root/button", "fields": {"module": "src/gadget/gadget.rs"}}),
         echo,
     )
@@ -455,7 +455,7 @@ fn an_unresolvable_or_ambiguous_write_subject_is_refused() {
     let fixture = workspace("write-candidates");
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.apply",
+        "xirang.apply",
         json!({"action": "delete", "node": "root/nothing-here", "confirm": true, "apply": true}),
     );
     assert!(!failed, "{text}");
@@ -469,7 +469,7 @@ fn an_unresolvable_or_ambiguous_write_subject_is_refused() {
     );
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.apply",
+        "xirang.apply",
         json!({"action": "add", "parent": "root", "fields": {"module": "src/gadget/gadget.rs"}, "apply": true}),
     );
     assert!(!failed, "{text}");
@@ -491,7 +491,7 @@ fn a_member_root_still_answers_as_one_package() {
     let fixture = workspace("member");
     let (text, failed) = call(
         &fixture.root.join("host"),
-        "nichlink.read",
+        "xirang.read",
         json!({"path": "src/lib.rs"}),
     );
     assert!(!failed, "{text}");
@@ -522,7 +522,7 @@ fn a_workspace_name_lookup_crosses_members_in_one_answer() {
     );
     let (text, failed) = call(
         &fixture.root,
-        "nichlink.callgraph",
+        "xirang.callgraph",
         json!({"function": "shared_helper"}),
     );
     assert!(!failed, "{text}");
@@ -540,20 +540,20 @@ fn a_workspace_name_lookup_crosses_members_in_one_answer() {
 fn the_resolved_tools_say_a_virtual_root_answers() {
     let listed = crate::mcp::tools::tools();
     for name in [
-        "nichlink.read",
-        "nichlink.inspect",
-        "nichlink.mir",
-        "nichlink.unified",
-        "nichlink.callgraph",
-        "nichlink.explain",
-        "nichlink.trace",
-        "nichlink.impact",
-        "nichlink.usages",
-        "nichlink.converge",
-        "nichlink.verify",
-        "nichlink.apply",
-        "nichlink.new_project",
-        "nichlink.plugin",
+        "xirang.read",
+        "xirang.inspect",
+        "xirang.mir",
+        "xirang.unified",
+        "xirang.callgraph",
+        "xirang.explain",
+        "xirang.trace",
+        "xirang.impact",
+        "xirang.usages",
+        "xirang.converge",
+        "xirang.verify",
+        "xirang.apply",
+        "xirang.new_project",
+        "xirang.plugin",
     ] {
         let tool = listed
             .iter()

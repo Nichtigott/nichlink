@@ -12,21 +12,21 @@
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
 /// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
 /// 而展开里的 `crate::` 解析到 crate 根。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 /// A custom preset and parts pair, distinct from the permissive defaults so the
 /// assertion can tell "forwarded" from "silently replaced".
 /// 一对自定义 preset/parts，刻意不同于宽松默认值，断言才能区分"被转发"与"被静默替换"。
 struct ProbePreset;
 
-impl nichlink_toolchain::run_method::PresetContract for ProbePreset {
+impl xirang_toolchain::run_method::PresetContract for ProbePreset {
     type Output = ();
     const REQUIRED_PARTS: &'static [&'static str] = &["probe"];
 }
 
 struct ProbeParts;
 
-impl nichlink_toolchain::run_method::PartsContract for ProbeParts {
+impl xirang_toolchain::run_method::PartsContract for ProbeParts {
     type Output = ();
     const PROVIDED_PARTS: &'static [&'static str] = &["probe"];
 }
@@ -36,7 +36,7 @@ impl nichlink_toolchain::run_method::PartsContract for ProbeParts {
 mod probe {
     use crate::{ProbeParts, ProbePreset};
 
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: ProbeFace,
         preset: ProbePreset,

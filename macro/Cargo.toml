@@ -1,23 +1,23 @@
 [package]
-name = "nichlink-macro"
+name = "xirang-macro"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-repository = "https://github.com/Nichtigott/nichlink"
-homepage = "https://github.com/Nichtigott/nichlink"
-description = "Face field normalisation and diagnostics for NichLink's authoring macros"
+repository = "https://github.com/Nichtigott/xirang"
+homepage = "https://github.com/Nichtigott/xirang"
+description = "Face field normalisation and diagnostics for XiRang's authoring macros"
 keywords = ["registration", "proc-macro", "codegen", "macros"]
 categories = ["development-tools::procedural-macro-helpers", "development-tools"]
 readme = "README.md"
-documentation = "https://docs.rs/nichlink-macro"
+documentation = "https://docs.rs/xirang-macro"
 
 [lib]
-name = "nichlink_macro"
+name = "xirang_macro"
 proc-macro = true
 
 [dependencies]
-nichlink-kernel = { workspace = true, features = ["syntax"] }
+xirang-kernel = { workspace = true, features = ["syntax"] }
 proc-macro2 = "1"
 
 [dev-dependencies]

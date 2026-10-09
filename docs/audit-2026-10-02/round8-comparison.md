@@ -8,7 +8,7 @@
 | **第七轮（我们）** | 第七轮**我们自己那一臂**（原列名"同臂"＝与我们同臂） | `target/round7/answer-mcp-<id>.md` |
 | **第七轮（codegraph）** | 第七轮的**对照臂**＝codegraph CLI | `target/round7/answer-cg-<id>.md` |
 
-口径：**预设答案**（`tools/nichlink-mcp-eval` 的关卡预设 + 四道 hardbug 的 `truth.json`）· 其余三列如上。**四道 hardbug 是第七轮之后新加的题**，第七轮没有它们 ⇒ 那四行的对照换成 **T-21 的对照臂**
+口径：**预设答案**（`tools/xirang-mcp-eval` 的关卡预设 + 四道 hardbug 的 `truth.json`）· 其余三列如上。**四道 hardbug 是第七轮之后新加的题**，第七轮没有它们 ⇒ 那四行的对照换成 **T-21 的对照臂**
 （`target/hardbug-runs/t21/answers/arm-codegraph/`）+ 登记真值。行号都由复核者回源码实核过。
 
 ## 有效 15 题

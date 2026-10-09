@@ -1,12 +1,12 @@
 //! What an agent names, resolved to the identity the executor wants.
 //! 代理所命名的东西，解析成执行器需要的身份。
 //!
-//! Two spellings, one answer: `nichlink.registry` and `nichlink.apply` both report
+//! Two spellings, one answer: `xirang.registry` and `xirang.apply` both report
 //! logical paths, so a caller can take a path out of the tree it just read and hand
 //! it straight back — no translation into a 32-digit identity, and no chance of
 //! translating it wrong. An identity is accepted too, because a caller that already
 //! has one should not have to look it up.
-//! 两种写法，一个答案：`nichlink.registry` 与 `nichlink.apply` 都报告逻辑路径，因此调用方可以
+//! 两种写法，一个答案：`xirang.registry` 与 `xirang.apply` 都报告逻辑路径，因此调用方可以
 //! 把它刚读到的树里的路径直接交回来——不必翻译成 32 位身份，也就没有翻译错的机会。身份同样接受，
 //! 因为已经持有身份的调用方不该被迫再查一次。
 //!
@@ -15,17 +15,17 @@
 use std::path::Path;
 
 use crate::build_method::FaceView;
-use nichlink_kernel::NodeId;
 use serde_json::Value;
+use xirang_kernel::NodeId;
 
 /// The parent identity a request names, by identity or by logical path.
 /// 请求命名的父身份，可按身份或按逻辑路径给出。
 ///
 /// A logical path is the agent-friendly spelling, and it is resolved against the
 /// same derivation the registry query reports — so an agent can take a path from
-/// `nichlink.registry` and use it here without translating it.
+/// `xirang.registry` and use it here without translating it.
 /// 逻辑路径是对代理友好的写法，而且它按注册树查询所报告的那份推导解析——因此代理可以把
-/// `nichlink.registry` 给出的路径直接用在这里，不必翻译。
+/// `xirang.registry` 给出的路径直接用在这里，不必翻译。
 pub(crate) fn parent_id(
     root: &Path,
     namespace: &str,
@@ -47,7 +47,7 @@ pub(crate) fn parent_id(
         // of `root/...` while living in no tree the host compiled.
         // 默认值是**带命名空间的**根：裸的 `ROOT_NODE_ID` 是另一个身份，挂在它下面的面会报告
         // `root/...` 的逻辑路径，却不住在宿主编译过的任何树里。
-        None | Some("") => Ok(nichlink_kernel::root_node_id(namespace)),
+        None | Some("") => Ok(xirang_kernel::root_node_id(namespace)),
         Some(value) => match value.parse::<NodeId>() {
             Ok(id) => Ok(id),
             Err(_) => resolve_node(root, namespace, value),
@@ -71,7 +71,7 @@ pub(crate) fn resolve_node(root: &Path, namespace: &str, target: &str) -> Result
     // so `root` is answered from the namespace directly.
     // 注册树根没有自己的面行（除非有东西声明了它），因此 `root` 直接由命名空间作答。
     if wanted == "root" {
-        return Ok(nichlink_kernel::root_node_id(namespace));
+        return Ok(xirang_kernel::root_node_id(namespace));
     }
     faces.retain(|face| face.path == wanted);
     match faces.len() {
@@ -153,7 +153,7 @@ pub(crate) fn derived_faces(
                     unreadable.len(),
                     REASONS,
                     "unparsable reasons",
-                    "run `nichlink check` for the build's own list"
+                    "run `xirang check` for the build's own list"
                 )
             ));
         }

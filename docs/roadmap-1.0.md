@@ -1,5 +1,5 @@
-# NichLink 1.0 路线图（四轮审计汇总）
-# NichLink 1.0 roadmap (four audit rounds)
+# XiRang 1.0 路线图（四轮审计汇总）
+# XiRang 1.0 roadmap (four audit rounds)
 
 本文是四轮审计的收敛结果与执行计划。结论按"能不能上 1.0"排序，不按发现顺序。
 This is the consolidated plan from four audit rounds. Findings are ordered by
@@ -11,7 +11,7 @@ what blocks 1.0, not by when they were found.
 | --- | --- | --- | --- |
 | 第一轮（大） | 人工 + 实测 | 命名、文件职责吻合度、实现链路（绕路/重合）、鲁棒性、投产判断 | 内核零 I/O 与零真实 unsafe；`missing_docs` 506 条；20 个公开 `Result<_, String>`；三份 `StdSourceTree` 适配器；`RegistryError` 访问器多于字段；`face_write` 两张顺序表偏重 |
 | 第二轮（大） | 三方只读审计（graft / kernel / 工具与发布）+ 人工复核 | 逐行最小化判断 | ~90 条 `F<n>`，其中 3 条经手工复核；静态/owned 四对重复校验；`health_check` 零调用；宏 arm 吞参数；范围 `" to "` 四处拆合；Studio 假 trace；`package-audit` 包名错 |
-| 第三轮（小） | crates.io 事实核查 | 发布门槛 | 无发布前审查；机器只卡 package 成功、license、版本可解析、包名、大小；版本不可变只能 yank；`nichlink*` 名字全空；core 包不随带 LICENSE 文本 |
+| 第三轮（小） | crates.io 事实核查 | 发布门槛 | 无发布前审查；机器只卡 package 成功、license、版本可解析、包名、大小；版本不可变只能 yank；`xirang*` 名字全空；core 包不随带 LICENSE 文本 |
 | 第四轮（大） | 新工具（crates.io 与上游 changelog 事实核查、codegraph 结构查询）+ 三个只读子审计（散文规则 vs 门禁 / 死代码与重复 / 文档与示例验证）+ 对进程后端的定向对抗阅读 | 依赖演化、进程后端、身份与信任基元、规则 vs 门禁、文档验证 | 进程后端"硬超时"曾经不硬（实测边界：帧 65 536 字节成功、65 537 字节超时）；`wasmi` 落后 18 个月两个大版本；`NodeId` 组合未钉而它落盘；手写 SHA-256 缺差分预言机；路线图声称的 `compile_fail` doctest 无任何 CI 命令编译；内核纯净性等四条规则无门禁；36 个文档 Rust 围栏零验证 |
 
 ## 进度快照 / Progress snapshot
@@ -41,7 +41,7 @@ what blocks 1.0, not by when they were found.
 2. ✅ Feature 2 落地:`health_check` 的宿主 API 文档(含 `no_run` 示例,用补回的 `node()/path()/source()/message()/children()`)、五个检查单测、`examples/control-button` 的 `health_check` example + 端到端测试、`toolchain/run_method/README*.md` 的宿主调用段。
 3. ✅ trace 1.0 回归测试:`trace_legend_reads_live_sample_and_never_claims_live_data`(断言图例为 `LIVE SAMPLE`,剥掉后不残留裸 `LIVE`),注释指向 `docs/design-trace-ingest.md`。
 4. ✅ 记录路径有了真实宿主:`examples/control-button/examples/graft_record.rs`,把包根重定向到带 `Drop` 清理的临时目录,同时证明类型化声明 `TypedDeclarationKept` 与字符串声明 `DeclarationOverridden`,且基树与 `builtin_static_plan()` 不变。
-5. ✅ **A1:`NICH_LINK_ENTRY` 只解析一次、两个读取者共用**(你选严格档)。构建侧新增 `entry::HostEntry`(`Configured`/`Declared`/`Convention`)与 `resolve_host_entry`,由 `host_entry_from_environment` 每构建读环境一次;`pipeline` 把同一个值交给 `SourceScope` 与 `host_graft_entries(&entry)`,后者不再自行解析入口。被指定却不是文件的入口现在**构建失败**(`NICH_LINK_ENTRY names …`,与 `host_entry_source` 给创作面的 `Err` 同义),而不是让一半回退到 `main.rs`;未设置时行为逐字节不变。测试钉住:配置入口同时决定剪枝与切口表、相对/绝对路径都相对包根、缺文件即失败、约定入口缺失仍只是"没有入口"。
+5. ✅ **A1:`XIRANG_ENTRY` 只解析一次、两个读取者共用**(你选严格档)。构建侧新增 `entry::HostEntry`(`Configured`/`Declared`/`Convention`)与 `resolve_host_entry`,由 `host_entry_from_environment` 每构建读环境一次;`pipeline` 把同一个值交给 `SourceScope` 与 `host_graft_entries(&entry)`,后者不再自行解析入口。被指定却不是文件的入口现在**构建失败**(`XIRANG_ENTRY names …`,与 `host_entry_source` 给创作面的 `Err` 同义),而不是让一半回退到 `main.rs`;未设置时行为逐字节不变。测试钉住:配置入口同时决定剪枝与切口表、相对/绝对路径都相对包根、缺文件即失败、约定入口缺失仍只是"没有入口"。
 6. ✅ **B:兄弟区间的顺序契约写成契约。** 跨度按 `registry_name` 排序(`resolution.rs`),现在这件事既写在代码注释里,也写进 `docs/graft.md`/`graft.zh-CN.md` 的新节 "Ranges over siblings" 与两个根 README。写反的端点(`mid to alpha`)**报错**而不是静默交换,错误同时给出两个端点、规则和正确的写法;两条测试钉住(`a_range_covers_the_siblings_between_its_endpoints_in_registry_name_order` 用注册序与名字序不同的四兄弟夹具,`a_backwards_range_is_refused_with_both_endpoints_and_the_order_rule`)。`GraftError::InvalidRange` 的载荷改为完整原因句、`Display` 原样打印(公开类型形状不变,跨父级那条消息逐字节不变)。
 7. ✅ **C19:诊断字段表。** `toolchain/cli/README*.md` 记录 `check --json` 的文档契约(十一键恒在、`line=0` 表示无行号、JSON 顺序 == 人类可读顺序、退出码仍非零)与逐 phase 的字段表;`toolchain/run_method/README*.md` 记录五个读取器,以及"顶层 `message()` 是固定聚合句、失败检查名在 `children()[0].message()`、`Display` 是推荐渲染"这条规则。
 8. ✅ **C24:Studio 对未声明槽位仍然写计划,但改成醒目警告。** 写入顺序合法("先写记录、后声明槽位"),因此不拒绝;但横幅以 `Warning:` 开头(状态栏据此上警示色),说明发布态会剪掉该槽位、运行期会把这条记录当作 `UnkeptSlot` 跳过(即嫁接不生效且不报错)、缺声明的是哪个入口文件,并附上按同一个内核构造器渲染出的可直接粘贴子句。测试 `graft_warns_about_an_undeclared_slot_after_writing_the_plan` 钉住"计划已写入 + 警告内容 + 子句与记录逐字相同"。
@@ -55,7 +55,7 @@ what blocks 1.0, not by when they were found.
 **仍待你定**
 
 - **首次发布**:需要你的 crates.io token 与授权(我不能代按)。驱动脚本
-  `tools/nichlink-publish` 已就绪并实测(dry-run 完整校验 `nichlink-kernel`、其余八个报"等待中",
+  `tools/xirang-publish` 已就绪并实测(dry-run 完整校验 `xirang-kernel`、其余八个报"等待中",
   退出 0),发布动作留给你一行命令。
 - **`missing_docs` 递增白名单**(B4-7):1.0 最后一块能靠代码本身完成的质量门,正按模块推进,
   进度见下。
@@ -74,7 +74,7 @@ what blocks 1.0, not by when they were found.
 1. **包形状:九个 crate 保持不动,九个全部发布。** 合并方案否决,理由记录在案:user
    只 `cargo add` 一个库、`cargo install` 一个 bin 包,因此发布面本可收窄;但选择保留
    编译隔离(每个 crate 单独成包、单独带自己的 README/LICENSE),改为把发布卫生做全(见 B4)。
-   发布顺序以 `tools/nichlink-publish` 的 `levels` 表为准(`kernel` → `macro`/`build_method`
+   发布顺序以 `tools/xirang-publish` 的 `levels` 表为准(`kernel` → `macro`/`build_method`
    → `run_method` → `debug_method`/`plugin-host` → `mcp` → `studio` → `cli`;`--check-table`
    在每次 push 与每次发布前把那张表与清单核对),本文不另立一份顺序。依赖版本下界**随发布线
    一起抬**(写 `^<工作区版本>`):`release_version` 与 `--check-table` 两道门禁都强制它等于
@@ -120,9 +120,9 @@ what blocks 1.0, not by when they were found.
 | 5 | `same_symbol` 每次比较两次堆分配且在双重循环内 | `mir/merge.rs:53-55` | 改 `strip_suffix` 零分配；既有 merge 测试绿 |
 | 6 | Studio 帮助文字三处错 + 折叠是死代码 | `ui/status.rs:27`、`ui/search.rs:47,137`、`overlay/search.rs:65,282,380`、`app/search_queries.rs:10-16` | 帮助文字与实际键位一致；死折叠的键位与标记删除（不新增行为） |
 | 7 | Studio "live trace" 是硬编码样例，README 却声称权威 | `app/lifecycle.rs:46`、`app/sample.rs`（硬编码样例所在文件，已在本项收口时删除，职责移到 `app/trace.rs`）、`README.md:714` | 面板与图例标注为示例，README 同步；真实 ingest 留到 B4 |
-| 8 | `tools/nichlink-package-audit` 引用不存在的包且不在 CI | `tools/nichlink-package-audit:8` | 改 `nichlink-toolchain`，接入 CI；脚本能跑通（core 已发前仍会因版本依赖失败，脚本里注明） |
+| 8 | `tools/xirang-package-audit` 引用不存在的包且不在 CI | `tools/xirang-package-audit:8` | 改 `xirang-toolchain`，接入 CI；脚本能跑通（core 已发前仍会因版本依赖失败，脚本里注明） |
 | 9 | `README.zh-CN.md` 把 `StaticPlan::find`（现名 `find_face`，旧名保留为一行转发器）写成 O(log n)，实际线性 | `README.zh-CN.md:569` vs `release.rs:203-217` | 更正为 O(n)，与英文 README 一致 |
-| 10 | MCP 宣称能查合同，5 个工具只读源码 | `toolchain/Cargo.toml:7`、`toolchain/README.md:13`、`toolchain/src/mcp/src/tools.rs:10-38` | 已按"补工具"收口（2026-09-26）：`nichlink.registry` 报告构建推导出的注册树（`face_views`）。contract/admission 数据仍缺——它们在已构建的 `RegistrationSnapshot` 里，不在源码里；宣称已按此收紧 |
+| 10 | MCP 宣称能查合同，5 个工具只读源码 | `toolchain/Cargo.toml:7`、`toolchain/README.md:13`、`toolchain/src/mcp/src/tools.rs:10-38` | 已按"补工具"收口（2026-09-26）：`xirang.registry` 报告构建推导出的注册树（`face_views`）。contract/admission 数据仍缺——它们在已构建的 `RegistrationSnapshot` 里，不在源码里；宣称已按此收紧 |
 
 ### B1 完成情况（已收口，附两条新增存疑）
 
@@ -138,9 +138,9 @@ what blocks 1.0, not by when they were found.
 - **`graft_plan_check` 的端到端测试在全量并行跑时撞过一次临时目录名**（同一纳秒）。
   已给 `build_method` 的测试临时目录加进程内 `AtomicU64` 序号（`graft_plan_check.rs`
   与 `pipeline.rs` 四处），与早先 macOS 上的同类修复一致。
-- CI 里 `tools/nichlink-package-audit` 曾用 `continue-on-error: true`，因为 core 发布前
-  它必然在 `nichlink-toolchain` 那步失败。**该开关已去掉**（2026-09-25 首次发布之后）：
-  这一步现在与 `cargo package -p nichlink-kernel` 并列，打包回归会让它失败，而不再被容忍掩盖。
+- CI 里 `tools/xirang-package-audit` 曾用 `continue-on-error: true`，因为 core 发布前
+  它必然在 `xirang-toolchain` 那步失败。**该开关已去掉**（2026-09-25 首次发布之后）：
+  这一步现在与 `cargo package -p xirang-kernel` 并列，打包回归会让它失败，而不再被容忍掩盖。
 
 ### B2 单一事实来源（去重复，改一份就够）
 
@@ -192,11 +192,11 @@ what blocks 1.0, not by when they were found.
 | `source::item_symbols` / `SourceItem` | 内核 `source/items.rs`（`INTRODUCERS` 一张表） | Studio 的搜索视图（不再自持词表：`strip_prefix("` 0 处） | `kernel/tests/b4_item_symbols.rs`（5）+ Studio `source_rows_tests`（4） |
 | `authoring::parse::try_parse_requirements_owned` | 内核 `authoring/parse/rules.rs`（严格入口） | 需要"拒绝"而非"丢弃"的调用方；已发布的 `parse_requirements_snapshot`（旧名 `parse_requirements_owned` 保留为一行转发器）签名与行为逐字保住 | `the_strict_requires_entry_refuses_a_malformed_entry` + `a_malformed_requires_entry_is_refused_not_dropped` |
 
-- **版本线**：四个入口都随未发布的 `0.1.6` 走——工作区版本不变、无需抬版本；`tools/nichlink-publish
+- **版本线**：四个入口都随未发布的 `0.1.6` 走——工作区版本不变、无需抬版本；`tools/xirang-publish
   --check-table` 只按清单比较依赖表，不受影响。
-- **隔离打包**：`tools/nichlink-package-audit` 的**内容**半边已含新模块（实测 `cargo package -p
-  nichlink-kernel --list --offline` 列出 `src/registry_core/source/items.rs`）；**打包**半边要等带版本号的
-  `nichlink-*` 依赖进入 index，未发布期间 warn + 跳过（**skip ≠ 失败**）——这批把等待态加深了一层
+- **隔离打包**：`tools/xirang-package-audit` 的**内容**半边已含新模块（实测 `cargo package -p
+  xirang-kernel --list --offline` 列出 `src/registry_core/source/items.rs`）；**打包**半边要等带版本号的
+  `xirang-*` 依赖进入 index，未发布期间 warn + 跳过（**skip ≠ 失败**）——这批把等待态加深了一层
   （Studio 已调用未发布的内核符号），发布顺序仍是 core 在前，发布后重跑 `--verify-consumers`。
 - **不动的**：本批没有删改任何已发布签名，四个入口都是加法式新增；`render_requirements` 之所以留着，
   是因为它是已发布线的一部分，而它的文档现在写明有损并指向严格兄弟。
@@ -281,9 +281,9 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
 
 ### B4 可运维与发布卫生
 
-1. `BuildDiagnostics` 加 `iter()/len()` 与 JSON 输出；`nichlink check --json`。
-2. `nichlink explain <NodeId|path>`；`nichlink grafts [--json]`；有效树 dump 出口。
-3. 真实 trace ingest（文件或 `NICH_LINK_*` 变量）或永久标注为示例。
+1. `BuildDiagnostics` 加 `iter()/len()` 与 JSON 输出；`xirang check --json`。
+2. `xirang explain <NodeId|path>`；`xirang grafts [--json]`；有效树 dump 出口。
+3. 真实 trace ingest（文件或 `XIRANG_*` 变量）或永久标注为示例。
 4. ✅ `cargo-deny`（advisories/licenses/bans）+ `deny.toml`；CI 加 `--all-features` 与
    `--no-default-features` 两个 job。那 10 条 `prototype-fixtures` 测试原先是死的（连编译都
    没过），现在有夹具、全绿——见"下一批"第 10 条。
@@ -293,24 +293,24 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    LICENSE 不会被复制进包，cargo 只自动包含 crate 目录下的 `LICENSE*`）；每个 crate 一份
    README（`macro` 缺）；补 `macro`/`run_method` 的 `documentation`；加一份根 CHANGELOG，
    不按 crate 分九份。
-6. **发布顺序与自动化**：新增 `tools/nichlink-publish`——按 `levels` 表**分层**发布
+6. **发布顺序与自动化**：新增 `tools/xirang-publish`——按 `levels` 表**分层**发布
    （core → macro/build_method → run_method → debug_method/plugin-host → mcp → studio → cli；
    该表是唯一一份顺序，`--check-table` 会把它与清单核对），
    每层发完轮询 index 直到该版本可见再进下一层（这一步是人最容易忘的）。默认是 **dry-run**，
    只有 `--publish --yes` 才真的上传（版本不可变，只能 yank）；真实发布前拒绝脏工作区，除非
    显式 `--allow-dirty`。dry-run 对"依赖版本尚未上 index"的 crate 跳过并警告，与
-   `tools/nichlink-package-audit` 行为一致，因此无需等首次发布即可用：当时实测完整校验了
-   `nichlink-kernel` 的打包、其余八个报"等待中"，退出 0。**选透明脚本而不是 release-plz /
+   `tools/xirang-package-audit` 行为一致，因此无需等首次发布即可用：当时实测完整校验了
+   `xirang-kernel` 的打包、其余八个报"等待中"，退出 0。**选透明脚本而不是 release-plz /
    `cargo workspaces publish`**：那个配置我无法在离线环境里跑起来验证，交一份没验证过的配置
    正是这个仓库拒绝的东西；脚本的顺序与轮询逻辑可以在本地实测（已实测）。
    **仍然只剩你需要做的一步**：打 tag 并给发布工作流 `CARGO_REGISTRY_TOKEN` secret
    ——发布需要你的 token 与授权，我不代按、也不做 git 写操作。收尾那一步现在是
-   `tools/nichlink-publish --verify-consumers`（本轮新增）：它在本检出之外建一个一次性 crate
+   `tools/xirang-publish --verify-consumers`（本轮新增）：它在本检出之外建一个一次性 crate
    按版本 `cargo add` 九个 crate，因此验证的是 index 上的解析而不是本地路径。`--check-table`
    在同一批里修掉了两张表的既存缺陷：`deps_of` 原先只返回多依赖 crate 的第一个依赖
-   （`nichlink-toolchain` 因此绕过"依赖未上 index 就不许发布"的守卫），并且边行的被依赖者被当成
+   （`xirang-toolchain` 因此绕过"依赖未上 index 就不许发布"的守卫），并且边行的被依赖者被当成
    独立 crate；现在按整行读取，并由 `--check-table` 在每次 push 与每次发布前核对
-   （`nichlink-toolchain` 缺的 `nichlink-kernel` 这条真实漂移已修正）。发布工作流见
+   （`xirang-toolchain` 缺的 `xirang-kernel` 这条真实漂移已修正）。发布工作流见
    `.github/workflows/release.yml`；`docs/performance-baseline.md` 记录 R4 的性能基线与预算。
 7. ✅ **`#![warn(missing_docs)]` 已在九个 crate 上全部开启**（比原计划的 `lexicon`/`identity`/
    `declaration`/`graft` 递增白名单更进一步：债一次还清，lint 覆盖整个 crate，因此不会再
@@ -327,17 +327,17 @@ kind-only 注册面(写了 `collector` 与 `kind`、没写 `handle`)的 `registr
    (b) 构建生成的 `generated_lib.rs` 里 `pub mod <容器> {`、`builtin_static_plan()`、
    `registrations()` 没有文档，宿主开了 lint 会收到**无法自行修**的警告（文件在 OUT_DIR）。
    现在容器模块与两个函数都有双语文档，裸的 `BUILTIN_STATIC_PLAN` 与 FACES/CUTS 一样标
-   `#[doc(hidden)]`。实测：`RUSTFLAGS="-W missing_docs" cargo check -p nichlink-example-control-button`
+   `#[doc(hidden)]`。实测：`RUSTFLAGS="-W missing_docs" cargo check -p xirang-example-control-button`
    的警告只剩示例自身的 `pub` 项（它没开 lint），生成文件零警告。
    实测门禁：`RUSTFLAGS=-W missing_docs cargo check --workspace --all-features --all-targets`
    对九个 crate 的 `src/` 零警告；`cargo clippy --workspace --all-targets -D warnings` 在
    default / `--all-features` / `--no-default-features` 三种配置下都干净。
-8. ✅ `nichlink-dev` 不再以坏掉的状态发布。Cargo 不支持按 target 的 `publish = false`，
+8. ✅ `xirang-dev` 不再以坏掉的状态发布。Cargo 不支持按 target 的 `publish = false`，
    因此用 `required-features = ["dev-supervisor"]`（新特性，默认关闭）把它挡在安装面之外；
    同时子 Studio 二进制改为按 **同级目录 → `PATH` → 工作区 `target/debug`** 顺序解析，且
    当它被编译时所在的检出已消失时，报错直接给出路径与修法（而不是让 Cargo 报"找不到清单"）。
-   实测：`cargo install --path studio --root /tmp/… ` 只装出 `nichlink-toolchain`（此前两个都
-   装，`nichlink-dev` 必然坏）；三条解析顺序各有单测（`the_sibling_binary_wins_over_path_and_the_workspace`、
+   实测：`cargo install --path studio --root /tmp/… ` 只装出 `xirang-toolchain`（此前两个都
+   装，`xirang-dev` 必然坏）；三条解析顺序各有单测（`the_sibling_binary_wins_over_path_and_the_workspace`、
    `path_is_searched_when_there_is_no_sibling`、`the_workspace_target_is_the_last_resort`）。
 
 ## 第四轮审计 / Round four
@@ -374,7 +374,7 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
    正是这条消息让上面那个 ETXTBSY 从"负载下的怪失败"变成可诊断的原因。
 
 2. **`NodeId` 组合钉住（落盘契约）。** `GraftPlanDocument.target` 就是 `NodeId`，从
-   `.nichlink/external-grafts/<selector>/graft.plan` 解析回来；而此前全仓只有两个标准向量
+   `.xirang/external-grafts/<selector>/graft.plan` 解析回来；而此前全仓只有两个标准向量
    钉住 `from_bytes`/`from_name` 形式，路径与命名空间组合**只有关系式断言**——把 `from_path`
    的两个摘要输入换个位置、或翻转 `separator` 标志，全部现有测试照样通过，而系统里每个 id
    都变了（后果是已落盘记录静默失效，按 S1+ 政策只表现为警告）。现补字面量钉
@@ -426,7 +426,7 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
    `\` 与 `"`，而 RFC 8259 还要求转义 U+0000–U+001F；一个含制表符的函数名会让每一行对严格
    读取器非法，而本 crate 自己的宽松解析器仍然接受它，所以往返测试永远绿。修前用独立复现器
    证明（python `json.loads` 报 `Invalid control character`），修后同一复现器报 **VALID**。
-   内核新增唯一的编码器 `nichlink_kernel::json`，`diagnostic/build.rs`（原先唯一正确的那份）、
+   内核新增唯一的编码器 `xirang_kernel::json`，`diagnostic/build.rs`（原先唯一正确的那份）、
    `mir/render.rs` 与 `build_method` 的脚手架片段共用它；钉子测试断言"不存在原样控制字符"
    而不是做往返。顺带把 `diagnostic/build.rs` 缩回 429 行，尺寸棘轮因此强制删掉它的欠账项
    （15 → 14）。
@@ -449,9 +449,9 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
 
 11. **外部路径预演（离线可做的部分已做）。** 把真实的示例宿主连同它的 graft crate 复制到工作区
     之外、作为独立 workspace 构建：`build.rs`、`OUT_DIR` 生成、`host!()` 展开、`#[path]` 面挂载、
-    静态 graft 全部成立，**26 条测试全绿**。另：`cargo package -p nichlink-kernel` 的隔离校验构建
+    静态 graft 全部成立，**26 条测试全绿**。另：`cargo package -p xirang-kernel` 的隔离校验构建
     通过；九个 crate 的包内容全部核对（250 个源码模块 + README + LICENSE，零缺失）。
-    **仍无法离线做的一件事**：从 tarball 构建那八个 crate。它们的带版本号 `nichlink-*` 依赖还
+    **仍无法离线做的一件事**：从 tarball 构建那八个 crate。它们的带版本号 `xirang-*` 依赖还
     不在 index 上，`cargo package`（含 `--no-verify`）都要向 registry 解析，因此这一步被首次
     发布本身挡住，已如实登记而不是绕过。
 
@@ -493,11 +493,11 @@ plus three read-only sub-audits and a focused adversarial read of the process ba
 
 - **宿主侧**:一个开了 `#![warn(missing_docs)]` 的宿主 crate，实测只对**作者自己写的**公开项
   报警(`pub struct Button`、各面的标记类型、`build.rs` 的 crate 文档)，
-  `RUSTFLAGS="-W missing_docs" cargo check -p nichlink-example-control-button --all-targets`
+  `RUSTFLAGS="-W missing_docs" cargo check -p xirang-example-control-button --all-targets`
   共 11 处,全部在示例自身源码里。宏生成的 `NODE_ID`/`REGISTRATION` 没有报警——它们由嵌套
   `macro_rules!`(`__registration_face!`)发射,span 落在 `run_method` 的宏定义文件里。因此框架
   不需要为生成的公开项补文档,宿主只需要文档化自己的类型。
-- **唯一的例外**是直接调用双下划线内部宏 `__nichlink_object!` 的探针
+- **唯一的例外**是直接调用双下划线内部宏 `__xirang_object!` 的探针
   (`toolchain/call_evidence/tests/collector_integration.rs`),它会把 `NODE_ID`/`REGISTRATION` 放在测试
   crate 根部并触发两条警告。那是测试 crate、用的也是内部宏,不在发布面的 lint 范围里；
   如果将来要把 `-W missing_docs` 也加到测试 crate,再给这两个常量补 `#[doc]` 或改探针写法。

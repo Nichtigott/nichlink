@@ -1,8 +1,8 @@
 # 调用链错误发现评测：种子驱动的注入、两个工具的机械判分与修复评分
 
-日期：2026-09-29。被评测对象：`toolchain/src/mcp/**`（二进制 `nichlink-mcp`，下称"我们的 MCP"）
-与 codegraph 1.5.0（下称 CG）。交付物：本记录，以及 `tools/nichlink-chain-eval` 与它调用的五个
-`tools/nichlink-chain-eval-*.py` 小助手（脚本全文见 §2.6 与 §2.2/§2.3/§2.5 的逐字片段）。
+日期：2026-09-29。被评测对象：`toolchain/src/mcp/**`（二进制 `xirang-mcp`，下称"我们的 MCP"）
+与 codegraph 1.5.0（下称 CG）。交付物：本记录，以及 `tools/xirang-chain-eval` 与它调用的五个
+`tools/xirang-chain-eval-*.py` 小助手（脚本全文见 §2.6 与 §2.2/§2.3/§2.5 的逐字片段）。
 
 一句话结论：**14 轮种子驱动的构造故障上，"点名病灶"两边都是 12/14；差距不在命中而在链路召回——
 最深的一轮我们的 MCP 召回 60/105 条参考边、CG 召回 82/84，而两轮失利（第 11、14 轮）各有具体
@@ -86,14 +86,14 @@ node 进程，约 150–300 ms 的固定开销）；但字节数是我们多（�
 
 ### 2.2 站点选取：种子 + 调用图，没有题库
 
-`tools/nichlink-chain-eval-graph.py` 做全部选取，它里面**没有一个符号名或源文件名**：
+`tools/xirang-chain-eval-graph.py` 做全部选取，它里面**没有一个符号名或源文件名**：
 
 1. 读 pristine 副本的 codegraph 索引（SQLite 的 `nodes` / `edges` 两张表），得到"函数 → 被谁调用"
    的边集，只保留**在范围内的成员**里的函数；
 2. 范围从清单推导：工作区 `Cargo.toml` 的 `members` 里、自己那份 `Cargo.toml` 没有写
    `publish = false` 的成员（于是 `conventions` 与两个示例宿主自动出局，`kernel`/`macro`/`toolchain`
    自动入选）；再减去**被评测仪器自己进入的模块目录**——那个目录由 `toolchain/Cargo.toml` 里名为
-   `nichlink-mcp` 的 `[[bin]]` 的 `path` 出发，经 crate 根的 `#[path]` 声明解析出来（本次解析为
+   `xirang-mcp` 的 `[[bin]]` 的 `path` 出发，经 crate 根的 `#[path]` 声明解析出来（本次解析为
    `toolchain/src/mcp/src`）；再减去测试文件（`tests/` 组件、`*_tests.rs`、`tests.rs`）与文件里
    `#[cfg(test)]` 区域之后的定义；
 3. 用 `random.Random(seed)` 从"有调用者且名字全树唯一"的函数里挑**观察点**，向上走 `d` 跳挑一条链，
@@ -134,13 +134,13 @@ node 进程，约 150–300 ms 的固定开销）；但字节数是我们多（�
 层次、深度都不进问题。这一点是这套评测能不能算"错误发现"的关键：如果把站点写进问题，命中的
 只会是"读题能力"。
 
-驱动过程对两边逐字相同（`tools/nichlink-chain-eval-ask.py`，全文见 §2.6）：
+驱动过程对两边逐字相同（`tools/xirang-chain-eval-ask.py`，全文见 §2.6）：
 
 | 步 | 我们的 MCP（`root` = 拥有该文件的成员目录，路径为成员内相对路径） | CG（`-p .`，路径为副本内相对路径） |
 |---|---|---|
-| 1 | `nichlink.callgraph {function, path, limit: 50}` | `codegraph callers <symbol> --json -l 50` |
+| 1 | `xirang.callgraph {function, path, limit: 50}` | `codegraph callers <symbol> --json -l 50` |
 | 2 | 对上一层报出的每个节点重复第 1 步，直到本轮深度 `d` | 同 |
-| 3 | 对最深层到达的每个文件：`nichlink.inspect {path}` | `codegraph node -f <file> --symbols-only` |
+| 3 | 对最深层到达的每个文件：`xirang.inspect {path}` | `codegraph node -f <file> --symbols-only` |
 
 两边**同一个人为上限**：每个节点最多取 10 个调用者（`FANOUT`）、每层最多查 12 个节点
 （`PER_LEVEL`）、整轮最多访问 48 个节点与发起 70 次调用（`MAX_NODES`/`MAX_CALLS`）。上限造成的
@@ -149,13 +149,13 @@ node 进程，约 150–300 ms 的固定开销）；但字节数是我们多（�
 **为什么两边寻址方式不同**：桥的文档化用法就是"传所属成员为 `root`，得到那个包自己的答案"，
 CLI 的用法就是以项目路径作答。问法、上限、顺序一致，只有工具自己的 API 拼写不同。
 
-**没有用 CG 的 `explore`/`impact` 参与判分**，因为我们的 MCP 没有对应的函数级工具（`nichlink.impact`
+**没有用 CG 的 `explore`/`impact` 参与判分**，因为我们的 MCP 没有对应的函数级工具（`xirang.impact`
 是对**注册面**的，不是对函数的）。为了不把"工具形状不同"记成"能力差距"，这两条命令作为**补充探针**
 单独记录在 §7，不计入命中率。
 
 ### 2.5 机械判分：没有 LLM 裁判
 
-`tools/nichlink-chain-eval-judge.py` 算四件事，全部是字符串与集合运算：
+`tools/xirang-chain-eval-judge.py` 算四件事，全部是字符串与集合运算：
 
 1. **命中**。`impl` 轮：答案正文里同时出现被注入文件的路径（副本相对或成员相对，两种拼法都算，因为
    两者是同一个路径在工具自己嘴里的样子）与站点符号名。`chain`/`both` 轮：判据换成"断链检出"
@@ -176,10 +176,10 @@ CLI 的用法就是以项目路径作答。问法、上限、顺序一致，只�
 读者应该看得出来是哪一种。
 ### 2.6 驱动脚本（逐字）
 
-维护者要求把驱动脚本逐字留在记录里。下面是 `tools/nichlink-chain-eval-ask.py` 的全文（判分规则
-`tools/nichlink-chain-eval-judge.py` 的 `judge_one`、选点 `tools/nichlink-chain-eval-graph.py` 的
-`pick_round` 与两个变异算子、`tools/nichlink-chain-eval-mutate.py` 的 `apply`/`revert` 分别在
-§2.5、§2.2、§2.3、§6 里逐字给出；编排脚本 `tools/nichlink-chain-eval` 的命令逐条出现在
+维护者要求把驱动脚本逐字留在记录里。下面是 `tools/xirang-chain-eval-ask.py` 的全文（判分规则
+`tools/xirang-chain-eval-judge.py` 的 `judge_one`、选点 `tools/xirang-chain-eval-graph.py` 的
+`pick_round` 与两个变异算子、`tools/xirang-chain-eval-mutate.py` 的 `apply`/`revert` 分别在
+§2.5、§2.2、§2.3、§6 里逐字给出；编排脚本 `tools/xirang-chain-eval` 的命令逐条出现在
 `$work/run.log` 里，§3.3 摘录）。
 
 ```python
@@ -256,7 +256,7 @@ class McpClient:
             {
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": {"name": "nichlink-chain-eval", "version": "1"},
+                "clientInfo": {"name": "xirang-chain-eval", "version": "1"},
             },
         )
 
@@ -388,7 +388,7 @@ def walk(tool: str, truth: dict, copy: str, members: list[str], binary: str | No
         if tool == "mcp":
             relative = node["file"][len(member) + 1 :]
             text, elapsed = client.tool_call(
-                "nichlink.callgraph",
+                "xirang.callgraph",
                 {"function": node["name"], "path": relative, "root": member, "limit": 50},
             )
             parsed = parse_mcp_callers(text, member, node["name"])
@@ -409,7 +409,7 @@ def walk(tool: str, truth: dict, copy: str, members: list[str], binary: str | No
         if tool == "mcp":
             relative = file[len(member) + 1 :]
             text, elapsed = client.tool_call(
-                "nichlink.inspect", {"path": relative, "root": member}
+                "xirang.inspect", {"path": relative, "root": member}
             )
             code = 0
         else:
@@ -500,19 +500,19 @@ if __name__ == "__main__":
 |---|---|---|
 | 修订 | `8f8b3b70a032d71879d34b9732c8dbc174145c00`（2026-09-29 20:38:59 +0800） | `git rev-parse HEAD`，写进 `$work/pinned-rev` |
 | 归档流 sha256 | `0dd79747d51cb664328b31715771bef6f811423f0e0f5b2df342dd3c31a89527` | `git archive <rev> \| sha256sum` |
-| 副本 | `/tmp/nichlink-eval/{base,round-01…round-14,scored-*}`，每份都由上面的归档解出；跑 cargo 的副本自带 `CARGO_TARGET_DIR=<副本>/target` | `git archive` + `tar -x` |
+| 副本 | `/tmp/xirang-eval/{base,round-01…round-14,scored-*}`，每份都由上面的归档解出；跑 cargo 的副本自带 `CARGO_TARGET_DIR=<副本>/target` | `git archive` + `tar -x` |
 | 在范围内的成员 | `kernel`、`macro`、`toolchain`（脚本从清单推导，见 §2.2） | `$work/plan.json` 的 `members_in_scope` |
 | 仪器边界 | `toolchain/src/mcp/src`（从 bin target 的 `path` 解析出来） | `$work/plan.json` 的 `instrument_boundary` |
 | 种子 | `20260929`；第 i 轮用 `seed + i*7919`，选点失败时按 `+1` 重试 | `$work/plan.json` 每轮的 `seed` |
-| 计划 | `1:impl,1:chain,1:both,2:impl,2:chain,2:both,3:impl,3:chain,3:both,4:impl,4:chain,4:both,5:impl,5:chain` | `NICHLINK_CHAIN_EVAL_PLAN` 默认值 |
+| 计划 | `1:impl,1:chain,1:both,2:impl,2:chain,2:both,3:impl,3:chain,3:both,4:impl,4:chain,4:both,5:impl,5:chain` | `XIRANG_CHAIN_EVAL_PLAN` 默认值 |
 | codegraph | 1.5.0（`~/.local/bin/codegraph`，默认不在 PATH，先 `export PATH="$HOME/.local/bin:$PATH"`） | `codegraph --version` |
 | cargo / rustc | 1.96.0 / 1.96.0 | `cargo --version`、`rustc --version` |
 | python3 | 3.14.7 | `python3 --version` |
-| `sh` | bash 5.3（`tools/nichlink-chain-eval` 通过 `sh -n`） | `sh -n tools/nichlink-chain-eval`，EXIT 0 |
+| `sh` | bash 5.3（`tools/xirang-chain-eval` 通过 `sh -n`） | `sh -n tools/xirang-chain-eval`，EXIT 0 |
 | 机器 | Linux 7.2.8-xanmod1，20 核 | `uname -sr`、`nproc` |
 
 **仪器只构建一次**：在 pristine 副本 `$work/base` 里、用它自己的 `CARGO_TARGET_DIR`
-(`$work/base/target`) 构建 `nichlink-mcp`，之后 14 轮复用它。理由是变异的是**被分析的目标树**、
+(`$work/base/target`) 构建 `xirang-mcp`，之后 14 轮复用它。理由是变异的是**被分析的目标树**、
 不是仪器本身：如果每轮都在注入后的副本里重建仪器，那些站点落在 `toolchain/` 里的轮次
 （第 3、5、6、8、9、11、12、14 轮）就会把仪器自己的源码也一起改掉，那时量到的会包括"仪器被改坏"，
 而不是"仪器读一棵被改坏的树"。仪器的构建日志里出现的是副本自己的路径，可核对。
@@ -522,32 +522,32 @@ pristine 副本被索引后：**460 个文件 / 5,835 个节点 / 18,719 条边*
 
 ### 3.2 实际执行的命令
 
-编排脚本 `tools/nichlink-chain-eval` 的每一步（命令与退出码都逐条进了 `$work/run.log`）：
+编排脚本 `tools/xirang-chain-eval` 的每一步（命令与退出码都逐条进了 `$work/run.log`）：
 
 ```sh
 # prepare：固定修订、解出 pristine 副本、在副本里构建仪器、索引、选点
-git archive 8f8b3b7… | tar -x -C /tmp/nichlink-eval/base
-( cd /tmp/nichlink-eval/base && CARGO_TARGET_DIR=/tmp/nichlink-eval/base/target \
-    cargo build -p nichlink-toolchain --offline --features mcp --bin nichlink-mcp )
-codegraph init /tmp/nichlink-eval/base
-python3 tools/nichlink-chain-eval-graph.py --root /tmp/nichlink-eval/base \
-    --out /tmp/nichlink-eval/plan.json --seed 20260929 --plan "$PLAN"
+git archive 8f8b3b7… | tar -x -C /tmp/xirang-eval/base
+( cd /tmp/xirang-eval/base && CARGO_TARGET_DIR=/tmp/xirang-eval/base/target \
+    cargo build -p xirang-toolchain --offline --features mcp --bin xirang-mcp )
+codegraph init /tmp/xirang-eval/base
+python3 tools/xirang-chain-eval-graph.py --root /tmp/xirang-eval/base \
+    --out /tmp/xirang-eval/plan.json --seed 20260929 --plan "$PLAN"
 
 # 每一轮（N=1…14）：新副本 → 注入 → 在副本里建 CG 索引 → 两边各问一次 → 判分
-git archive 8f8b3b7… | tar -x -C /tmp/nichlink-eval/round-NN
-python3 tools/nichlink-chain-eval-mutate.py --plan …/plan.json --round NN \
+git archive 8f8b3b7… | tar -x -C /tmp/xirang-eval/round-NN
+python3 tools/xirang-chain-eval-mutate.py --plan …/plan.json --round NN \
     --copy …/round-NN --truth …/out/round-NN/truth.json
-( cd /tmp/nichlink-eval/round-NN && codegraph init . )        # CG 不跟随副本，必须重建索引
-python3 tools/nichlink-chain-eval-ask.py --tool mcp --truth … --copy … --out-dir … \
-    --members kernel,macro,toolchain --binary …/base/target/debug/nichlink-mcp
-python3 tools/nichlink-chain-eval-ask.py --tool codegraph --truth … --copy … --out-dir … \
+( cd /tmp/xirang-eval/round-NN && codegraph init . )        # CG 不跟随副本，必须重建索引
+python3 tools/xirang-chain-eval-ask.py --tool mcp --truth … --copy … --out-dir … \
+    --members kernel,macro,toolchain --binary …/base/target/debug/xirang-mcp
+python3 tools/xirang-chain-eval-ask.py --tool codegraph --truth … --copy … --out-dir … \
     --members kernel,macro,toolchain
-python3 tools/nichlink-chain-eval-judge.py --mode one --truth … --out-dir … \
+python3 tools/xirang-chain-eval-judge.py --mode one --truth … --out-dir … \
     --db …/base/.codegraph/codegraph.db --copy … --members … --out …/verdict.json
 
 # 汇总
-python3 tools/nichlink-chain-eval-judge.py --mode table \
-    --verdicts '/tmp/nichlink-eval/out/round-*/verdict.json' --out /tmp/nichlink-eval/summary.md
+python3 tools/xirang-chain-eval-judge.py --mode table \
+    --verdicts '/tmp/xirang-eval/out/round-*/verdict.json' --out /tmp/xirang-eval/summary.md
 ```
 
 所有 cargo 命令都带 `--offline`；**没有任何一步**用 `git stash` / `git checkout` / `git restore` /
@@ -560,7 +560,7 @@ python3 tools/nichlink-chain-eval-judge.py --mode table \
 ```text
 pinned revision 8f8b3b70a032d71879d34b9732c8dbc174145c00 (2026-09-29 20:38:59 +0800)
 archive sha256 0dd79747d51cb664328b31715771bef6f811423f0e0f5b2df342dd3c31a89527
-base copy /tmp/nichlink-eval/base
+base copy /tmp/xirang-eval/base
 $ build_in_base
    Compiling proc-macro2 v1.0.107
    Compiling unicode-ident v1.0.24
@@ -582,11 +582,11 @@ $ build_in_base
    Compiling indexmap v2.14.2
    Compiling syn v2.0.119
    Compiling petgraph v0.8.3
-   Compiling nichlink-kernel v0.2.0 (/tmp/nichlink-eval/base/kernel)
+   Compiling xirang-kernel v0.2.0 (/tmp/xirang-eval/base/kernel)
    Compiling tracing-attributes v0.1.31
    Compiling tracing v0.1.44
-   Compiling nichlink-macro v0.2.0 (/tmp/nichlink-eval/base/macro)
-   Compiling nichlink-toolchain v0.2.0 (/tmp/nichlink-eval/base/toolchain)
+   Compiling xirang-macro v0.2.0 (/tmp/xirang-eval/base/macro)
+   Compiling xirang-toolchain v0.2.0 (/tmp/xirang-eval/base/toolchain)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.75s
 EXIT 0
 instrument ```
@@ -600,30 +600,30 @@ instrument ```
 ```text
 123 |         let line = crate::mcp::freshness::line(&self.root, &self.out);
     |                                ^^^^^^^^^ could not find `freshness` in `mcp`
-error: could not compile `nichlink-toolchain` (lib) due to 2 previous errors
+error: could not compile `xirang-toolchain` (lib) due to 2 previous errors
 EXIT 101
 ```
 
 修法是把构建包进子 shell：`( cd $work/base && CARGO_TARGET_DIR=… cargo build … )`，修好之后
-`$work/run.log` 里出现的是副本自己的路径（`Compiling nichlink-toolchain v0.2.0 (/tmp/nichlink-eval/base/toolchain)`），
+`$work/run.log` 里出现的是副本自己的路径（`Compiling xirang-toolchain v0.2.0 (/tmp/xirang-eval/base/toolchain)`），
 这也成了"构建确实发生在副本里"的可核证据。这次事故同时说明为什么本记录把修订固定下来：
 共享工作树会在评测进行中改变它自己。
 ### 3.5 单轮完整流程实测（原样输出与 EXIT）
 
 编排脚本被单独跑了一遍完整流程（`prepare` + 3 轮 + 汇总表），工作目录是
-`NICHLINK_CHAIN_EVAL_WORK=/tmp/nichlink-eval/demo`，计划 `1:impl,2:chain,4:impl`，退出码在最后一行为
+`XIRANG_CHAIN_EVAL_WORK=/tmp/xirang-eval/demo`，计划 `1:impl,2:chain,4:impl`，退出码在最后一行为
 **0**。下面是它的原样记录（命令、单行结果与每一步的 EXIT，节选到第 2 轮开始处）：
 
 ```text
 pinned revision 8f8b3b70a032d71879d34b9732c8dbc174145c00 (2026-09-29 20:38:59 +0800)
 archive sha256 0dd79747d51cb664328b31715771bef6f811423f0e0f5b2df342dd3c31a89527
-base copy /tmp/nichlink-eval/demo/base
+base copy /tmp/xirang-eval/demo/base
 $ build_in_base
 EXIT 0
-instrument /tmp/nichlink-eval/demo/base/target/debug/nichlink-mcp
-$ codegraph init /tmp/nichlink-eval/demo/base
+instrument /tmp/xirang-eval/demo/base/target/debug/xirang-mcp
+$ codegraph init /tmp/xirang-eval/demo/base
 EXIT 0
-$ python3 /home/nich/Moirai_N3/nichlink/tools/nichlink-chain-eval-graph.py --root /tmp/nichlink-eval/demo/base --out /tmp/nichlink-eval/demo/plan.json --seed 20260929 --plan 1:impl,2:chain,4:impl
+$ python3 /home/nich/Moirai_N3/nichlink/tools/xirang-chain-eval-graph.py --root /tmp/xirang-eval/demo/base --out /tmp/xirang-eval/demo/plan.json --seed 20260929 --plan 1:impl,2:chain,4:impl
 plan: 3 rounds, members ['kernel', 'macro', 'toolchain'], boundary toolchain/src/mcp/src, nodes 1627
   round  1 d=1 impl  seed=20260929 site=kernel/src/registry_core/source/calls.rs::direct_calls
   round  2 d=2 chain seed=20268848 site=toolchain/src/studio/src/studio/ui/search.rs::draw_search
@@ -632,22 +632,22 @@ EXIT 0
 round  1 d=1 impl  seed=20260929 observable=kernel/src/registry_core/source/source.rs::mask_non_code site=kernel/src/registry_core/source/calls.rs::direct_calls
 round  2 d=2 chain seed=20268848 observable=toolchain/src/studio/src/studio/ui/graph.rs::search_center_ref site=toolchain/src/studio/src/studio/ui/search.rs::draw_search
 round  3 d=4 impl  seed=20276767 observable=toolchain/src/studio/src/studio/app/lifecycle.rs::note site=toolchain/src/studio/src/studio/app/pointer.rs::handle_mouse
-$ python3 /home/nich/Moirai_N3/nichlink/tools/nichlink-chain-eval-mutate.py --plan /tmp/nichlink-eval/demo/plan.json --round 1 --copy /tmp/nichlink-eval/demo/round-01 --truth /tmp/nichlink-eval/demo/out/round-01/truth.json
+$ python3 /home/nich/Moirai_N3/nichlink/tools/xirang-chain-eval-mutate.py --plan /tmp/xirang-eval/demo/plan.json --round 1 --copy /tmp/xirang-eval/demo/round-01 --truth /tmp/xirang-eval/demo/out/round-01/truth.json
 round 1: d=1 impl site=kernel/src/registry_core/source/calls.rs::direct_calls | kernel/src/registry_core/source/calls.rs:171 '||'->'&&'
 EXIT 0
-$ python3 /home/nich/Moirai_N3/nichlink/tools/nichlink-chain-eval-ask.py --tool mcp --truth /tmp/nichlink-eval/demo/out/round-01/truth.json --copy /tmp/nichlink-eval/demo/round-01 --out-dir /tmp/nichlink-eval/demo/out/round-01 --members kernel,macro,toolchain --binary /tmp/nichlink-eval/demo/base/target/debug/nichlink-mcp
+$ python3 /home/nich/Moirai_N3/nichlink/tools/xirang-chain-eval-ask.py --tool mcp --truth /tmp/xirang-eval/demo/out/round-01/truth.json --copy /tmp/xirang-eval/demo/round-01 --out-dir /tmp/xirang-eval/demo/out/round-01 --members kernel,macro,toolchain --binary /tmp/xirang-eval/demo/base/target/debug/xirang-mcp
 mcp: 4 calls, 3281 bytes, 286.8 ms, reached 7 nodes
 EXIT 0
-$ python3 /home/nich/Moirai_N3/nichlink/tools/nichlink-chain-eval-ask.py --tool codegraph --truth /tmp/nichlink-eval/demo/out/round-01/truth.json --copy /tmp/nichlink-eval/demo/round-01 --out-dir /tmp/nichlink-eval/demo/out/round-01 --members kernel,macro,toolchain
+$ python3 /home/nich/Moirai_N3/nichlink/tools/xirang-chain-eval-ask.py --tool codegraph --truth /tmp/xirang-eval/demo/out/round-01/truth.json --copy /tmp/xirang-eval/demo/round-01 --out-dir /tmp/xirang-eval/demo/out/round-01 --members kernel,macro,toolchain
 codegraph: 4 calls, 3731 bytes, 1045.1 ms, reached 7 nodes
 EXIT 0
-$ python3 /home/nich/Moirai_N3/nichlink/tools/nichlink-chain-eval-judge.py --mode one --truth /tmp/nichlink-eval/demo/out/round-01/truth.json --out-dir /tmp/nichlink-eval/demo/out/round-01 --db /tmp/nichlink-eval/demo/base/.codegraph/codegraph.db --copy /tmp/nichlink-eval/demo/round-01 --members kernel,macro,toolchain --out /tmp/nichlink-eval/demo/out/round-01/verdict.json
+$ python3 /home/nich/Moirai_N3/nichlink/tools/xirang-chain-eval-judge.py --mode one --truth /tmp/xirang-eval/demo/out/round-01/truth.json --out-dir /tmp/xirang-eval/demo/out/round-01 --db /tmp/xirang-eval/demo/base/.codegraph/codegraph.db --copy /tmp/xirang-eval/demo/round-01 --members kernel,macro,toolchain --out /tmp/xirang-eval/demo/out/round-01/verdict.json
 round 1: mcp=hit(present) codegraph=hit(present)
 EXIT 0
-$ python3 /home/nich/Moirai_N3/nichlink/tools/nichlink-chain-eval-mutate.py --plan /tmp/nichlink-eval/demo/plan.json --round 2 --copy /tmp/nichlink-eval/demo/round-02 --truth /tmp/nichlink-eval/demo/out/round-02/truth.json
+$ python3 /home/nich/Moirai_N3/nichlink/tools/xirang-chain-eval-mutate.py --plan /tmp/xirang-eval/demo/plan.json --round 2 --copy /tmp/xirang-eval/demo/round-02 --truth /tmp/xirang-eval/demo/out/round-02/truth.json
 
-…[此处截断：完整流水见 /tmp/nichlink-eval/demo.log，下面是这次运行的汇总表与总退出码]
-verdicts: /tmp/nichlink-eval/demo/verdicts.json
+…[此处截断：完整流水见 /tmp/xirang-eval/demo.log，下面是这次运行的汇总表与总退出码]
+verdicts: /tmp/xirang-eval/demo/verdicts.json
 DEMO_EXIT=0
 ```
 
@@ -663,7 +663,7 @@ DEMO_EXIT=0
 它证明的是"整条流水线能一次跑完并给出判分"，不是命中率——命中率看 §5 的 14 轮。
 ## 4. 逐轮记录（种子、站点、深度、层次、两边结果、原始片段、推理链）
 
-下面 14 节是按轮次从产物直接生成的（`nichlink-chain-eval-judge.py --mode fragments`），
+下面 14 节是按轮次从产物直接生成的（`xirang-chain-eval-judge.py --mode fragments`），
 每节里的原始片段都截断并标出截断处（`…[此处截断：全文 N 行，此处 M 行]`），推理链是本节作者写的。
 站点与观察点的路径是**副本内相对路径**（`kernel/…`、`macro/…`、`toolchain/…`），工具自己回答时用的是
 成员内相对路径（`src/…`）或副本内相对路径，两者都在判分时被认作同一个文件。每节的表里，
@@ -1449,7 +1449,7 @@ src/runtime/src/runtime/trace/snapshot/parse.rs:250 fn parse_optional_source
 
 ## 6. 修复质量评分（3 轮）
 
-评分流程对每个候选轮（`tools/nichlink-chain-eval repair`，逐条命令见 §3.2）：
+评分流程对每个候选轮（`tools/xirang-chain-eval repair`，逐条命令见 §3.2）：
 
 1. **基线**：pristine 副本上跑最小命令 `cargo test -p <站点所属 crate> --offline`（副本自带
    `CARGO_TARGET_DIR`），要求它绿；
@@ -1457,7 +1457,7 @@ src/runtime/src/runtime/trace/snapshot/parse.rs:250 fn parse_optional_source
 3. **根因修复**：把注入的精确逆操作打回去（`--revert`），同一条命令要求它转绿；
 4. **负对照**：不做修复，只给那个失败的测试加 `#[ignore]`，再跑一次。
 
-四项判据（数字都由 `tools/nichlink-chain-eval-repair.py` 从日志与文件算出来）：
+四项判据（数字都由 `tools/xirang-chain-eval-repair.py` 从日志与文件算出来）：
 ① **绿恢复**＝退出码 0 **且** `failed=0` **且** `ignored` 没有变多（"不再跑的测试"不算"通过的测试"）；
 ② **改动最小性**＝相对 pristine 副本的 diff 行数、碰了几个文件、注入文件在不在其中；
 ③ **根因或症状**＝补丁落在注入文件的那一行（根因）、落在测试里（症状）、还是别处；
@@ -1465,14 +1465,14 @@ src/runtime/src/runtime/trace/snapshot/parse.rs:250 fn parse_optional_source
 `if false`、`todo!(` 等）。
 
 候选池按深度从浅到深排队：第 1、4、10、7、13 轮，取满 3 个真的变红的。**第 10 轮与第 7 轮的注入没有
-造出红灯**（`cargo test -p nichlink-kernel --offline` 退出码 0），它们照原样留证、不获评分资格：
+造出红灯**（`cargo test -p xirang-kernel --offline` 退出码 0），它们照原样留证、不获评分资格：
 "函数体重写没有被测试覆盖"是关于测试套件的事实，不是把绿灯改写成红灯的理由。
 
 ### 第 1 轮（d=1，层次 `impl`）
 
 | 项 | 值 |
 |---|---|
-| 最小命令 | `cargo test -p nichlink-kernel --offline` |
+| 最小命令 | `cargo test -p xirang-kernel --offline` |
 | 注入 | `kernel/src/registry_core/source/calls.rs::direct_calls`，第 171 行 `||`→`&&` |
 | ① 基线 | 退出码 0；passed=206 failed=0 ignored=0 |
 | ① 注入后（红） | 退出码 101；passed=184 failed=3 ignored=0；失败测试：registry_core::source::calls::tests::a_declaration_macro_body_is_not_a_call_site, registry_core::source::calls::tests::direct_calls_are_sorted_distinct_and_exclude_the_function_itself, registry_core::source::source_tests::a_non_ascii_identifier_is_indexed_whole |
@@ -1496,16 +1496,16 @@ src/runtime/src/runtime/trace/snapshot/parse.rs:250 fn parse_optional_source
 红灯与绿灯的原文尾巴（截断处已标出）：
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 注入后
+$ cargo test -p xirang-kernel --offline   # 注入后
     registry_core::source::source_tests::a_non_ascii_identifier_is_indexed_whole
 
 test result: FAILED. 184 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
 
-error: test failed, to rerun pass `-p nichlink-kernel --lib`
+error: test failed, to rerun pass `-p xirang-kernel --lib`
 ```
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 根因修复后
+$ cargo test -p xirang-kernel --offline   # 根因修复后
 test kernel/src/registry_core/declaration/contract.rs - registry_core::declaration::contract::assert_contract (line 56) - compile fail ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
@@ -1514,7 +1514,7 @@ all doctests ran in 0.32s; merged doctests compilation took 0.27s
 ```
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 负对照：只加 #[ignore]
+$ cargo test -p xirang-kernel --offline   # 负对照：只加 #[ignore]
 test kernel/src/registry_core/declaration/contract.rs - registry_core::declaration::contract::assert_contract (line 56) - compile fail ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
@@ -1526,7 +1526,7 @@ all doctests ran in 0.37s; merged doctests compilation took 0.32s
 
 | 项 | 值 |
 |---|---|
-| 最小命令 | `cargo test -p nichlink-kernel --offline` |
+| 最小命令 | `cargo test -p xirang-kernel --offline` |
 | 注入 | `kernel/src/registry_core/source/items.rs::item_symbols`，第 68 行 `true`→`false` |
 | ① 基线 | 退出码 0；passed=206 failed=0 ignored=0 |
 | ① 注入后（红） | 退出码 101；passed=198 failed=1 ignored=0；失败测试：qualified_functions_are_functions |
@@ -1550,16 +1550,16 @@ all doctests ran in 0.37s; merged doctests compilation took 0.32s
 红灯与绿灯的原文尾巴（截断处已标出）：
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 注入后
+$ cargo test -p xirang-kernel --offline   # 注入后
     qualified_functions_are_functions
 
 test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-error: test failed, to rerun pass `-p nichlink-kernel --test b4_item_symbols`
+error: test failed, to rerun pass `-p xirang-kernel --test b4_item_symbols`
 ```
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 根因修复后
+$ cargo test -p xirang-kernel --offline   # 根因修复后
 test kernel/src/registry_core/declaration/contract.rs - registry_core::declaration::contract::assert_contract (line 56) - compile fail ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
@@ -1568,7 +1568,7 @@ all doctests ran in 0.40s; merged doctests compilation took 0.32s
 ```
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 负对照：只加 #[ignore]
+$ cargo test -p xirang-kernel --offline   # 负对照：只加 #[ignore]
 test kernel/src/registry_core/declaration/contract.rs - registry_core::declaration::contract::assert_contract (line 56) - compile fail ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
@@ -1580,7 +1580,7 @@ all doctests ran in 0.38s; merged doctests compilation took 0.32s
 
 | 项 | 值 |
 |---|---|
-| 最小命令 | `cargo test -p nichlink-kernel --offline` |
+| 最小命令 | `cargo test -p xirang-kernel --offline` |
 | 注入 | `kernel/src/registry_core/tree/graft_ops/overlay.rs::overlay_cuts`，第 130 行 `!=`→`==` |
 | ① 基线 | 退出码 0；passed=206 failed=0 ignored=0 |
 | ① 注入后（红） | 退出码 101；passed=170 failed=17 ignored=0；失败测试：registry_core::tree::graft_ops::overlay::tests::a_non_full_graft_does_not_install_a_rule_its_children_violate, registry_core::tree::graft_ops::overlay::tests::an_unknown_replacement_names_the_selector, registry_core::tree::graft_ops::overlay::tests::overlay_keeps_base_siblings_and_source_trees_untouched … |
@@ -1604,16 +1604,16 @@ all doctests ran in 0.38s; merged doctests compilation took 0.32s
 红灯与绿灯的原文尾巴（截断处已标出）：
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 注入后
+$ cargo test -p xirang-kernel --offline   # 注入后
     registry_core::tree::graft_ops::resolution::resolution_tests::full_cut_inherits_external_subtree_without_moving_source_trees
 
 test result: FAILED. 170 passed; 17 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
 
-error: test failed, to rerun pass `-p nichlink-kernel --lib`
+error: test failed, to rerun pass `-p xirang-kernel --lib`
 ```
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 根因修复后
+$ cargo test -p xirang-kernel --offline   # 根因修复后
 test kernel/src/registry_core/declaration/contract.rs - registry_core::declaration::contract::assert_contract (line 56) - compile fail ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
@@ -1622,7 +1622,7 @@ all doctests ran in 0.41s; merged doctests compilation took 0.33s
 ```
 
 ```text
-$ cargo test -p nichlink-kernel --offline   # 负对照：只加 #[ignore]
+$ cargo test -p xirang-kernel --offline   # 负对照：只加 #[ignore]
 test kernel/src/registry_core/declaration/contract.rs - registry_core::declaration::contract::assert_contract (line 56) - compile fail ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
@@ -1638,7 +1638,7 @@ all doctests ran in 0.38s; merged doctests compilation took 0.30s
    无关文件 0 个、绕过记号 0 个；`#[ignore]` 补丁虽然也让退出码变成 0，但 `ignored` 计数暴露了它，
    绕过记号与（第 4 轮）一个无关文件把它钉在症状那一侧。
 3. **两个候选轮没有红灯**：第 10 轮（`register_snapshot_batch` 的函数体）与第 7 轮
-   （`apply_overlay_face` 的函数体）的 `false`→`true` / `||`→`&&` 重写没有让 `nichlink-kernel` 的
+   （`apply_overlay_face` 的函数体）的 `false`→`true` / `||`→`&&` 重写没有让 `xirang-kernel` 的
    任何测试失败。这说明"函数体变异 + 单 crate 测试"并不是稳定的红灯来源，评分轮必须先验证红灯再
    评分——本流程就是这么做的（红灯不成立就不进评分）。
 ## 7. 补充探针：两处"看不见"，与 CG 的 `explore`/`impact`
@@ -1654,9 +1654,9 @@ all doctests ran in 0.38s; merged doctests compilation took 0.30s
 ```sh
 $ python3 - <<'PY'
 # 我们的 MCP：以工作区根为 root，不加 path（桥为整个工作区作答的用法）
-call("nichlink.callgraph", {"function": "find_registry", "root": "<副本根>", "limit": 50})
+call("xirang.callgraph", {"function": "find_registry", "root": "<副本根>", "limit": 50})
 PY
-nichlink.callgraph callers = 17
+xirang.callgraph callers = 17
 by top directory: ['src', 'tests']        # 全部是成员内相对路径，也就是 kernel 自己
 cross-crate present: []
 ```
@@ -1701,7 +1701,7 @@ round's failure, and its numbers are reported as a defect measurement.
 """
 import json, re, sqlite3, subprocess
 
-root = "/tmp/nichlink-eval/base"
+root = "/tmp/xirang-eval/base"
 conn = sqlite3.connect(f"file:{root}/.codegraph/codegraph.db?mode=ro", uri=True)
 members = ["kernel", "macro", "toolchain"]
 candidates = []
@@ -1722,7 +1722,7 @@ for name, path, start in conn.execute(
         candidates.append((relative, name, member))
 
 process = subprocess.Popen(
-    [f"{root}/target/debug/nichlink-mcp"], cwd=root,
+    [f"{root}/target/debug/xirang-mcp"], cwd=root,
     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1,
 )
 def call(request):
@@ -1732,7 +1732,7 @@ call({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
 blind, seen, examples = 0, 0, []
 for relative, name, member in candidates:
     response = call({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
-        "name": "nichlink.callgraph",
+        "name": "xirang.callgraph",
         "arguments": {"function": name, "path": relative[len(member) + 1:], "root": f"{root}/{member}"}}})
     text = response["result"]["content"][0]["text"]
     if "no static function match" in text:
@@ -1740,7 +1740,7 @@ for relative, name, member in candidates:
         examples.append((relative, name))
     else:
         seen += 1
-print(f"generic declarations probed: {len(candidates)}; nichlink.callgraph sees {seen}, blind to {blind}")
+print(f"generic declarations probed: {len(candidates)}; xirang.callgraph sees {seen}, blind to {blind}")
 for relative, name in examples[:6]:
     print("  blind:", relative, "::", name)
 ```
@@ -1748,8 +1748,8 @@ for relative, name in examples[:6]:
 它在一份 pristine 副本上的原样输出：
 
 ```text
-$ python3 /tmp/nichlink-eval/probe-generics.py
-generic declarations probed: 35; nichlink.callgraph sees 34, blind to 1
+$ python3 /tmp/xirang-eval/probe-generics.py
+generic declarations probed: 35; xirang.callgraph sees 34, blind to 1
   blind: toolchain/src/studio/src/studio/ui/forms.rs :: button
 ```
 
@@ -1770,7 +1770,7 @@ $ codegraph node -f toolchain/src/studio/src/studio/ui/forms.rs -p . --symbols-o
 而我们的 `inspect` 对同一个文件只列出另一个函数（`button` 不在其中）：
 
 ```text
-$ nichlink.inspect {"path": "src/studio/src/studio/ui/forms.rs", "root": "<副本>/toolchain"}
+$ xirang.inspect {"path": "src/studio/src/studio/ui/forms.rs", "root": "<副本>/toolchain"}
 file src/studio/src/studio/ui/forms.rs
 fn draw_form_frame lines 60-100 calls=[…, button, …]
 ```
@@ -1799,7 +1799,7 @@ $ codegraph impact find_registry -p . -d 2 --json
 { "symbol": "find_registry", "depth": 2, "nodeCount": 88, "edgeCount": 109, "affected": [ … ] }
 ```
 
-我们的 MCP 没有对应的**函数级** `explore`/`impact`：`nichlink.impact` 的输入是注册面节点
+我们的 MCP 没有对应的**函数级** `explore`/`impact`：`xirang.impact` 的输入是注册面节点
 （`node`、`depth`、`limit`），不是函数。因此这三条命令没有被塞进判分流程——把"工具形状不同"记成
 "能力差距"会是这次评测自己的误报。
 ## 8. 敏感串扫描
@@ -1807,9 +1807,9 @@ $ codegraph impact find_registry -p . -d 2 --json
 公开的是证据，不是秘密：扫描命令与它的原样输出都留在这里。扫描对象是本次新增的六个脚本与本文档。
 
 ```text
-$ grep -nE (sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}|BEGIN [A-Z ]*PRIVATE KEY|password[[:space:]]*=|secret[[:space:]]*=|token[[:space:]]*=) tools/nichlink-chain-eval tools/nichlink-chain-eval-graph.py tools/nichlink-chain-eval-mutate.py tools/nichlink-chain-eval-ask.py tools/nichlink-chain-eval-judge.py tools/nichlink-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md
+$ grep -nE (sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}|BEGIN [A-Z ]*PRIVATE KEY|password[[:space:]]*=|secret[[:space:]]*=|token[[:space:]]*=) tools/xirang-chain-eval tools/xirang-chain-eval-graph.py tools/xirang-chain-eval-mutate.py tools/xirang-chain-eval-ask.py tools/xirang-chain-eval-judge.py tools/xirang-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md
 scan exit 1 (1 = no credential-shaped string)
-$ grep -nF "$HOME" tools/nichlink-chain-eval tools/nichlink-chain-eval-graph.py tools/nichlink-chain-eval-mutate.py tools/nichlink-chain-eval-ask.py tools/nichlink-chain-eval-judge.py tools/nichlink-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md   # 家目录的具体路径不该写进脚本，扫的是它
+$ grep -nF "$HOME" tools/xirang-chain-eval tools/xirang-chain-eval-graph.py tools/xirang-chain-eval-mutate.py tools/xirang-chain-eval-ask.py tools/xirang-chain-eval-judge.py tools/xirang-chain-eval-repair.py docs/audit-2026-09-29/audit-chain-eval.md   # 家目录的具体路径不该写进脚本，扫的是它
 scan exit 1 (1 = no machine-specific path)
 ```
 
@@ -1870,9 +1870,9 @@ scan exit 1 (1 = no machine-specific path)
 观察点与链上每个节点都要求名字全树唯一（否则"点名"有歧义，量的就不是深度了）。于是 CG 的
 "50 条无法核实"里那一类真实难题（常见名 `new` 有 142 个定义）在这套评测里没有被评。
 
-**⑪ 副本里没有 `.nichlink` 产物，所以我们的 MCP 全程走的是"源码推导"这条路。**
+**⑪ 副本里没有 `.xirang` 产物，所以我们的 MCP 全程走的是"源码推导"这条路。**
 `git archive` 不含未跟踪的构建产物，成员状态因此全是 `not built`（答案原文：
-`cannot read …/target/nichlink/out/source_scope.tsv`）。这既让答案更啰嗦（每个成员一行状态），
+`cannot read …/target/xirang/out/source_scope.tsv`）。这既让答案更啰嗦（每个成员一行状态），
 也让"先读已发布记录"那条产品路径没有在这套评测里被走到。
 
 **⑫ 评测的树是固定修订，不是评测时刻的 HEAD。**

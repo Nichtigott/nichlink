@@ -10,7 +10,7 @@
 use std::fs;
 use std::path::Path;
 
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use crate::build_method::face_syntax_check::parsed_face;
 use crate::build_method::{FaceSource, relative_display};
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn plugin_declaring_face_is_detected_from_source_text() {
         let root = std::env::temp_dir().join(format!(
-            "nichlink-forced-roots-{}-{}",
+            "xirang-forced-roots-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

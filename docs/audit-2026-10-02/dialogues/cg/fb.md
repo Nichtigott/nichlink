@@ -38,7 +38,7 @@ Design (following `toolchain/tests/runtime_face_preset_parts.rs`):
 
 In `src/control/object/button/button.rs`:
 ```rust
-use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
+use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
 
 /// Button 的内部结构：它自己声明的那一层零件。
 /// The Button's internal structure: the parts layer it declares for itself.
@@ -206,9 +206,9 @@ Let me write the files.
 ```
 **examples/tree.rs** — 11 lines, 1 symbol · no other indexed file depends on it
 
-1	//! 运行 `cargo run -p nichlink-example-control-button --example tree` 打印示例的
+1	//! 运行 `cargo run -p xirang-example-control-button --example tree` 打印示例的
 2	//! 注册树。
-3	//! Run `cargo run -p nichlink-example-control-button --example tree` to print the
+3	//! Run `cargo run -p xirang-example-control-button --example tree` to print the
 4	//! example's registration tree.
 5	
 6	fn main() {
@@ -273,12 +273,12 @@ Let me write the files.
 44	#[test]
 45	#[ignore = "runs a separate cargo build; CI runs it explicitly"]
 46	fn the_ide_mirror_type_checks_with_nested_faces() {
-47	    let target = std::env::temp_dir().join("nichlink-ide-mirror-target");
+47	    let target = std::env::temp_dir().join("xirang-ide-mirror-target");
 48	    // The nested-face host is the one that failed; the mirror-only host guards
 49	    // the other direction, where a face declares no registry to own.
 50	    // 嵌套面宿主是失败的那一个；只有镜像的宿主守住另一侧——注册面没有注册机可拥有。
-51	    check_under_rust_analyzer("nichlink-example-control-button", &target);
-52	    check_under_rust_analyzer("nichlink-example-control-button-graft", &target);
+51	    check_under_rust_analyzer("xirang-example-control-button", &target);
+52	    check_under_rust_analyzer("xirang-example-control-button-graft", &target);
 53	}
 54
 ```
@@ -295,7 +295,7 @@ Let me write the files.
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};
 6	
 7	pub struct Button;
 8	
@@ -375,11 +375,11 @@ Compiling proc-macro2 v1.0.107
    Compiling memchr v2.8.3
    Compiling itoa v1.0.18
    Compiling syn v2.0.119
-   Compiling nichlink-kernel v0.2.0 (/home/nich/Moirai_N3/nichlink/kernel)
-   Compiling nichlink-macro v0.2.0 (/home/nich/Moirai_N3/nichlink/macro)
-   Compiling nichlink-toolchain v0.2.0 (/home/nich/Moirai_N3/nichlink/toolchain)
-   Compiling nichlink-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/carrier/control-button-graft)
-   Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
+   Compiling xirang-kernel v0.2.0 (/home/nich/Moirai_N3/nichlink/kernel)
+   Compiling xirang-macro v0.2.0 (/home/nich/Moirai_N3/nichlink/macro)
+   Compiling xirang-toolchain v0.2.0 (/home/nich/Moirai_N3/nichlink/toolchain)
+   Compiling xirang-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/carrier/control-button-graft)
+   Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
     Finished `test` profile [unoptimized + debuginfo]
 …[输出：此处截断，全文 3958 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
@@ -394,9 +394,9 @@ root/control/slider  kind=Slider  source=control/object/slider/slider.rs
 
 **非桥 3**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb cargo test --offline > /tmp/fb_after.out 2>&1; rc=$?; cat /tmp/fb_after.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
 error[E0271]: type mismatch resolving `<NoParts as PartsContract>::Output == ButtonParts`
-   --> /home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/build/nichlink-example-control-button-3c4e9e23aa54373b/out/generated_lib.rs:154:121
+   --> /home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/build/xirang-example-control-button-3c4e9e23aa54373b/out/generated_lib.rs:154:121
     |
 154 | ...bject::button::__Preset, control_button_graft::button_fast::__Parts>();
     |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `ButtonParts`, found `()`
@@ -412,7 +412,7 @@ note: required by a bound in `assert_contract`
 **非桥 4**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb cargo run --offline -q --example tree > /tmp/fb_tree_after.txt 2>&1; rc=$?; cat /tmp/fb_tree_after.txt; exit $rc`
 ```
 error[E0271]: type mismatch resolving `<NoParts as PartsContract>::Output == ButtonParts`
-   --> /home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/build/nichlink-example-control-button-3c4e9e23aa54373b/out/generated_lib.rs:154:121
+   --> /home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/build/xirang-example-control-button-3c4e9e23aa54373b/out/generated_lib.rs:154:121
     |
 154 | ...bject::button::__Preset, control_button_graft::button_fast::__Parts>();
     |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `ButtonParts`, found `()`
@@ -430,7 +430,7 @@ note: required by a bound in `assert_contract`
 
 **非桥 5**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb cargo test --offline > /tmp/fb_after.out 2>&1; rc=$?; cat /tmp/fb_after.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.74s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/deps/control_button-ae8520d232bed415)
 
@@ -459,7 +459,7 @@ root/control/slider  kind=Slider  source=control/object/slider/slider.rs
 
 **非桥 7**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb cargo test --offline --all-features > /tmp/fb_all.out 2>&1; rc=$?; cat /tmp/fb_all.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.82s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/deps/control_button-ae8520d232bed415)
 
@@ -480,7 +480,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 **非桥 8**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb cargo test --offline --all-features > /tmp/fb_final.out 2>&1; rc=$?; cat /tmp/fb_final.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fb)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.80s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/deps/control_button-ae8520d232bed415)
 
@@ -534,10 +534,10 @@ Simplest: use `sed`/`python3 -i` (in-place edits) via bash for the 4 files (fb/g
 Let me construct the patch with python3 (line-based insertion) for precision:
 
 For button.rs:
-- After the line `use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};` → replace with the multi-line import including PartsContract, PresetContract.
+- After the line `use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};` → replace with the multi-line import including PartsContract, PresetContract.
   New: 
   ```
-  use nichlink_toolchain::runtime::{
+  use xirang_toolchain::runtime::{
       ContractId, FlowContract, PartsContract, PresetContract, NON_EMPTY_TEXT,
   };
   ```
@@ -563,8 +563,8 @@ Note the exact indentation/content. Let me write the script with explicit anchor
 ```python
 p = 'trees/fb/src/control/object/button/button.rs'
 s = open(p).read()
-old_use = "use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};"
-new_use = "use nichlink_toolchain::runtime::{\n    ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract,\n};"
+old_use = "use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};"
+new_use = "use xirang_toolchain::runtime::{\n    ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract,\n};"
 assert old_use in s
 s = s.replace(old_use, new_use)
 block = '''/// Button 的内部结构：它由哪些零件构成。
@@ -607,7 +607,7 @@ Careful: the `control_object!` block in button.rs starts with `crate::control_ob
 
 Hmm, one thing: the macro invocation `crate::control_object!` — is it the same as `__control_object!`? There's a wrapper `control_object!` that probably passes `collector`/source. Fine.
 
-Also: `PartsContract`/`PresetContract` — are they exported at `nichlink_toolchain::runtime::`? The toolchain's test used `nichlink_toolchain::runtime::PresetContract` ✓ and `nichlink_toolchain::runtime::PartsContract` ✓.
+Also: `PartsContract`/`PresetContract` — are they exported at `xirang_toolchain::runtime::`? The toolchain's test used `xirang_toolchain::runtime::PresetContract` ✓ and `xirang_toolchain::runtime::PartsContract` ✓.
 
 For registry.rs, let me write the replacement test:
 
@@ -632,7 +632,7 @@ Now implementing the internal layer in **fb** (baseline first, then patch):
 
 **调用** `bash`（step 42）：
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\nimport io\np = 'trees/fb/src/control/object/button/button.rs'\ns = open(p, encoding='utf-8').read()\nold_use = \"use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};\"\nnew_use = \"use nichlink_toolchain::runtime::{\\n    ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract,\\n};\"\nassert old_use in s\ns = s.replace(old_use, new_use, 1)\nblock = '''/// Button 的内部结构：这个对象由哪些零件构成。\n/// The Button's internal structure: the parts this object is made of.\n///\n/// 这一层只进 `REGISTRATION.contract`（`preset` 要求什么、`parts` 供应什么），\n/// 不进 `NodeId`（namespace + 相对源码路径 + kind），也不改公开路径。\npub struct ButtonParts {\n    /// The label this face carries.\n    /// 本面携带的 label。\n    pub label: String,\n}\n\n/// 造一个 Button 所需的零件：一个 label。\n/// The parts a Button requires: one label.\npub struct ButtonPreset;\n\nimpl PresetContract for ButtonPreset {\n    type Output = ButtonParts;\n    const REQUIRED_PARTS: &'static [&'static str] = &[\"label\"];\n}\n\nimpl PartsContract for ButtonParts {\n    type Output = ButtonParts;\n    const PROVIDED_PARTS: &'static [&'static str] = &[\"label\"];\n}\n\n'''\nanchor = \"crate::control_object! {\"\nassert anchor in s\ns = s.replace(anchor, block + anchor, 1)\nold_kind = \"    kind: Button,\\n\"\nnew_kind = \"    kind: Button,\\n    preset: ButtonPreset,\\n    parts: ButtonParts,\\n\"\nassert old_kind in s\ns = s.replace(old_kind, new_kind, 1)\nopen(p, 'w', encoding='utf-8').write(s)\n\np2 = 'trees/fb/tests/registry.rs'\nr = open(p2, encoding='utf-8').read()\nstart = r.index('/// 自定义 `handle` 且省略')\nend = r.index('/// 叶子面以自身名字载入')\nnew_block = '''/// 省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的\n/// `\"$crate :: NoPreset\"` 字面 token；**声明**了二者的面则必须原样记录作者写下的名字，\n/// 并让合同读同一批类型。后者正是 `Button` 这一层内部结构的落点：它不动任何路径，只动\n/// 记录里的构造合同。\n/// A face that omits `preset`/`parts` must record the plain default names, not the\n/// expanded `\"$crate :: N
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\nimport io\np = 'trees/fb/src/control/object/button/button.rs'\ns = open(p, encoding='utf-8').read()\nold_use = \"use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};\"\nnew_use = \"use xirang_toolchain::runtime::{\\n    ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract,\\n};\"\nassert old_use in s\ns = s.replace(old_use, new_use, 1)\nblock = '''/// Button 的内部结构：这个对象由哪些零件构成。\n/// The Button's internal structure: the parts this object is made of.\n///\n/// 这一层只进 `REGISTRATION.contract`（`preset` 要求什么、`parts` 供应什么），\n/// 不进 `NodeId`（namespace + 相对源码路径 + kind），也不改公开路径。\npub struct ButtonParts {\n    /// The label this face carries.\n    /// 本面携带的 label。\n    pub label: String,\n}\n\n/// 造一个 Button 所需的零件：一个 label。\n/// The parts a Button requires: one label.\npub struct ButtonPreset;\n\nimpl PresetContract for ButtonPreset {\n    type Output = ButtonParts;\n    const REQUIRED_PARTS: &'static [&'static str] = &[\"label\"];\n}\n\nimpl PartsContract for ButtonParts {\n    type Output = ButtonParts;\n    const PROVIDED_PARTS: &'static [&'static str] = &[\"label\"];\n}\n\n'''\nanchor = \"crate::control_object! {\"\nassert anchor in s\ns = s.replace(anchor, block + anchor, 1)\nold_kind = \"    kind: Button,\\n\"\nnew_kind = \"    kind: Button,\\n    preset: ButtonPreset,\\n    parts: ButtonParts,\\n\"\nassert old_kind in s\ns = s.replace(old_kind, new_kind, 1)\nopen(p, 'w', encoding='utf-8').write(s)\n\np2 = 'trees/fb/tests/registry.rs'\nr = open(p2, encoding='utf-8').read()\nstart = r.index('/// 自定义 `handle` 且省略')\nend = r.index('/// 叶子面以自身名字载入')\nnew_block = '''/// 省略 `preset`/`parts` 的面必须记录朴素的默认名，而不是展开后的\n/// `\"$crate :: NoPreset\"` 字面 token；**声明**了二者的面则必须原样记录作者写下的名字，\n/// 并让合同读同一批类型。后者正是 `Button` 这一层内部结构的落点：它不动任何路径，只动\n/// 记录里的构造合同。\n/// A face that omits `preset`/`parts` must record the plain default names, not the\n/// expanded `\"$crate :: N
 …[参数：此处截断，全文 3555 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -692,7 +692,7 @@ Adopting the captain's corrections. Continuing with **fb**'s internal layer:
 ```
 
 **同一步并行发出的其它调用**：
-- `bash` → 归属 fb：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\nimport io\np = 'trees/fb/src/control/object/button/button.rs'\ns = open(p, encoding='utf-8').read()\nold_use = \"use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};\"\nnew_use = \"use nichlink
+- `bash` → 归属 fb：`{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\nimport io\np = 'trees/fb/src/control/object/button/button.rs'\ns = open(p, encoding='utf-8').read()\nold_use = \"use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};\"\nnew_use = \"use xirang
 …[参数：此处截断，全文 3555 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `bash`（step 43）：
@@ -710,7 +710,7 @@ fb test rc=101
 < root/control/slider  kind=Slider  source=control/object/slider/slider.rs
 ---
 > error[E0271]: type mismatch resolving `<NoParts as PartsContract>::Output == ButtonParts`
->    --> /home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/build/nichlink-example-control-button-3c4e9e23aa54373b/out/generated_lib.rs:154:121
+>    --> /home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fb/debug/build/xirang-example-control-button-3c4e9e23aa54373b/out/generated_lib.rs:154:121
 >     |
 > 154 | ...bject::button::__Preset, control_button_graft::button_fast::__Parts>();
 >     |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `ButtonParts`, found `()`
@@ -725,7 +725,7 @@ fb test rc=101
 >     |                      ^^^^^^^^^^^^^^^^^^ required by this bound in `assert_contract`
 > 
 > For more information about this error, try `rustc --explain E0271`.
-> error: could not compile `nichlink-example-control-button` (lib) due to 1 previous error
+> error: could not compile `xirang-example-control-button` (lib) due to 1 previous error
 [exit code: 1]
 ```
 

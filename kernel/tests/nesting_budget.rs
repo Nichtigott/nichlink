@@ -35,9 +35,9 @@
 
 // The guard only exists with the parser, so the whole file is gated with it. A
 // whole-workspace build enables `syntax` through the other members; a bare
-// `cargo test -p nichlink-core` does not, and then this file has nothing to say.
+// `cargo test -p xirang-core` does not, and then this file has nothing to say.
 // 守卫只随解析器存在，因此整个文件与之同门控。整工作区构建会经其他成员打开 `syntax`；
-// 单跑 `cargo test -p nichlink-core` 不会，那时本文件无话可说。
+// 单跑 `cargo test -p xirang-core` 不会，那时本文件无话可说。
 #![cfg(feature = "syntax")]
 
 use std::path::{Path, PathBuf};
@@ -90,7 +90,7 @@ fn inspect(files: &[PathBuf]) -> (Vec<String>, Vec<String>) {
         // reject a file this repository ships.
         // 不是注册面源码的文件允许解析失败：绝不允许发生的是**嵌套**拒绝，因为那意味着守卫会
         // 拒绝一个本仓库出厂的文件的。
-        if let Err(error) = nichlink_kernel::registry_core::syntax::parse_faces(&text) {
+        if let Err(error) = xirang_kernel::registry_core::syntax::parse_faces(&text) {
             let message = error.to_string();
             if message.contains(REFUSAL) {
                 refused.push(format!("{}: {message}", path.display()));
@@ -125,7 +125,7 @@ fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
     // 退出了，于是它守的承诺有两个批次无人检查，而测试一直报成功。
     if !root.join("kernel").is_dir() || !root.join("toolchain").is_dir() {
         eprintln!(
-            "skipping: {} is not a NichLink checkout; this gate is about that repository",
+            "skipping: {} is not a XiRang checkout; this gate is about that repository",
             root.display()
         );
         return;
@@ -167,7 +167,7 @@ fn no_source_in_this_workspace_is_refused_by_the_nesting_guard() {
 #[test]
 fn a_file_that_cannot_be_read_is_reported() {
     let path = std::env::temp_dir().join(format!(
-        "nichlink-nesting-unreadable-{}-{}.rs",
+        "xirang-nesting-unreadable-{}-{}.rs",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

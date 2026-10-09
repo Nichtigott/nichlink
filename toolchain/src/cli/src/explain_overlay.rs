@@ -68,10 +68,10 @@ pub(super) fn overlay_report(
         .flatten();
     let declared = declared_grafts(manifest);
     // The traversal itself belongs to `crate::build_method::overlay_projection`,
-    // because the MCP bridge's `nichlink.explain {"overlay": true}` asks the same
+    // because the MCP bridge's `xirang.explain {"overlay": true}` asks the same
     // question; this page only renders the rows it returns.
     // 遍历本身属于 `crate::build_method::overlay_projection`，因为 MCP 桥的
-    // `nichlink.explain {"overlay": true}` 问的是同一个问题；本页只渲染它返回的行。
+    // `xirang.explain {"overlay": true}` 问的是同一个问题；本页只渲染它返回的行。
     let projection = match crate::build_method::overlay_projection(
         manifest,
         faces,
@@ -138,7 +138,7 @@ pub(super) fn overlay_report(
 
     if json_output {
         let report = json!({
-            "schema": "nichlink.explain-overlay/1",
+            "schema": "xirang.explain-overlay/1",
             "kind": "static-projection",
             "entry": entry,
             "entry_error": entry_error,
@@ -176,7 +176,7 @@ pub(super) fn overlay_report(
     } else {
         writeln!(
             out,
-            "  scope: unknown; run `nichlink check` to publish source_scope.tsv"
+            "  scope: unknown; run `xirang check` to publish source_scope.tsv"
         )
         .map_err(write_error)?;
     }

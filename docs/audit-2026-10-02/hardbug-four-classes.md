@@ -2,7 +2,7 @@
 
 ## 一、四道 bug 测试的内容（配方 · 症状 · 正解 · 必须拒绝的捷径）
 
-来源 `tools/nichlink-mcp-hardbug plan`（每类的真值由**注入构造**给出，住在树的 `.audit/` 里，题面不指向它 ✓）。
+来源 `tools/xirang-mcp-hardbug plan`（每类的真值由**注入构造**给出，住在树的 `.audit/` 里，题面不指向它 ✓）。
 
 ### 1. `h1-supply-chain` 供应链驳杂
 - **注入**：同族里**一个兄弟调用了与其余兄弟不同的那一族名字** ✓（`toggle` 调 `to_world`，其余 8 个调 `to_local`）。

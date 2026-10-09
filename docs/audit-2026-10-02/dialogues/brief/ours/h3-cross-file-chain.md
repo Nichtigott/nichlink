@@ -16,7 +16,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host
 tree   14 rust file(s), 24 function(s)
 elapsed 23211 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/target/xirang/out/check-default.log
 exit   101
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -33,7 +33,7 @@ census: 0 named numeric constant(s); a static fact about this tree, not a verdic
   decl   no test names `offset` (src/control/object/badge/badge.rs:15)
   not covered: the reachability column (dynamic dispatch, function pointers, FFI, macro expansion, trait methods and closures are invisible; matching is by name; `main` is never listed) · the branch column (no data-dependent condition is judged, `false` is the only guard literal decided, a `pub` enum is never judged, and a construction this tree does not spell would falsify a row) · this census (string constants, structural duplication, runtime behaviour and claims written in prose are outside it). A static read of the source text, not a coverage measurement; `census: true` and `--list check` have the full text
 … truncated: 9 of 18 census rows withheld at the limit of 5; pass `census: true` for the whole table (every column head is already here with its count)
-evidence nichlink.check {"face":"default","timeout_ms":900000} → exit 0
+evidence xirang.check {"face":"default","timeout_ms":900000} → exit 0
 
 ```
 
@@ -60,8 +60,8 @@ Root cause (file:line): the
 
 **工具返回**：
 ```
-namespace nichlink-example-control-button
-tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/target/nichlink/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/target/nichlink/out/source_scope.tsv: No such file or directory (os error 2))
+namespace xirang-example-control-button
+tree derived now (no published records at /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/target/xirang/out; cannot read /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/target/xirang/out/source_scope.tsv: No such file or directory (os error 2))
 faces 10
 root/control                             Control        control/control.rs                     fb97ddd5f2b803d1b7f40a776d8a22d9
 root/control/badge                       Badge          control/object/badge/badge.rs          f930da08aeaaffc0d35a3a6fd11751ab
@@ -74,7 +74,7 @@ root/control/spinner                     Spinner        control/object/spinner/s
 root/control/timeline                    Timeline       control/object/timeline/timeline.rs    3c26ff3d25859d5981245bd179c9bb43
 root/control/toggle                      Toggle         control/object/toggle/toggle.rs        4dbbd3f9fbf51458e863ff8e25bdbef8
 next   `explain {node}` for one face's contract, `check {face}` for whether it builds
-evidence nichlink.registry {} → exit 0
+evidence xirang.registry {} → exit 0
 
 ```
 
@@ -88,14 +88,14 @@ at src/control/object/dial/dial.rs:15 — the definition `offset` (lines 15-17)
   siblings   8 file(s) under src/control/object define `offset` too: src/control/object/badge/badge.rs, src/control/object/button/button.rs, src/control/object/gauge/gauge.rs, src/control/object/panel/panel.rs, src/control/object/slider/slider.rs, src/control/object/spinner/spinner.rs, src/control/object/timeline/timeline.rs, src/control/object/toggle/toggle.rs — a change here is a change to the family (`consistency --parent` compares their declared shapes)
   callers    0 in this root
   pins       no test names `offset` — nothing pins this, so a change here is unverified until something does
-  adoption   no ledger at .nichlink/adopted/entries in this root
+  adoption   no ledger at .xirang/adopted/entries in this root
   gate       no `#[cfg]` attribute sits directly above this definition at src/control/object/dial/dial.rs:15 (a gate on the enclosing module is not read here)
-  scope      scope unknown (no source_scope.tsv; run `nichlink check`)
-  pruning    pruning unknown (no pruning_manifest.tsv; run `nichlink check`)
+  scope      scope unknown (no source_scope.tsv; run `xirang check`)
+  pruning    pruning unknown (no pruning_manifest.tsv; run `xirang check`)
   wiring     no declared cut in /home/nich/Moirai_N3/nichlink/target/round9/trees/h3-cross-file-chain/host/src/lib.rs names `root/control/dial` — the entry declares 8 cut(s), and a face no cut names is one the build replaces with nothing (`grafts` lists them)
 not covered here: how a grafted subtree looks at runtime (ask `trace`), and whether the declarations above describe the tree **as it is now** — the scope and pruning lines are the build's own output, and a tree built before the last edit says so on the `scope` line
 next   `check {face}` to run the face that compiles it, `grafts` for every declared cut, `locate {symptom}` for sibling places to compare it with
-evidence nichlink.why {"at":"src/control/object/dial/dial.rs:15"} → exit 0
+evidence xirang.why {"at":"src/control/object/dial/dial.rs:15"} → exit 0
 
 ```
 
@@ -106,7 +106,7 @@ evidence nichlink.why {"at":"src/control/object/dial/dial.rs:15"} → exit 0
 root cause — `src/lib.rs:48-66` 的 `static_graft_plan!`：它声明了 **8 个 cut**（button `:50`、slider `:52`、timeline `:54`、gauge `:56`、toggle `:58`、spinner `:60`、panel `:62`、badge `:64`），**没有 dial 的那一条**；缺的正是 `:65`（badge 的 graft 行）与 `:66`（`);`）之间应当追加的 `cut(crate::control::object::dial::NODE_ID) graft(control_button_graft::dial_fast::NODE_ID),`。
 mechanism — 构建期作用域从入口推导：`cut` 是"强制存活根"，作用域保留的**恰好是切口命名的子树**（`toolchain/src/build_time/src/scope.rs:249-318`；宿主自己的文档也这么写，`src/lib.rs:36-43`："the build-time scope narrows to the subtrees these cuts name: a face nobody declared is not shipped by this application"）。dial 的源码在（`src/control/object/dial/dial.rs`，`registry` 也把它当**派生树**里的第 10 个面列出），但没有任何切口点名它 ⇒ 生成的发布树不挂载它 ⇒ `outline()`（`src/lib.rs:69-95`）里没有 `root/control/dial` ⇒ `tests/shipped.rs:8-23` 按名字逐个断言时 `dial` 落空。
 evidence — ① `cargo test --offline`（root=h3-cross-file-chain/host，exit **101**）：`every_declared_widget_ships ... FAILED`，panic 在 `tests/shipped.rs:19`：`` `dial` is declared and does not ship; the tree is: `` 后列出 9 行（control + badge/button/gauge/panel/slider/spinner/timeline/toggle，**无 dial**）。
-② `check {face:default}` → `verdict failed (cargo exit 101)`，同一条（log `…/host/target/nichlink/out/check-default.log`）。
+② `check {face:default}` → `verdict failed (cargo exit 101)`，同一条（log `…/host/target/xirang/out/check-default.log`）。
 ③ `registry` → `faces 10`，其中含 `root/control/dial Dial control/object/dial/dial.rs e1070833…` ⇒ 源码侧没问题，差的是**发布**那一步。
 ④ `why {at:src/control/object/dial/dial.rs:15}` → `wiring no declared cut in …/host/src/lib.rs names root/control/dial — the entry declares 8 cut(s), and a face no cut names is one the build replaces with nothing`；同一回复还说 `siblings 8 file(s) … define offset too`、`callers 0 in this root`、`pins no test names offset`。
 ⑤ 外部实现**已经在了**：`graft/src/dial_fast.rs` 存在，`graft/src/lib.rs:17` 声明 `pub mod dial_fast;`，`:32` 把 `dial_fast::REGISTRATION` 放进 `external_registry()` ⇒ 缺口只在宿主入口的计划里。

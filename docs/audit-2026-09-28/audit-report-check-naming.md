@@ -60,7 +60,7 @@
 - **正文全量锚点扫描 525 条**（t24 时 450 条；新增 75 条来自命名节与 §7.5）：
   - 文件不存在 **0**、行号越界 **0**；
   - `AMBIGUOUS` 2 次命中同一条：原文写作裸路径 `control/control.rs` 并带行号 43（出现在两处）——§1.5 的排除项 ① 已点名它、正文也标注为 `/tmp` 探针包内相对路径，且我已核过两个工作树候选分别只有 39/32 行、**不含第 43 行**（t24 结论沿用）→ 门禁规则（多候选→跳过）下不算违规 ✓；
-  - **配对 token 不符 1 条**（`audit-report.md:1339`）：`` 类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:50`、`:52`） `` —— 该宏的调用在**第 48 行**（`examples/control-button/src/lib.rs:48` `nichlink_run_method::static_graft_plan!(`），50/52 行是它的两个 `cut(...)` 实参。按 `conventions/src/doc_anchors.rs` 的配对规则（token 必须出现在所引行/区间内），这是一处不成立的引用；它与 t22 报的 K5、t23 修掉的 `CallTreeMemo` 属**同一类**（这次是新引入的）。
+  - **配对 token 不符 1 条**（`audit-report.md:1339`）：`` 类型化 `static_graft_plan!`（`examples/control-button/src/lib.rs:50`、`:52`） `` —— 该宏的调用在**第 48 行**（`examples/control-button/src/lib.rs:48` `xirang_run_method::static_graft_plan!(`），50/52 行是它的两个 `cut(...)` 实参。按 `conventions/src/doc_anchors.rs` 的配对规则（token 必须出现在所引行/区间内），这是一处不成立的引用；它与 t22 报的 K5、t23 修掉的 `CallTreeMemo` 属**同一类**（这次是新引入的）。
     - 注：本版 §1.5 的自我声明只承诺"**可解析**"（文件存在 + 行号在界内），因此它**没有**被这句自述直接证伪；但配对写法本身就是"这个 token 在这几行上"的断言，读者按它去核会落空。
     - 最小修法：把该处引用改成 `examples/control-button/src/lib.rs:48`（宏调用所在行）或 `:48-54`（整段调用）；一词级改动。
 - **§1.5 的排除项确实被扩大**，我逐类判定：
@@ -68,7 +68,7 @@
   - ② **新增**「命名专项里的模式化文件名」（`meta.nam_pattern_tokens` 17 条，如 `<x>/<x>.rs`、`app/<module>.rs`、`*_tests.rs`）：**合理且已声明**——它们是谓词 P1–P8 的输入**模式**，不是路径；而且这类 token 多数没有行号，本来就不会被门禁当锚点。抽查该清单与命名节里的用法一致。
   - ③ **新增**「§8 条目里少数文件级定位（`path:1`）」：**目前是空集**——我在正文里没有找到"指向目录的 `:1` 锚点"这一类形状（我的全量扫描里没有这类失败）；也就是说 ③ 只是预防性声明，既没有隐藏真锚点、也没有可指认的实例。建议要么删掉 ③，要么给出它实际覆盖的那几条 id（否则读者无法核）。
   - **结论**：扩大**没有掩盖本轮那条真缺陷**（我的扫描在排除项之外仍然抓到了 `:1339`），因此不属于"用排除项洗白"。
-- **随机 10 条 `file`/`line`**（seed=20260928）：`NAM-19`→`studio/src/studio/app/tests/project.rs:1`、`GTE-G-09`→`tools/nichlink-publish:101`、`KRN-C-10`→`core/src/registry_core/mir/model.rs:28`、`NAM-20`→`mcp/src/index.rs:1`、`LGC-LG-09`→`build_method/src/pipeline.rs:155`、`KRN-K-15`→`core/src/registry_core/mir/jsonl.rs:111`、`LGC-LG-25`→`conventions/src/release_workflow.rs:96`、`STU-C-02`→`studio/src/studio/app/writers.rs:1`、`STU-S-06`→`studio/src/studio/app/search_queries.rs:74`、`NAM-01`→`studio/src/studio/app/support.rs:1`：**10/10 命中且行号在界内**。
+- **随机 10 条 `file`/`line`**（seed=20260928）：`NAM-19`→`studio/src/studio/app/tests/project.rs:1`、`GTE-G-09`→`tools/xirang-publish:101`、`KRN-C-10`→`core/src/registry_core/mir/model.rs:28`、`NAM-20`→`mcp/src/index.rs:1`、`LGC-LG-09`→`build_method/src/pipeline.rs:155`、`KRN-K-15`→`core/src/registry_core/mir/jsonl.rs:111`、`LGC-LG-25`→`conventions/src/release_workflow.rs:96`、`STU-C-02`→`studio/src/studio/app/writers.rs:1`、`STU-S-06`→`studio/src/studio/app/search_queries.rs:74`、`NAM-01`→`studio/src/studio/app/support.rs:1`：**10/10 命中且行号在界内**。
 
 ## 6. HTML —— **通过**
 

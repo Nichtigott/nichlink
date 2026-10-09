@@ -8,7 +8,7 @@
 
 use crate::control::object::node_editor::object::{MIN_CANVAS_WIDTH, clamp_canvas_width};
 use crate::control::{ControlFrame, ControlHandle};
-use nichlink_run_method::{ContractId, FlowContract};
+use xirang_run_method::{ContractId, FlowContract};
 
 /// NodeEditor 交给子对象的绘制结果。
 /// The frame NodeEditor hands to its children for painting.

@@ -4,17 +4,17 @@
 use std::cell::RefCell;
 use std::sync::OnceLock;
 
-pub use nichlink_kernel::registry_core::identity::NodeId;
+pub use xirang_kernel::registry_core::identity::NodeId;
 
 /// Version of the identity input and persisted catalog formats.
 /// 身份输入与持久化目录格式的版本。
 ///
 /// The kernel owns the value: a build that carried its own copy could accept a
-/// `NICH_LINK_SCOPE` or a plugin lock the kernel rejects, or the other way
+/// `XIRANG_SCOPE` or a plugin lock the kernel rejects, or the other way
 /// round, with no compiler noticing.
-/// 该值由内核拥有：构建若自带一份副本，就可能接受内核拒绝的 `NICH_LINK_SCOPE`
+/// 该值由内核拥有：构建若自带一份副本，就可能接受内核拒绝的 `XIRANG_SCOPE`
 /// 或插件锁（反之亦然），而编译器不会察觉。
-pub use nichlink_kernel::registry_core::identity::IDENTITY_SCHEMA;
+pub use xirang_kernel::registry_core::identity::IDENTITY_SCHEMA;
 
 /// Explicit namespace for standalone runs (CLI, tests). Cargo build scripts
 /// read `CARGO_PKG_NAME` from the environment instead.
@@ -91,7 +91,7 @@ impl Drop for RestoreNamespace {
 /// 失配、诊断渲染为空。
 #[cfg(test)]
 pub(crate) fn freeze_test_namespace() {
-    set_package_namespace("nichlink-toolchain-tests".to_owned());
+    set_package_namespace("xirang-toolchain-tests".to_owned());
 }
 
 /// Return the namespace of the package whose build script is currently running.
@@ -99,9 +99,9 @@ pub(crate) fn freeze_test_namespace() {
 ///
 /// Cargo exposes the consuming package name to a build-script process. Using
 /// that value keeps build-time identities byte-for-byte compatible with the
-/// `crate::NICHLINK_NAMESPACE` value the declaration macros read, which `host!()` defines from `env!("CARGO_PKG_NAME")` (audit `M7`, P3.3).
+/// `crate::XIRANG_NAMESPACE` value the declaration macros read, which `host!()` defines from `env!("CARGO_PKG_NAME")` (audit `M7`, P3.3).
 /// Cargo 把消费方包名暴露给构建脚本进程。使用该值让构建期身份与声明宏捕获的
-/// `crate::NICHLINK_NAMESPACE` 逐字节一致——那个常量由 `host!()` 用 `env!("CARGO_PKG_NAME")` 定义（审计 `M7`，P3.3）。
+/// `crate::XIRANG_NAMESPACE` 逐字节一致——那个常量由 `host!()` 用 `env!("CARGO_PKG_NAME")` 定义（审计 `M7`，P3.3）。
 ///
 /// An in-process run's namespace wins over both the pinned override and
 /// `CARGO_PKG_NAME`; see [`IN_PROCESS_NAMESPACE`].
@@ -114,7 +114,7 @@ pub fn package_namespace() -> String {
         .get()
         .cloned()
         .unwrap_or_else(|| {
-            std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "nichlink.default".to_owned())
+            std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "xirang.default".to_owned())
         })
 }
 
@@ -173,11 +173,11 @@ mod tests {
     ///
     /// Measured failure this exists against: a second `check_for` in one process
     /// was ignored by the first-write-wins pin, so its pruning manifest was
-    /// stamped with the *first* package's namespace and `nichlink.diff` reported
+    /// stamped with the *first* package's namespace and `xirang.diff` reported
     /// every face as re-identified (`ba9a8808…` for the run, `77fc3680…` for the
     /// sources, measured on this fixture).
     /// 这条测试针对的实测失败：进程内第二次 `check_for` 被"先到先得"的固定值忽略，于是它的剪枝清单
-    /// 盖上了**第一个**包的命名空间，`nichlink.diff` 把每个面都报成身份变了（本夹具上实测为运行侧
+    /// 盖上了**第一个**包的命名空间，`xirang.diff` 把每个面都报成身份变了（本夹具上实测为运行侧
     /// `ba9a8808…`、源码侧 `77fc3680…`）。
     ///
     /// The assertions read the active namespace rather than the process answer,

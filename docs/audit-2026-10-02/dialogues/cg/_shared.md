@@ -274,7 +274,7 @@ Also for g1's "看不见什么":
 - 看不到限定路径调用（`ledger_core::audit::audit_count`）→ 工具把这条边漏了（实证：callees 该测试只给出 Entry::new）。
 - 看不到 feature 面：`#[cfg(feature="audit")]` 是构建期事实，静态图不区分面。
 - 看不到 trait 对象/动态派发后的目标、宏生成的调用、函数指针/闭包间接调用（工具声称 linking dynamic dispatch，但覆盖有限）。
-- 看不到运行时才发生的调用（e.g. 通过字符串/注册表驱动的调用，比如 nichlink 的注册面）。
+- 看不到运行时才发生的调用（e.g. 通过字符串/注册表驱动的调用，比如 xirang 的注册面）。
 - 看不到只有 cargo test 某 target 才编译的测试（`#[cfg(test)]` 模块、集成测试 target、feature 门）。
 - 也看不到"测试是否真的会失败"——没有断言强度分析。
 
@@ -706,8 +706,8 @@ error: test failed, to rerun pass `--test offsets`
 === NONBRIDGE-BYTES: 1029
 === EXIT: 101
 ===== h3 =====
-   Compiling nichlink-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/graft)
-   Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/host)
+   Compiling xirang-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/graft)
+   Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h3-cross-file-chain/host)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 2.43s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target/debug/deps/control_button-ec43ad9ac874301c)
 
@@ -824,7 +824,7 @@ Created file
 ### step 68（turn 1）· `write`
 
 ```
-{"content": "# BATCHING — 哪些题共享了哪一次调用（逐行）\n\n## A. 共享的 **nonbridge** 调用（输出全部落盘，可逐字复核）\n\n| # | 调用（完整命令） | 服务的题 | 输出 | 原文在哪 |\n| --- | --- | --- | --- | --- |\n| 1 | `diff -r -x .codegraph s1 <v>`（v＝s2,s3,s4,s5,s6,s7,s8，一条命令里 7 次 diff） | **s2 · s3 · s4 · s5 · s6 · s7 · s8** | 约 1.1 KB | `logs/_shared.txt` |\n| 2 | `diff -r -x .codegraph trees/s1 trees/g4` | **g4** | 229 B | `logs/g4.txt` |\n| 3 | `sha256sum button/button.rs panel/panel.rs` + 对 8 个兄弟逐个 `diff button/button.rs <o>/<o>.rs` | **h2-claim-unkept** | 约 1.2 KB | `logs/h2-claim-unkept.txt` |\n| 4 | `node /tmp/copycheck.mjs`（15 棵副本的 base 哈希复核，TREES.json 算法） | **15 题全用**（同树性判据） | 1.5 KB | `logs/_shared.txt` |\n| 5 | `node /tmp/treecheck.mjs`（24 棵原件哈希 vs TREES.json） | 装置（不是任何题） | 2.6 KB | 结论抄进 `APPARATUS.md` §2，未落盘日志 |\n\n第 1 条是 s2–s8 的**变体发现**用：s3/s4 与 s1 无差异；s2 只差 `audit.rs:9`；s5 差 `query.rs:27` 与 `render.rs:9`；\ns6 差 `model.rs:38`；s7 差 `buckets.rs:10`；s8 差 `render.rs:9`/`:12`。凡用到这条结论的答案都在末行标注了\"1 次共享\"。\n\n## B. 共享的 **codegraph** 批次（不影响逐题 token 归因）\n\n一条 bash 调用里可以并排放好几道题的 codegraph 调用；**每一次 codegraph 调用**都在它自己那道题的\n`logs/<id>.txt` 里留下独立的 `=== CMD` / 原文 / `=== EXIT` 三行，所以\"步/题\"按 `=== CMD` 逐题可数。\n实际发生过的跨题批次：\n\n| bash 调用 | 里面的 codegraph 调用归属 |\n| --- | --- |\n| s1 的 files/query/callers/node 批次 | 仅 s1 |\n| s1 的两批 `node`（core 6 个 + report 6 个） | 仅 s1 |\n| s4 + g1 一批 | s4 的 5 条 + g1 的 4 条 |\n| s2 + s5 一批 | s2 的 4 条 + s5 的 4 条 |\n| s6 + s7 + s8 + g2 一批 | s6 3 条 + s7 3 条 + s8 3 条 + g2 4 条 |\n| 15 棵树的 `init` / `files` 两批 | 逐棵各自的日志（每棵一条 init、一条 files） |\n\n## C. 与第九轮 batching 口径的对齐\n\n第九轮（nichlink-mcp 臂）要求\"把几道题放进同一条 shell 命令\"必须逐行登记——上面 A、B 两张表就是这件事，\n按\"共享了哪一次调用\"逐行写清；A 表的 #1/#2/#3 是**唯一**跨题共享的判据性非 codegraph 调用。\n", "file_path": "/home/nich/Moirai_N3/nichlink/target/probe-cg26/BATCHING.md"}
+{"content": "# BATCHING — 哪些题共享了哪一次调用（逐行）\n\n## A. 共享的 **nonbridge** 调用（输出全部落盘，可逐字复核）\n\n| # | 调用（完整命令） | 服务的题 | 输出 | 原文在哪 |\n| --- | --- | --- | --- | --- |\n| 1 | `diff -r -x .codegraph s1 <v>`（v＝s2,s3,s4,s5,s6,s7,s8，一条命令里 7 次 diff） | **s2 · s3 · s4 · s5 · s6 · s7 · s8** | 约 1.1 KB | `logs/_shared.txt` |\n| 2 | `diff -r -x .codegraph trees/s1 trees/g4` | **g4** | 229 B | `logs/g4.txt` |\n| 3 | `sha256sum button/button.rs panel/panel.rs` + 对 8 个兄弟逐个 `diff button/button.rs <o>/<o>.rs` | **h2-claim-unkept** | 约 1.2 KB | `logs/h2-claim-unkept.txt` |\n| 4 | `node /tmp/copycheck.mjs`（15 棵副本的 base 哈希复核，TREES.json 算法） | **15 题全用**（同树性判据） | 1.5 KB | `logs/_shared.txt` |\n| 5 | `node /tmp/treecheck.mjs`（24 棵原件哈希 vs TREES.json） | 装置（不是任何题） | 2.6 KB | 结论抄进 `APPARATUS.md` §2，未落盘日志 |\n\n第 1 条是 s2–s8 的**变体发现**用：s3/s4 与 s1 无差异；s2 只差 `audit.rs:9`；s5 差 `query.rs:27` 与 `render.rs:9`；\ns6 差 `model.rs:38`；s7 差 `buckets.rs:10`；s8 差 `render.rs:9`/`:12`。凡用到这条结论的答案都在末行标注了\"1 次共享\"。\n\n## B. 共享的 **codegraph** 批次（不影响逐题 token 归因）\n\n一条 bash 调用里可以并排放好几道题的 codegraph 调用；**每一次 codegraph 调用**都在它自己那道题的\n`logs/<id>.txt` 里留下独立的 `=== CMD` / 原文 / `=== EXIT` 三行，所以\"步/题\"按 `=== CMD` 逐题可数。\n实际发生过的跨题批次：\n\n| bash 调用 | 里面的 codegraph 调用归属 |\n| --- | --- |\n| s1 的 files/query/callers/node 批次 | 仅 s1 |\n| s1 的两批 `node`（core 6 个 + report 6 个） | 仅 s1 |\n| s4 + g1 一批 | s4 的 5 条 + g1 的 4 条 |\n| s2 + s5 一批 | s2 的 4 条 + s5 的 4 条 |\n| s6 + s7 + s8 + g2 一批 | s6 3 条 + s7 3 条 + s8 3 条 + g2 4 条 |\n| 15 棵树的 `init` / `files` 两批 | 逐棵各自的日志（每棵一条 init、一条 files） |\n\n## C. 与第九轮 batching 口径的对齐\n\n第九轮（xirang-mcp 臂）要求\"把几道题放进同一条 shell 命令\"必须逐行登记——上面 A、B 两张表就是这件事，\n按\"共享了哪一次调用\"逐行写清；A 表的 #1/#2/#3 是**唯一**跨题共享的判据性非 codegraph 调用。\n", "file_path": "/home/nich/Moirai_N3/nichlink/target/probe-cg26/BATCHING.md"}
 ```
 
 **结果**：
@@ -845,7 +845,7 @@ BATCHING.md content:
   1. `diff -r -x .codegraph s1 <v>` for v in s2..s8 — served s2,s3,s4,s5,s6,s7,s8 (7 questions) — output 1.1KB — logs/_shared.txt. Result: s3/s4 identical to s1; s2 diff = audit.rs:9; s5 diff = query.rs:27 + render.rs:9; s6 = model.rs:38; s7 = buckets.rs:10; s8 = render.rs:9+12.
   2. `diff -r -x .codegraph trees/s1 trees/g4` — served g4 — 229 B — logs/g4.txt.
   3. `sha256sum + 逐兄弟 diff` — served h2 — 1.2KB — logs/h2-claim-unkept.txt.
-  4. `cat .nichlink/adopted/entries` — served h2 (already logged).
+  4. `cat .xirang/adopted/entries` — served h2 (already logged).
   5. Hash checks `node /tmp/copycheck.mjs` — apparatus + all 15 (logs/_shared.txt).
   6. `node /tmp/treecheck.mjs` — apparatus (11 mismatches) — output in APPARATUS.md.
 - Shared *codegraph* bash batches: each codegraph invocation is logged with its own CMD/EXIT in its question's log, so token attribution stays per question even though one bash call carried several (e.g. one call carried s2+s5 calls; one carried s6+s7+s8+g2; one carried s4+g1). List them.
@@ -1394,7 +1394,7 @@ Now g3, fa, fb (host trees), then fd, fe.
 
 **g3**: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" (add an internal layer to this object, without touching its registration tree and public paths; explain why you believe it's untouched; gate must be green).
 
-The g3 tree: 160K, 13 files, 102 nodes. Let me look: it's a nichlink control-button host with `.nichlink`, examples, src, tests, build.rs, Cargo.toml. Let me read its structure and lib.rs, control.rs, and one object file.
+The g3 tree: 160K, 13 files, 102 nodes. Let me look: it's a xirang control-button host with `.xirang`, examples, src, tests, build.rs, Cargo.toml. Let me read its structure and lib.rs, control.rs, and one object file.
 
 Plan for g3:
 1. Read the tree (files, lib.rs, control.rs, an object file) via codegraph.
@@ -1412,7 +1412,7 @@ For g3 I need a "before" baseline of the registration outline. Since g3 is initi
 
 Let me explore g3's tree first.
 
-**fa**: "我要加一个新对象，和现有的差不多" — add a new object similar to an existing one. In the round-9 fa tree (restored to the clean host), the deliverable: what I did, basis, command sequence, total calls; gate green after. So: add a new face (e.g. `Dial` like the existing `Button`) to the host — a new file `src/control/object/<new>/<new>.rs` with the `control_object!` macro, and (for a grafted slot) maybe also the graft side; plus (per the entry-plan rule I learned in h3) the entry must name the new face if it's an object the app publishes... Hmm! In the fa tree, is the new object required to be in the graft plan? Let me look at the fa tree's structure: it has src/, examples/, tests/, .nichlink, build.rs. fa is the "control-button" host (chromium README example). Let me read its lib.rs and the tests to see what "adding an object" requires (maybe there's a test that enumerates the tree, e.g. `tests/` asserting the outline).
+**fa**: "我要加一个新对象，和现有的差不多" — add a new object similar to an existing one. In the round-9 fa tree (restored to the clean host), the deliverable: what I did, basis, command sequence, total calls; gate green after. So: add a new face (e.g. `Dial` like the existing `Button`) to the host — a new file `src/control/object/<new>/<new>.rs` with the `control_object!` macro, and (for a grafted slot) maybe also the graft side; plus (per the entry-plan rule I learned in h3) the entry must name the new face if it's an object the app publishes... Hmm! In the fa tree, is the new object required to be in the graft plan? Let me look at the fa tree's structure: it has src/, examples/, tests/, .xirang, build.rs. fa is the "control-button" host (chromium README example). Let me read its lib.rs and the tests to see what "adding an object" requires (maybe there's a test that enumerates the tree, e.g. `tests/` asserting the outline).
 
 **fb**: "这个对象内部还不够" — deepen the object's inside: add the internal layer (Parts) — like g3! Hmm, g3 and fb are similar. g3's phrasing: "给这个对象加一层内部结构，但不要动它的注册树和公开路径" — the "不要动公开路径" constraint. fb: "这个对象内部还不够" (the object's inside isn't enough) → add internal structure. So fb = same operation, without the explicit "don't touch public paths" constraint (but obviously you shouldn't break the tree).
 
@@ -1461,7 +1461,7 @@ Only in trees/g3: .gitignore
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
 6	
 7	pub struct Button;
 8	
@@ -1505,7 +1505,7 @@ Only in trees/g3: .gitignore
 2	//! Control folder face: it owns a Registry, and every direct child must satisfy
 3	//! the rule kept beside it.
 4	
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	/// 父注册面交给子对象的绘制结果。
 8	/// The frame a parent face hands to its children for painting.
@@ -1534,16 +1534,16 @@ Note: fd/fe lack `.gitignore` (only in s1) — that's part of their declared has
 
 Hmm, g3 and fa have identical layouts. Are they the same content? g3 = 18e80bbd, fa = 13333fd5 → different. Let me diff them: `diff -r trees/g3 trees/fa`. Let me also read g3's lib.rs + the registry test (33 symbols) to understand the constraints for "adding an internal layer" and "adding a new object".
 
-For fa (add a new object): the host has Button and Slider objects; the question: add a new object similar to an existing one → e.g. add a third face (like `Dial`/`Toggle`) OR add a new object layer inside an existing face? "我要加一个新对象，和现有的差不多" = "I want to add a new object, similar to the existing ones." So: create a new face file (e.g. `toggle.rs` modeled on `button.rs`), mount it in control.rs, and (since the entry plan/scope matters) also declare it in the entry plan if it's a grafted slot... Hmm. In this fa tree there's no graft crate (no graft dir, no carrier?). Let me check fa's Cargo.toml (it might depend on carrier/control-button-graft — from my earlier read of the OLD fa copy, yes: `nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }` and the entry plan with `cut(...) graft(...)`. Hmm, but the restored fa's lib.rs may differ. Let me read it.
+For fa (add a new object): the host has Button and Slider objects; the question: add a new object similar to an existing one → e.g. add a third face (like `Dial`/`Toggle`) OR add a new object layer inside an existing face? "我要加一个新对象，和现有的差不多" = "I want to add a new object, similar to the existing ones." So: create a new face file (e.g. `toggle.rs` modeled on `button.rs`), mount it in control.rs, and (since the entry plan/scope matters) also declare it in the entry plan if it's a grafted slot... Hmm. In this fa tree there's no graft crate (no graft dir, no carrier?). Let me check fa's Cargo.toml (it might depend on carrier/control-button-graft — from my earlier read of the OLD fa copy, yes: `xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }` and the entry plan with `cut(...) graft(...)`. Hmm, but the restored fa's lib.rs may differ. Let me read it.
 
 For g3 (add an internal layer to "this object" without touching its registration tree/public paths): the object would be Button (and/or Slider). What does "加一层内部结构" mean concretely in this codebase? From fb's old damaged copy, the shape was:
 ```rust
 pub struct Button { parts: ButtonParts }
 pub struct ButtonParts { pub label: String }
-impl nichlink_toolchain::runtime::PartsContract for ButtonParts { type Output = ButtonParts; const PROVIDED_PARTS: &'static [&'static str] = &["label"]; }
+impl xirang_toolchain::runtime::PartsContract for ButtonParts { type Output = ButtonParts; const PROVIDED_PARTS: &'static [&'static str] = &["label"]; }
 impl Button { pub fn parts(&self) -> &ButtonParts { &self.parts } }
 ```
-Hmm — is `PartsContract` a real API in this toolchain? In the old damaged fb copy, that's what it looked like (it referred to `nichlink_toolchain::runtime::PartsContract`). Since fa/fb (clean, restored) presumably DON'T have PartsContract, but the toolchain (frozen at /home/nich/.../toolchain, v0.2.0) — hmm, does the current checkout's toolchain have `PartsContract`? The old damaged fb copy was built from... hmm, that copy was some "done state" from a previous round's arm. If `PartsContract` doesn't exist in this checkout's toolchain, the old fb copy would not compile. Let me check: does the toolchain have `PartsContract`? I can't grep the workspace (forbidden). But I CAN look for it via codegraph!... the session's codegraph MCP is for the workspace — hmm, using it is a deviation from "use the frozen CLI". 
+Hmm — is `PartsContract` a real API in this toolchain? In the old damaged fb copy, that's what it looked like (it referred to `xirang_toolchain::runtime::PartsContract`). Since fa/fb (clean, restored) presumably DON'T have PartsContract, but the toolchain (frozen at /home/nich/.../toolchain, v0.2.0) — hmm, does the current checkout's toolchain have `PartsContract`? The old damaged fb copy was built from... hmm, that copy was some "done state" from a previous round's arm. If `PartsContract` doesn't exist in this checkout's toolchain, the old fb copy would not compile. Let me check: does the toolchain have `PartsContract`? I can't grep the workspace (forbidden). But I CAN look for it via codegraph!... the session's codegraph MCP is for the workspace — hmm, using it is a deviation from "use the frozen CLI". 
 
 Alternative: check if the ~frozen CLI indexes the tree only. Hmm. But I can check the toolchain crate's public API via... the trees' Cargo.lock? No.
 
@@ -1551,7 +1551,7 @@ Simplest: try compiling. For fb's task ("内部还不够"), I can write the inte
 
 Also relevant: the g3 tree has `tests/static_plan_allocations.rs` (19 symbols) and `tests/registry.rs` (33 symbols) — these tests enumerate the tree structure; the "别动注册树/公开路径" constraint can be checked by running them (they'd fail if the tree changed).
 
-So for g3: add an internal layer that does NOT change the registration tree or public paths → e.g. add a private `struct ButtonState`/`Parts` inside button.rs, with the face carrying it. But "内部结构" must be meaningful for the toolchain: perhaps the host expects an "internal face" registered under the object? Hmm — in nichlink, a "face" can have nested faces (the registry tree: root/control/button/...). "加一层内部结构" might mean adding an inner registration layer (e.g. `root/control/button/label`)! But that WOULD change the registration tree... and the constraint says DON'T change the registration tree. Hmm, contradictory? Unless "内部结构" means internal *Rust* structure (fields/parts), not registration.
+So for g3: add an internal layer that does NOT change the registration tree or public paths → e.g. add a private `struct ButtonState`/`Parts` inside button.rs, with the face carrying it. But "内部结构" must be meaningful for the toolchain: perhaps the host expects an "internal face" registered under the object? Hmm — in xirang, a "face" can have nested faces (the registry tree: root/control/button/...). "加一层内部结构" might mean adding an inner registration layer (e.g. `root/control/button/label`)! But that WOULD change the registration tree... and the constraint says DON'T change the registration tree. Hmm, contradictory? Unless "内部结构" means internal *Rust* structure (fields/parts), not registration.
 
 Wait, let me re-read g3: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" — "add a layer of internal structure to this object, but don't touch its registration tree and public paths; explain why you believe [they're] untouched; the gate must be green."
 
@@ -1745,7 +1745,7 @@ g3 baseline sha: 571b70bc642f6aa1
 ### step 53（turn 2）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\np='trees/fb/src/control/object/button/button.rs'\ns=open(p,encoding='utf-8').read()\nmulti=\"use nichlink_toolchain::runtime::{\\n    ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract,\\n};\"\nsingle=\"use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};\"\nassert multi in s; s=s.replace(multi,single,1)\nstart=s.index('/// Button 的内部结构'); end=s.index('crate::control_object! {')\nblock=s[start:end]; s=s[:start]+s[end:]\ns=s.rstrip('\\n')+'\\n\\n'+block.rstrip('\\n')+'\\n'\nopen(p,'w',encoding='utf-8').write(s)\nprint('fb rearranged; macro at line', s[:s.index('crate::control_object!')].count('\\n')+1)\nPY\nD=/home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh fb bash -c \"cd $D/trees/fb && CARGO_TARGET_DIR=$D/cargo-target-fb cargo test --offline --all-features > /tmp/fb_final.out 2>&1; rc=\\$?; cat /tmp/fb_final.out; exit \\$rc\" >/dev/null; echo \"fb --all-features rc=$(grep -a '^=== EXIT' logs/fb.txt | tail -1 | awk '{print $3}') :: $(grep -a -c 'test result: ok' /tmp/fb_final.out) ok, $(grep -a -c 'test result: FAILED' /tmp/fb_final.out) failed\"; ./nb.sh g3 bash -c \"cd $D/trees/g3 && CARGO_TARGET_DIR=$D/cargo-target-g3 cargo test --offline --all-features > /tmp/g3_final.out 2>&1; rc=\\$?; cat /tmp/g3_final.out; exit \\$rc\" >/dev/null; echo \"g3 --all-features rc=$(grep -a '^=== EXIT' logs/g3.txt | tail -1 | awk '{print $3}') :: $(grep -a -c 'test result: ok' /tmp/g3_final.out) ok, $(grep -a -c 'test result: FAILED' /tmp/g3_final.out) failed\"; sleep 2; ./cg.sh fb node src/control/object/button/button.rs >/dev/null; ./cg.sh g3 node src/control/object/button/button.rs >/dev/null; echo \"post-change sources logged\"", "description": "fb rearrangement + final gates for fb/g3", "timeoutMs": 900000}
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\np='trees/fb/src/control/object/button/button.rs'\ns=open(p,encoding='utf-8').read()\nmulti=\"use xirang_toolchain::runtime::{\\n    ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract,\\n};\"\nsingle=\"use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT, PartsContract, PresetContract};\"\nassert multi in s; s=s.replace(multi,single,1)\nstart=s.index('/// Button 的内部结构'); end=s.index('crate::control_object! {')\nblock=s[start:end]; s=s[:start]+s[end:]\ns=s.rstrip('\\n')+'\\n\\n'+block.rstrip('\\n')+'\\n'\nopen(p,'w',encoding='utf-8').write(s)\nprint('fb rearranged; macro at line', s[:s.index('crate::control_object!')].count('\\n')+1)\nPY\nD=/home/nich/Moirai_N3/nichlink/target/probe-cg26; ./nb.sh fb bash -c \"cd $D/trees/fb && CARGO_TARGET_DIR=$D/cargo-target-fb cargo test --offline --all-features > /tmp/fb_final.out 2>&1; rc=\\$?; cat /tmp/fb_final.out; exit \\$rc\" >/dev/null; echo \"fb --all-features rc=$(grep -a '^=== EXIT' logs/fb.txt | tail -1 | awk '{print $3}') :: $(grep -a -c 'test result: ok' /tmp/fb_final.out) ok, $(grep -a -c 'test result: FAILED' /tmp/fb_final.out) failed\"; ./nb.sh g3 bash -c \"cd $D/trees/g3 && CARGO_TARGET_DIR=$D/cargo-target-g3 cargo test --offline --all-features > /tmp/g3_final.out 2>&1; rc=\\$?; cat /tmp/g3_final.out; exit \\$rc\" >/dev/null; echo \"g3 --all-features rc=$(grep -a '^=== EXIT' logs/g3.txt | tail -1 | awk '{print $3}') :: $(grep -a -c 'test result: ok' /tmp/g3_final.out) ok, $(grep -a -c 'test result: FAILED' /tmp/g3_final.out) failed\"; sleep 2; ./cg.sh fb node src/control/object/button/button.rs >/dev/null; ./cg.sh g3 node src/control/object/button/button.rs >/dev/null; echo \"post-change sources logged\"", "description": "fb rearrangement + final gates for fb/g3", "timeoutMs": 900000}
 ```
 
 **结果**：
@@ -1808,8 +1808,8 @@ answers/g1.md:18:> 补注（复核者口径）：本树共 **5 个 `#[test]`**�
 **结果**：
 ```
 === fc vs fa (my fa edits are known: button.rs layer / lib.rs const / registry.rs 4 pins / new toggle.rs) ===
-Only in trees/fc/.nichlink: adopted
-Only in trees/fa/.nichlink: external-grafts
+Only in trees/fc/.xirang: adopted
+Only in trees/fa/.xirang: external-grafts
 Only in trees/fa/src/control/object: toggle
 diff -r -x .codegraph trees/fa/src/lib.rs trees/fc/src/lib.rs
 56,72d55
@@ -1917,7 +1917,7 @@ s6                           stated=None
 == h2 (host crate root = trees/h2-claim-unkept/host) ==
 
 == h2 log: nonbridge entries ==
-65:=== CMD(nonbridge): cat trees/h2-claim-unkept/host/.nichlink/adopted/entries
+65:=== CMD(nonbridge): cat trees/h2-claim-unkept/host/.xirang/adopted/entries
 68:=== NONBRIDGE-BYTES: 455
 70:=== CMD(nonbridge): bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/h2-claim-unkept/host && cargo test --offline > /tmp/cg26_h2.out 2>&1; rc=$?; cat /tmp/cg26_h2.out; exit $rc
 93:=== NONBRIDGE-BYTES: 1013
@@ -1925,7 +1925,7 @@ s6                           stated=None
 319:=== NONBRIDGE-BYTES: 2225
 
 == fc log: nonbridge entries ==
-64:=== CMD(nonbridge): cat trees/fc/.nichlink/adopted/entries
+64:=== CMD(nonbridge): cat trees/fc/.xirang/adopted/entries
 67:=== NONBRIDGE-BYTES: 467
 114:=== CMD(nonbridge): bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fc && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fc cargo run --offline -q --example tree > /tmp/fc_tree_before.txt 2>&1; rc=$?; cat /tmp/fc_tree_before.txt; exit $rc
 118:=== NONBRIDGE-BYTES: 200
@@ -1960,7 +1960,7 @@ Two things:
 Let me redo the comparison properly: extract the stated count and (if present) bytes in B/KB, and compare the **count** with the logged count (the count is the cleanest alignment signal).
 
 For the in-scope answers (h2, fc), I must make the line match the log exactly: h2 logged (3 calls / 3,693 B) — but h2's stated says 4 次 / 约 3.5 KB. Hmm, which is right? The logged value counts only nb.sh-recorded calls in `logs/h2-claim-unkept.txt`. The verifier's point: some calls (sha256sum/diff) were run straight through bash without nb.sh — for h2 I *did* later re-run the sha256sum+diff via nb.sh (that's one of the 3 logged). Let me look at h2's log to see the 3 nonbridge calls:
-  1. `cat …/.nichlink/adopted/entries` (455 B)
+  1. `cat …/.xirang/adopted/entries` (455 B)
   2. `cargo test --offline` (1013 B)
   3. `sha256sum + 逐兄弟 diff` (1.2 KB ≈ 2225 B?) — total 3,693 ✓ plausible.
 So the logged count is 3, and the answer says 4 (I counted the *separate* original diff call that went straight through bash, which was later re-run and logged). The honest fix: state exactly what's in the log (3 次 / 3,693 B) and mention the unlogged extra (1 次 `sha256sum`+`diff` 早前直连 bash 未入日志 ⇒ 下界).
@@ -1984,7 +1984,7 @@ Let me run.
 ### step 5（turn 4）· `bash`
 
 ```
-{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\n# ---------- h2-claim-unkept.md ----------\np='answers/h2-claim-unkept.md'\ns=open(p,encoding='utf-8').read()\n\nold_fix='③ `fix`：`spinner.rs:23` 前补 `handle_contracts: [crate::control::ControlHandle],`；台账把 panel 那条按其现存字节重录指纹（或删掉该失效条目）。**不动** `control.rs`、`registry_rule.rs`、offsets 测试、其它 7 个兄弟。'\nnew_fix='''③ `fix`：`spinner.rs:23` 前补 `handle_contracts: [crate::control::ControlHandle],`；**台账既有条目一字不改、不删**——panel 那条的处置是\"**需要人，不是改代码**\"：由**人**在台账里**追加**一条确认行（走桥的 `adopted … --apply` 流程），旧两行原样留作历史；代码侧没有可改的东西（记录失真不是缺陷）。**不动** `control.rs`、`registry_rule.rs`、offsets 测试、其它 7 个兄弟、台账既有两行。'''\nassert old_fix in s; s=s.replace(old_fix,new_fix,1)\n\nold_cp_end='两条互斥，note/时间戳指向 panel。工具侧的反证：'\nnew_cp_end='''两条互斥，note/时间戳指向 panel，而且**可重算**：按内核 `adoption_fingerprint` 的拼法（相对路径 ++ 0x00 ++ 内容字节长度 ++ 0x00 ++ 内容 ++ 0x00，再 sha256）我复算 `src/control/object/button/button.rs` 得 `edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9` == panel 那行写的指纹，而 panel 自己的当前指纹是 `57afd3b6e4eca34d…` ⇒ **那一行记的是别的文件（button）的当前指纹**，记录失真、需人工重确认（不是代码缺陷）。工具侧的反证：'''\nassert old_cp_end in s; s=s.replace(old_cp_end,new_cp_end,1)\n\nold_nb=s[s.index('nonbridge: '):].split('\\n')[0]\nnew_nb='nonbridge: 3 次 / 3,693 B（= 本题日志里列出的 3 条：`cat entries` 455 B、`cargo test` 1013 B、`sha256sum`+逐兄弟 `diff` 2225 B；早前还有 1 次同样内容的 `diff` 直连 bash 未入日志 ⇒ **本栏是下界**，口径见 `SETUP.md` §5）'\ns=s.replace(old_nb,new_nb,1)\nopen(p,'w',encoding='utf-8').write(s)\nprint('h2 patched; lines =', len(s.rstrip('\\n').split('\\n')))\n\n# ---------- fc.md ----------\np='answers/fc.md'\ns=open(p,encoding='utf-8').read()\nold_b='''   - **我没有**给 `Toggle` 手写第二条记录：采信由桥（`nichlink-mcp` 的写路径）在它自己的 conformance 读之后写，而该记录的指纹**不是文件字节的 sha256**（实测：文件 = `e842be74…`，台账写 `22b54a4c…`），我在树上无法重算它 ⇒ 手写一条等于伪造证据。给不给新兄弟采信，应由桥按同一流程决定。'''\nnew_b='''   - **我没有**给 `Toggle` 手写第二条记录：**理由不是\"算不出来\"**——内核有公开的 `adoption_fingerprint`（`kernel/src/registry_core/adoption/adoption.rs:200`；写入路径的调用点 `to
+{"command": "cd /home/nich/Moirai_N3/nichlink/target/probe-cg26; python3 - <<'PY'\n# ---------- h2-claim-unkept.md ----------\np='answers/h2-claim-unkept.md'\ns=open(p,encoding='utf-8').read()\n\nold_fix='③ `fix`：`spinner.rs:23` 前补 `handle_contracts: [crate::control::ControlHandle],`；台账把 panel 那条按其现存字节重录指纹（或删掉该失效条目）。**不动** `control.rs`、`registry_rule.rs`、offsets 测试、其它 7 个兄弟。'\nnew_fix='''③ `fix`：`spinner.rs:23` 前补 `handle_contracts: [crate::control::ControlHandle],`；**台账既有条目一字不改、不删**——panel 那条的处置是\"**需要人，不是改代码**\"：由**人**在台账里**追加**一条确认行（走桥的 `adopted … --apply` 流程），旧两行原样留作历史；代码侧没有可改的东西（记录失真不是缺陷）。**不动** `control.rs`、`registry_rule.rs`、offsets 测试、其它 7 个兄弟、台账既有两行。'''\nassert old_fix in s; s=s.replace(old_fix,new_fix,1)\n\nold_cp_end='两条互斥，note/时间戳指向 panel。工具侧的反证：'\nnew_cp_end='''两条互斥，note/时间戳指向 panel，而且**可重算**：按内核 `adoption_fingerprint` 的拼法（相对路径 ++ 0x00 ++ 内容字节长度 ++ 0x00 ++ 内容 ++ 0x00，再 sha256）我复算 `src/control/object/button/button.rs` 得 `edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9` == panel 那行写的指纹，而 panel 自己的当前指纹是 `57afd3b6e4eca34d…` ⇒ **那一行记的是别的文件（button）的当前指纹**，记录失真、需人工重确认（不是代码缺陷）。工具侧的反证：'''\nassert old_cp_end in s; s=s.replace(old_cp_end,new_cp_end,1)\n\nold_nb=s[s.index('nonbridge: '):].split('\\n')[0]\nnew_nb='nonbridge: 3 次 / 3,693 B（= 本题日志里列出的 3 条：`cat entries` 455 B、`cargo test` 1013 B、`sha256sum`+逐兄弟 `diff` 2225 B；早前还有 1 次同样内容的 `diff` 直连 bash 未入日志 ⇒ **本栏是下界**，口径见 `SETUP.md` §5）'\ns=s.replace(old_nb,new_nb,1)\nopen(p,'w',encoding='utf-8').write(s)\nprint('h2 patched; lines =', len(s.rstrip('\\n').split('\\n')))\n\n# ---------- fc.md ----------\np='answers/fc.md'\ns=open(p,encoding='utf-8').read()\nold_b='''   - **我没有**给 `Toggle` 手写第二条记录：采信由桥（`xirang-mcp` 的写路径）在它自己的 conformance 读之后写，而该记录的指纹**不是文件字节的 sha256**（实测：文件 = `e842be74…`，台账写 `22b54a4c…`），我在树上无法重算它 ⇒ 手写一条等于伪造证据。给不给新兄弟采信，应由桥按同一流程决定。'''\nnew_b='''   - **我没有**给 `Toggle` 手写第二条记录：**理由不是\"算不出来\"**——内核有公开的 `adoption_fingerprint`（`kernel/src/registry_core/adoption/adoption.rs:200`；写入路径的调用点 `to
 …[参数：此处截断，全文 3084 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 

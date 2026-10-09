@@ -3,7 +3,7 @@
 //!
 //! The kernel owns every rule of plugin selection and verification, and the
 //! adapters own execution — but nothing walked the path between them. A host had
-//! to read `.nichlink/plugins/*.lock` itself, build a [`PluginCatalog`] itself,
+//! to read `.xirang/plugins/*.lock` itself, build a [`PluginCatalog`] itself,
 //! remember to call [`PluginPolicy::decision`] *with* that catalog, then pick
 //! between `verify_signed` and `verify_artifact`, and finally guess which lane
 //! the result qualifies for. Because that path was nobody's job, the Official
@@ -11,7 +11,7 @@
 //! and a lock written by the host's own plugin UI could not even match an
 //! official manifest (the record carries no signature, the manifest must).
 //! 内核拥有插件筛选与校验的每条规则，适配器拥有执行——但两者之间的路没有人走。宿主必须自己读
-//! `.nichlink/plugins/*.lock`、自己构造 [`PluginCatalog`]、记得把该目录传给
+//! `.xirang/plugins/*.lock`、自己构造 [`PluginCatalog`]、记得把该目录传给
 //! [`PluginPolicy::decision`]、再在 `verify_signed` 与 `verify_artifact` 之间选择，最后还要猜
 //! 结果够得上哪条通道。因为这段路不属于任何人，Official 通道在实践中不可达：树内没有任何代码调用过
 //! `verify_signed`，而宿主自己的插件界面写下的锁甚至无法匹配官方 manifest（记录不带签名，
@@ -35,7 +35,7 @@ use crate::plugin_host::HostError;
 
 /// Directory, under a package root, that holds the plugin locks.
 /// 包根之下存放插件锁的目录。
-pub const PLUGIN_LOCK_DIRECTORY: &str = ".nichlink/plugins";
+pub const PLUGIN_LOCK_DIRECTORY: &str = ".xirang/plugins";
 
 /// Lock file a publisher maintains for the official lane.
 /// 发布者为官方通道维护的锁文件。

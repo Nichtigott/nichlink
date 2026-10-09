@@ -1,13 +1,13 @@
-# nichlink MCP 与 codegraph 的效率、收敛性实测（2026-09-29）
+# xirang MCP 与 codegraph 的效率、收敛性实测（2026-09-29）
 
-装置：nichlink 侧用 `target/debug/nichlink-mcp`（stdio JSON-RPC，驱动脚本取自 prober 的原件 `docs/audit-2026-09-29/audit-mcp-probe-raw.md` §1）；
+装置：xirang 侧用 `target/debug/xirang-mcp`（stdio JSON-RPC，驱动脚本取自 prober 的原件 `docs/audit-2026-09-29/audit-mcp-probe-raw.md` §1）；
 codegraph 侧用 `~/.local/bin/codegraph` 1.5.0（`explore`，默认 `--max-files`）。
-两侧都**含进程启动**（每次调用起一个进程），因此是可比的；差异是 nichlink 为 debug 构建。
+两侧都**含进程启动**（每次调用起一个进程），因此是可比的；差异是 xirang 为 debug 构建。
 题目用 t1 冻结的 6 道（C1/C2 调用链、W1/W2 符号与调用方、I1/I2 影响面）。
 
 ## 1. 每调用的成本与产出
 
-| 维度 | nichlink MCP | codegraph |
+| 维度 | xirang MCP | codegraph |
 | --- | --- | --- |
 | 单次延迟（示例宿主 13 文件） | `status` 14–21 ms；`registry` 66–102 ms；`grafts` 55–100 ms | 6 题 468–759 ms |
 | 单次延迟（工作区根 444 文件） | `status` **964 ms**；`registry` 52 ms | 与规模无关（索引已建） |
@@ -21,7 +21,7 @@ codegraph 侧用 `~/.local/bin/codegraph` 1.5.0（`explore`，默认 `--max-file
 ## 2. 收敛性
 
 **确定性：两边都是确定的。**
-- nichlink：同一棵树、同一调用跑两次，字节与 sha256 相同（`status` 466/466 B、`registry` 795/795、`grafts` 543/543）。
+- xirang：同一棵树、同一调用跑两次，字节与 sha256 相同（`status` 466/466 B、`registry` 795/795、`grafts` 543/543）。
 - codegraph：同一句 + 同一 `--max-files`，连跑两次 21913 字节、sha 相同。
 - ⇒ 先前"codegraph 不可复现"的结论已更正为"差别来自参数与措辞"（见 `audit-mcp-workflow.md` §⑦）。
 
@@ -50,11 +50,11 @@ codegraph 侧用 `~/.local/bin/codegraph` 1.5.0（`explore`，默认 `--max-file
 | 证据状态 | 我们 | `Live`/compiler candidate、`ok/stale/unreadable` 分类 |
 | 保鲜 | 我们（现读树） | 它的索引需 `sync`，陈旧时答案不报错 |
 
-补两条方法学声明：① codegraph 侧是 CLI 每次起进程，nichlink 侧也是每次起进程，但真实使用中我们的桥是常驻的（`initialize` 只 3 ms），因此延迟栏偏向我们；② 本次未测"长驻 MCP 服务 vs 常驻索引服务"的稳态吞吐，也未测大仓（>10 万行）下的表现。
+补两条方法学声明：① codegraph 侧是 CLI 每次起进程，xirang 侧也是每次起进程，但真实使用中我们的桥是常驻的（`initialize` 只 3 ms），因此延迟栏偏向我们；② 本次未测"长驻 MCP 服务 vs 常驻索引服务"的稳态吞吐，也未测大仓（>10 万行）下的表现。
 
 ## 4. 更正与补测（2026-09-29，维护者问"我们应该也能读全树"）
 
-我先前口头说"`read` 把整个文件都给了"——**错**，那只对 40 行的 `examples/control-button/src/control/object/button/button.rs` 成立。实测 `nichlink.read` 是**有界窗口**：
+我先前口头说"`read` 把整个文件都给了"——**错**，那只对 40 行的 `examples/control-button/src/control/object/button/button.rs` 成立。实测 `xirang.read` 是**有界窗口**：
 
 | 调用 | 返回 | 标头 |
 | --- | --- | --- |

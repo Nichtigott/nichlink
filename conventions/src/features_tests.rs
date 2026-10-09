@@ -12,7 +12,7 @@ use super::*;
 /// 特性需要显式打开。
 const WELL_SHAPED: &str = "\
 [package]
-name = \"nichlink-toolchain\"
+name = \"xirang-toolchain\"
 version = \"0.1.6\"
 
 [features]
@@ -22,8 +22,8 @@ prototype-fixtures = []
 dev-supervisor = []
 
 [[bin]]
-name = \"nichlink-dev\"
-path = \"src/bin/nichlink-dev.rs\"
+name = \"xirang-dev\"
+path = \"src/bin/xirang-dev.rs\"
 required-features = [\"dev-supervisor\"]
 ";
 
@@ -32,10 +32,8 @@ required-features = [\"dev-supervisor\"]
 fn workspace(manifest: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "nichlink-features-{}-{sequence}",
-        std::process::id()
-    ));
+    let root =
+        std::env::temp_dir().join(format!("xirang-features-{}-{sequence}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("toolchain/src")).expect("fixture directory");
     fs::write(
@@ -71,7 +69,7 @@ fn a_missing_requirement_on_a_workspace_only_target_is_reported() {
     assert!(
         found
             .iter()
-            .any(|finding| finding.contains("`nichlink-dev` must carry")),
+            .any(|finding| finding.contains("`xirang-dev` must carry")),
         "a deleted `required-features` is reported: {found:#?}"
     );
     let _ = fs::remove_dir_all(&root);

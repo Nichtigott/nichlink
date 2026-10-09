@@ -46,16 +46,16 @@ Note: fd/fe lack `.gitignore` (only in s1) — that's part of their declared has
 
 Hmm, g3 and fa have identical layouts. Are they the same content? g3 = 18e80bbd, fa = 13333fd5 → different. Let me diff them: `diff -r trees/g3 trees/fa`. Let me also read g3's lib.rs + the registry test (33 symbols) to understand the constraints for "adding an internal layer" and "adding a new object".
 
-For fa (add a new object): the host has Button and Slider objects; the question: add a new object similar to an existing one → e.g. add a third face (like `Dial`/`Toggle`) OR add a new object layer inside an existing face? "我要加一个新对象，和现有的差不多" = "I want to add a new object, similar to the existing ones." So: create a new face file (e.g. `toggle.rs` modeled on `button.rs`), mount it in control.rs, and (since the entry plan/scope matters) also declare it in the entry plan if it's a grafted slot... Hmm. In this fa tree there's no graft crate (no graft dir, no carrier?). Let me check fa's Cargo.toml (it might depend on carrier/control-button-graft — from my earlier read of the OLD fa copy, yes: `nichlink-example-control-button-graft = { path = "../carrier/control-button-graft" }` and the entry plan with `cut(...) graft(...)`. Hmm, but the restored fa's lib.rs may differ. Let me read it.
+For fa (add a new object): the host has Button and Slider objects; the question: add a new object similar to an existing one → e.g. add a third face (like `Dial`/`Toggle`) OR add a new object layer inside an existing face? "我要加一个新对象，和现有的差不多" = "I want to add a new object, similar to the existing ones." So: create a new face file (e.g. `toggle.rs` modeled on `button.rs`), mount it in control.rs, and (since the entry plan/scope matters) also declare it in the entry plan if it's a grafted slot... Hmm. In this fa tree there's no graft crate (no graft dir, no carrier?). Let me check fa's Cargo.toml (it might depend on carrier/control-button-graft — from my earlier read of the OLD fa copy, yes: `xirang-example-control-button-graft = { path = "../carrier/control-button-graft" }` and the entry plan with `cut(...) graft(...)`. Hmm, but the restored fa's lib.rs may differ. Let me read it.
 
 For g3 (add an internal layer to "this object" without touching its registration tree/public paths): the object would be Button (and/or Slider). What does "加一层内部结构" mean concretely in this codebase? From fb's old damaged copy, the shape was:
 ```rust
 pub struct Button { parts: ButtonParts }
 pub struct ButtonParts { pub label: String }
-impl nichlink_toolchain::runtime::PartsContract for ButtonParts { type Output = ButtonParts; const PROVIDED_PARTS: &'static [&'static str] = &["label"]; }
+impl xirang_toolchain::runtime::PartsContract for ButtonParts { type Output = ButtonParts; const PROVIDED_PARTS: &'static [&'static str] = &["label"]; }
 impl Button { pub fn parts(&self) -> &ButtonParts { &self.parts } }
 ```
-Hmm — is `PartsContract` a real API in this toolchain? In the old damaged fb copy, that's what it looked like (it referred to `nichlink_toolchain::runtime::PartsContract`). Since fa/fb (clean, restored) presumably DON'T have PartsContract, but the toolchain (frozen at /home/nich/.../toolchain, v0.2.0) — hmm, does the current checkout's toolchain have `PartsContract`? The old damaged fb copy was built from... hmm, that copy was some "done state" from a previous round's arm. If `PartsContract` doesn't exist in this checkout's toolchain, the old fb copy would not compile. Let me check: does the toolchain have `PartsContract`? I can't grep the workspace (forbidden). But I CAN look for it via codegraph!... the session's codegraph MCP is for the workspace — hmm, using it is a deviation from "use the frozen CLI". 
+Hmm — is `PartsContract` a real API in this toolchain? In the old damaged fb copy, that's what it looked like (it referred to `xirang_toolchain::runtime::PartsContract`). Since fa/fb (clean, restored) presumably DON'T have PartsContract, but the toolchain (frozen at /home/nich/.../toolchain, v0.2.0) — hmm, does the current checkout's toolchain have `PartsContract`? The old damaged fb copy was built from... hmm, that copy was some "done state" from a previous round's arm. If `PartsContract` doesn't exist in this checkout's toolchain, the old fb copy would not compile. Let me check: does the toolchain have `PartsContract`? I can't grep the workspace (forbidden). But I CAN look for it via codegraph!... the session's codegraph MCP is for the workspace — hmm, using it is a deviation from "use the frozen CLI". 
 
 Alternative: check if the ~frozen CLI indexes the tree only. Hmm. But I can check the toolchain crate's public API via... the trees' Cargo.lock? No.
 
@@ -63,7 +63,7 @@ Simplest: try compiling. For fb's task ("内部还不够"), I can write the inte
 
 Also relevant: the g3 tree has `tests/static_plan_allocations.rs` (19 symbols) and `tests/registry.rs` (33 symbols) — these tests enumerate the tree structure; the "别动注册树/公开路径" constraint can be checked by running them (they'd fail if the tree changed).
 
-So for g3: add an internal layer that does NOT change the registration tree or public paths → e.g. add a private `struct ButtonState`/`Parts` inside button.rs, with the face carrying it. But "内部结构" must be meaningful for the toolchain: perhaps the host expects an "internal face" registered under the object? Hmm — in nichlink, a "face" can have nested faces (the registry tree: root/control/button/...). "加一层内部结构" might mean adding an inner registration layer (e.g. `root/control/button/label`)! But that WOULD change the registration tree... and the constraint says DON'T change the registration tree. Hmm, contradictory? Unless "内部结构" means internal *Rust* structure (fields/parts), not registration.
+So for g3: add an internal layer that does NOT change the registration tree or public paths → e.g. add a private `struct ButtonState`/`Parts` inside button.rs, with the face carrying it. But "内部结构" must be meaningful for the toolchain: perhaps the host expects an "internal face" registered under the object? Hmm — in xirang, a "face" can have nested faces (the registry tree: root/control/button/...). "加一层内部结构" might mean adding an inner registration layer (e.g. `root/control/button/label`)! But that WOULD change the registration tree... and the constraint says DON'T change the registration tree. Hmm, contradictory? Unless "内部结构" means internal *Rust* structure (fields/parts), not registration.
 
 Wait, let me re-read g3: "给这个对象加一层内部结构，但不要动它的注册树和公开路径；说明凭什么相信没动，门必须绿" — "add a layer of internal structure to this object, but don't touch its registration tree and public paths; explain why you believe [they're] untouched; the gate must be green."
 
@@ -213,11 +213,11 @@ Then implement for fb/g3:
 pub struct ButtonPreset;
 pub struct ButtonParts;
 
-impl nichlink_toolchain::runtime::PresetContract for ButtonPreset {
+impl xirang_toolchain::runtime::PresetContract for ButtonPreset {
     type Output = Button;   // hmm, Output must match PartsContract::Output
     const REQUIRED_PARTS: &'static [&'static str] = &["label"];
 }
-impl nichlink_toolchain::runtime::PartsContract for ButtonParts {
+impl xirang_toolchain::runtime::PartsContract for ButtonParts {
     type Output = Button;
     const PROVIDED_PARTS: &'static [&'static str] = &["label"];
 }
@@ -343,7 +343,7 @@ Last question: **fa** (add a new object). Reconnaissance of the pinned face set:
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
 6	
 7	pub struct Button;
 8	
@@ -407,7 +407,7 @@ Let me read that region of fa's registry.rs.
 2	//! Control folder face: it owns a Registry, and every direct child must satisfy
 3	//! the rule kept beside it.
 4	
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	/// 父注册面交给子对象的绘制结果。
 8	/// The frame a parent face hands to its children for painting.
@@ -538,7 +538,7 @@ Time is a factor; let me move fast.
 37	use std::sync::atomic::{AtomicUsize, Ordering};
 38	
 39	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-40	use nichlink_toolchain::runtime::registry_core::{GraftPlan, Registry};
+40	use xirang_toolchain::runtime::registry_core::{GraftPlan, Registry};
 41	
 42	/// Number of successful allocations since the last reset.
 43	/// 自上次重置以来成功分配的次数。
@@ -633,8 +633,8 @@ Let me read those tests (lines 275-330 and around) to patch precisely. Let me pr
 ```
 **src/lib.rs** — 86 lines, 3 symbols · used by 2 files: tests/registry.rs, tests/static_plan_allocations.rs
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -643,7 +643,7 @@ Let me read those tests (lines 275-330 and around) to patch precisely. Let me pr
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -659,7 +659,7 @@ Let me read those tests (lines 275-330 and around) to patch precisely. Let me pr
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -680,7 +680,7 @@ Let me read those tests (lines 275-330 and around) to patch precisely. Let me pr
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -753,12 +753,12 @@ Let me print lines 344-395.
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -901,7 +901,7 @@ Let me run these.
 3	//! over a contiguous range of siblings under one parent.
 4	
 5	use crate::control::{ControlFrame, ControlHandle};
-6	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+6	use xirang_toolchain::runtime::{ContractId, FlowContract};
 7	
 8	pub struct Slider;
 9	
@@ -967,12 +967,12 @@ Let me run sync + node, then recompute fa's numbers, then write the answer.
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -1155,7 +1155,7 @@ Let me write it.
 37	use std::sync::atomic::{AtomicUsize, Ordering};
 38	
 39	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-40	use nichlink_toolchain::runtime::registry_core::{GraftPlan, Registry};
+40	use xirang_toolchain::runtime::registry_core::{GraftPlan, Registry};
 41	
 42	/// Number of successful allocations since the last reset.
 43	/// 自上次重置以来成功分配的次数。
@@ -1240,12 +1240,12 @@ Let me write it.
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -1414,12 +1414,12 @@ Let me write the patch.
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -1634,7 +1634,7 @@ Linking dynamic dispatch...
 2	//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	pub struct Toggle;
 8	
@@ -1685,18 +1685,18 @@ Compiling proc-macro2 v1.0.107
    Compiling itoa v1.0.18
    Compiling memchr v2.8.3
    Compiling syn v2.0.119
-   Compiling nichlink-kernel v0.2.0 (/home/nich/Moirai_N3/nichlink/kernel)
-   Compiling nichlink-macro v0.2.0 (/home/nich/Moirai_N3/nichlink/macro)
-   Compiling nichlink-toolchain v0.2.0 (/home/nich/Moirai_N3/nichlink/toolchain)
-   Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
-   Compiling nichlink-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/carrier/control-button-graft)
+   Compiling xirang-kernel v0.2.0 (/home/nich/Moirai_N3/nichlink/kernel)
+   Compiling xirang-macro v0.2.0 (/home/nich/Moirai_N3/nichlink/macro)
+   Compiling xirang-toolchain v0.2.0 (/home/nich/Moirai_N3/nichlink/toolchain)
+   Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
+   Compiling xirang-example-control-button-graft v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/carrier/control-button-graft)
     Finished `test` profile [unoptimized + debuginfo]
 …[输出：此处截断，全文 3958 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
 **非桥 2**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fa cargo test --offline > /tmp/fa_after.out 2>&1; rc=$?; cat /tmp/fa_after.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.19s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fa/debug/deps/control_button-ae8520d232bed415)
 
@@ -1717,7 +1717,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 **非桥 3**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fa cargo test --offline > /tmp/fa_after2.out 2>&1; rc=$?; cat /tmp/fa_after2.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.54s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fa/debug/deps/control_button-ae8520d232bed415)
 
@@ -1738,7 +1738,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 **非桥 4**：`bash -c cd /home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa && CARGO_TARGET_DIR=/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fa cargo test --offline --all-features > /tmp/fa_all.out 2>&1; rc=$?; cat /tmp/fa_all.out; exit $rc`
 ```
-Compiling nichlink-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
+Compiling xirang-example-control-button v0.1.0 (/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
      Running unittests src/lib.rs (/home/nich/Moirai_N3/nichlink/target/probe-cg26/cargo-target-fa/debug/deps/control_button-ae8520d232bed415)
 
@@ -1771,7 +1771,7 @@ root/control/toggle  kind=Toggle  source=control/object/toggle/toggle.rs
 
 **调用** `write`（step 61）：
 ```
-{"content": "//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse nichlink_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlHandle for Toggle {\n    fn paint(&self) -> ControlFrame {\n        ControlFrame\n    }\n}\n\ncrate::control_object! {\n    kind: Toggle,\n    exports: [\"control.render\"],\n    parent: crate::control::NODE_ID,\n    handle_contracts: [crate::control::ControlHandle],\n    flow: FlowContract::new(\n        ContractId::new(\"control.render.v1\"),\n        1,\n        \"ControlInput\",\n        \"ControlFrame\",\n    ),\n}\n", "file_path": "/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa/src/control/object/toggle/toggle.rs"}
+{"content": "//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse xirang_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlHandle for Toggle {\n    fn paint(&self) -> ControlFrame {\n        ControlFrame\n    }\n}\n\ncrate::control_object! {\n    kind: Toggle,\n    exports: [\"control.render\"],\n    parent: crate::control::NODE_ID,\n    handle_contracts: [crate::control::ControlHandle],\n    flow: FlowContract::new(\n        ContractId::new(\"control.render.v1\"),\n        1,\n        \"ControlInput\",\n        \"ControlFrame\",\n    ),\n}\n", "file_path": "/home/nich/Moirai_N3/nichlink/target/probe-cg26/trees/fa/src/control/object/toggle/toggle.rs"}
 ```
 
 **结果**：
@@ -1800,7 +1800,7 @@ New file `src/control/object/toggle/toggle.rs`:
 //! Toggle leaf face: Control's third direct child, shaped like Button/Slider.
 
 use crate::control::{ControlFrame, ControlHandle};
-use nichlink_toolchain::runtime::{ContractId, FlowContract};
+use xirang_toolchain::runtime::{ContractId, FlowContract};
 
 pub struct Toggle;
 
@@ -1873,7 +1873,7 @@ Adding the new object to **fa** (a third leaf face + entry-spelled publication):
 ```
 
 **同一步并行发出的其它调用**：
-- `write` → 归属 fa：`{"content": "//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse nichlink_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlH
+- `write` → 归属 fa：`{"content": "//! Toggle 叶子面：Control 的第三个直接子对象，与 Button/Slider 同形。\n//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.\n\nuse crate::control::{ControlFrame, ControlHandle};\nuse xirang_toolchain::runtime::{ContractId, FlowContract};\n\npub struct Toggle;\n\nimpl ControlH
 …[参数：此处截断，全文 835 字符；原件见 outputs/ 里的对话渲染脚本可重跑]`
 
 **调用** `bash`（step 62）：

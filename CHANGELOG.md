@@ -2,7 +2,7 @@
 
 English | [简体中文](#简体中文)
 
-All notable changes to the NichLink workspace are recorded in this one file.
+All notable changes to the XiRang workspace are recorded in this one file.
 The nine crates are released as a single version line, so a change is described
 once here instead of nine times: **per-crate changelogs are deliberately not
 kept**. Release order and the reasoning behind the one-line release are in
@@ -14,7 +14,7 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 **Release state:** `0.1.0` is published. All nine crates went to crates.io together
 on 2026-09-25, and the release workflow's last step built a throwaway consumer
 outside the checkout and resolved all nine by version. `0.1.1` followed on
-2026-09-26, the same way and with the same last step; `tools/nichlink-package-audit`
+2026-09-26, the same way and with the same last step; `tools/xirang-package-audit`
 now builds all nine packaged tarballs instead of skipping the eight whose
 requirements had not reached the index. `0.1.3` followed on 2026-09-26 (run
 `36236583886`, with `--verify-consumers` green in the same run); `0.1.2` was never
@@ -28,21 +28,21 @@ version moved because a published `0.1.4` CLI could not be corrected any other w
 "1.0" names the milestone in
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) rather than a published version.
 `0.2.0` (2026-10-07) closed that gap: the three names are on the index, and
-`tools/nichlink-publish --verify-consumers` resolved and built them in a throwaway crate outside the
+`tools/xirang-publish --verify-consumers` resolved and built them in a throwaway crate outside the
 checkout. It was first published on 2026-09-29 and then **deleted** from crates.io; it was
 **re-published on 2026-10-07** from the then-current checkout, so today's `0.2.0` is *not*
 byte-identical to the deleted one (the checksum differs, and a lockfile pinning the old one will fail
 to verify — `cargo publish` is immutable, which is why the re-publication needed the deletion first).
 Prefer `0.2.1` or later once it exists.
 Raising the line to `1.0.0` is a separate decision that would move every internal
-`nichlink-*` version requirement with it, and that step is what freezes the public
+`xirang-*` version requirement with it, and that step is what freezes the public
 surface. The third-party audit's fixes below moved the workspace version and every
 internal requirement together, which is what lets a cross-crate API change ship
 without a red package audit; `0.1.3` moved the same way and for the same reason
-(`mcp` now uses `nichlink_toolchain::build_method::face_views`), and publishing it closed the
+(`mcp` now uses `xirang_toolchain::build_method::face_views`), and publishing it closed the
 waiting state that change opened. `0.1.4` followed on 2026-09-27: its content is a batch
-of MCP evidence tools (`nichlink.mir`/`unified`/`impact`, the trace-driven `converge`,
-recorded values and data edges in `nichlink.trace`, and one cross-process identity
+of MCP evidence tools (`xirang.mir`/`unified`/`impact`, the trace-driven `converge`,
+recorded values and data edges in `xirang.trace`, and one cross-process identity
 defect), but only one thing **required** the version move — `lexicon::TRACE_MODE_ENV` is
 the first core symbol added after `0.1.3` shipped, `run_method` consumes it, and the
 packaged `run_method` therefore cannot compile against the published `core 0.1.3`. `v0.1.4`
@@ -51,7 +51,7 @@ run: a throwaway crate outside the checkout resolved and built all nine by versi
 the package audit is back to `verified:` all nine with `skipped: none`.
 **发布状态：** `0.1.0` 已发布。九个 crate 于 2026-09-25 一同上了 crates.io，发布工作流的最后
 一步在本检出之外构建了一个一次性消费者，按版本解析到全部九个。`0.1.1` 于 2026-09-26 以同样的
-方式跟进、同样有最后一步；`tools/nichlink-package-audit` 现在会构建全部九个包的 tarball，而不再
+方式跟进、同样有最后一步；`tools/xirang-package-audit` 现在会构建全部九个包的 tarball，而不再
 跳过那八个依赖尚未进入 index 的 crate。`0.1.3` 于 2026-09-26 跟进（run `36236583886`，
 `--verify-consumers` 在同一次运行里通过）；`0.1.2` 从未发布，它的改动随 `0.1.3` 一起走，包审计
 也回到九个全部 `verified`、`skipped: none`。设计仍在深化期间，版本线保持
@@ -60,11 +60,11 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 生成它的那个发布，属于模板修复而不是跨 crate 符号——移动版本线是因为已发布的 `0.1.4` CLI 没有别的
 办法被修正。而"1.0"是
 [`docs/roadmap-1.0.md`](docs/roadmap-1.0.md) 里的里程碑名，不是已发布的版本。把版本线抬到
-`1.0.0` 是另一个决定，需要连同每一处内部 `nichlink-*` 版本要求一起移动——那一步才是冻结
+`1.0.0` 是另一个决定，需要连同每一处内部 `xirang-*` 版本要求一起移动——那一步才是冻结
 公开面。下面三方审查的修复把工作区版本与每一处内部要求一同移动，这正是让一次跨 crate 的 API
 改动得以随版本发布、而不让包审计变红的原因；`0.1.3` 以同样的方式、同样的理由移动（`mcp` 现在
-使用 `nichlink_toolchain::build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。`0.1.4`
-于 2026-09-27 跟进：它的内容是一批 MCP 证据工具（`nichlink.mir`/`unified`/`impact`、由 trace 驱动的
+使用 `xirang_toolchain::build_method::face_views`），而把它发布出去，正是关掉那次改动打开的等待态。`0.1.4`
+于 2026-09-27 跟进：它的内容是一批 MCP 证据工具（`xirang.mir`/`unified`/`impact`、由 trace 驱动的
 `converge`、`trace` 的值与数据边、一个跨进程身份缺陷的修复），而**必须**移动版本线的原因只有一个——
 `lexicon::TRACE_MODE_ENV` 是 `0.1.3` 发布之后新增的第一个 core 符号，被 `run_method` 消费，因此
 打包 `run_method` 时对着已发布的 `core 0.1.3` 编译不出来。`v0.1.4` 于 2026-09-27 发布
@@ -72,11 +72,35 @@ the package audit is back to `verified:` all nine with `skipped: none`.
 构建了全部九个；包审计也回到九个全部 `verified`、`skipped: none`。
 
 `0.2.0`（2026-10-07）关掉了那个等待态：三个名字都在 index 上，而
-`tools/nichlink-publish --verify-consumers` 已在检出之外的一次性 crate 里按版本解析并构建了它们。
+`tools/xirang-publish --verify-consumers` 已在检出之外的一次性 crate 里按版本解析并构建了它们。
 它曾于 2026-09-29 首发、随后被**从 crates.io 删除**；这一次是 **2026-10-07** 用当时的检出**重发**的，
 因此今天的 `0.2.0` 与被删掉的那份**并非逐字节相同**（校验和不同，把旧校验和钉在 lockfile 里的消费者
 会校验失败——`cargo publish` 不可变，这正是重发必须先有那次删除的原因）。能升到 `0.2.1` 或更高时，
 优先用新版本。
+
+## [0.1.0] — 2026-10-09
+
+**Rename.** The project, its three published crates and its binaries are renamed from
+NichLink / `nichlink-*` to **XiRang / `xirang-*`**（息壤）. This line starts at `0.1.0`
+because the new crate names are new crates on the index.
+
+**What changes for a consumer:**
+- dependencies become `xirang-kernel`, `xirang-macro`, `xirang-toolchain`;
+- binaries become `xirang`, `cargo-xirang`, `xirang-mcp`, `xirang-studio`, `xirang-dev`;
+- the crate-root namespace constant is `XIRANG_NAMESPACE` and the state directory in a tree
+  is `.xirang/` (was `.nichlink/`); environment variables are `XIRANG_*`;
+- **identities change**: `NodeId = hash(namespace, relative source path, name)` and the
+  namespace is the package name, so records written under the old name (graft plans, the
+  adoption ledger, external plans) no longer resolve. Migration: rename `.nichlink` to
+  `.xirang`, then re-run `check` and re-record.
+
+**改名。** 项目、三个已发布 crate 与全部二进制由 NichLink / `nichlink-*` 更名为
+**XiRang / `xirang-*`**（息壤）。新名字在 index 上是新的 crate，因此这条线从 `0.1.0` 开始。
+对使用者的影响：依赖名改为 `xirang-*`；二进制改为 `xirang` / `cargo-xirang` / `xirang-mcp` /
+`xirang-studio` / `xirang-dev`；crate 根命名空间常量改为 `XIRANG_NAMESPACE`，树里的状态目录改为
+`.xirang/`，环境变量改为 `XIRANG_*`；**身份会变**（`NodeId` 的命名空间就是包名）⇒ 旧名字下写的记录
+（graft 计划、采信台账、外部计划）不再解析；迁移＝把 `.nichlink` 改名成 `.xirang`，重跑 `check`
+并重新登记。**本节之前的发布物，其真实名字是 `nichlink-*`** ✓。
 
 ## [0.2.2] — unreleased
 
@@ -90,12 +114,12 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
 
 - **The two host-facing modules are named after the cargo method they implement (2026-10-07, breaking).**
   `build_time` is now `build_method` and `runtime` is now `run_method`, so the host entries read
-  `nichlink_toolchain::build_method::run()` and `nichlink_toolchain::run_method::host!()`. Nothing else
+  `xirang_toolchain::build_method::run()` and `xirang_toolchain::run_method::host!()`. Nothing else
   moved: the modules are the same code, and the seven-module layout is unchanged. Update the two call
   sites a host has; 0.2.0 and earlier spell the old names.
   **两个宿主面模块改回"它实现的那个 cargo 方法"的口径（2026-10-07，破坏性）。** `build_time` 现名
   `build_method`，`runtime` 现名 `run_method`，宿主入口因此写成
-  `nichlink_toolchain::build_method::run()` 与 `nichlink_toolchain::run_method::host!()`。除此之外没有
+  `xirang_toolchain::build_method::run()` 与 `xirang_toolchain::run_method::host!()`。除此之外没有
   搬动：模块还是同一份代码，七模块布局不变。宿主只需改这两处调用点；0.2.0 及更早写的是旧名。
 
 ### Fixed
@@ -123,9 +147,9 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
 
 - **Crate splits are operable from every authoring surface (2026-10-07).** A host declares at its
   package root which subtrees become crates of their own (`add_crates.rs`), and that declaration is now
-  something the tools edit rather than something a reader only reads: `nichlink crates --declare <name>
+  something the tools edit rather than something a reader only reads: `xirang crates --declare <name>
   --subtree <crate::…::SUBTREE>` adds a crate and `--undeclare <name>` removes one (both preview the
-  exact text diff; `--write` applies), the bridge's `nichlink.crates` gained `action: "declare"` /
+  exact text diff; `--write` applies), the bridge's `xirang.crates` gained `action: "declare"` /
   `"undeclare"`, and Studio's `CRATE PARTITION` screen lost its blind spot — `D` removes the selected
   declared crate. The edit is **text**, not a re-render: `add_crates.rs` is hand-written source the
   author also reads, so only the named entry moves and every other byte stays. Removing the last
@@ -136,9 +160,9 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   answer the other half — what the split would write, what is on disk, how large each package is, and
   what `cargo publish` would still want.
   **分区的声明层现在每个创作面都改得动（2026-10-07）。** 宿主在包根声明哪些子树各自成为一个 crate
-  （`add_crates.rs`），而这份声明现在是被工具编辑的东西，不再只是被读的东西：`nichlink crates --declare
+  （`add_crates.rs`），而这份声明现在是被工具编辑的东西，不再只是被读的东西：`xirang crates --declare
   <name> --subtree <crate::…::SUBTREE>` 加一个 crate、`--undeclare <name>` 去掉一个（两者都先预览那段
-  确切的文本差异，`--write` 才落盘），桥的 `nichlink.crates` 多了 `action: "declare"` / `"undeclare"`，
+  确切的文本差异，`--write` 才落盘），桥的 `xirang.crates` 多了 `action: "declare"` / `"undeclare"`，
   而 Studio 的 **CRATE PARTITION** 屏补上了它的盲点——`D` 移除选中的已声明 crate。改动是**文本**而不是
   重渲染：`add_crates.rs` 是作者也会读的手写源码，因此只动被点名的那一条、其余每个字节保持原样。移除最后
   一个已声明的 crate 会连文件一起移除（宿主回到"就是一个 crate"，也就是一份不点名任何 crate 的声明想表达的
@@ -195,12 +219,12 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
 ### Fixed
 
 - **Generated build scripts no longer carry `unsafe` (2026-10-07).** The claim a fragment compiles and
-  the facade flag used to travel through `NICH_LINK_SHAPE_*`, which a generated build script could only
+  the facade flag used to travel through `XIRANG_SHAPE_*`, which a generated build script could only
   set with `unsafe { std::env::set_var(…) }` under edition 2024. They are arguments now
   (`run_for_partition(…, Some("claims"), false)`), the shape lives on the build input, and a nail
   asserts the generated script contains `run_for_partition` and neither `unsafe` nor `set_var`.
   **生成的构建脚本不再带 `unsafe`（2026-10-07）。** 碎片编译哪些认领、以及"我就是 facade"这两件事，
-  过去经 `NICH_LINK_SHAPE_*` 传递，而生成的构建脚本在 edition 2024 下只能靠
+  过去经 `XIRANG_SHAPE_*` 传递，而生成的构建脚本在 edition 2024 下只能靠
   `unsafe { std::env::set_var(…) }` 设置它们。现在它们是参数（`run_for_partition(…, Some("claims"),
   false)`），形状落在构建输入上，并有一条钉子断言生成的脚本含 `run_for_partition`、不含 `unsafe` 与
   `set_var`。
@@ -208,10 +232,10 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
 - **A claimed subtree that matches no published face is refused, not silently empty (2026-10-07).** A
   misspelled path (or a plan built from an earlier declaration) used to produce a crate with zero
   sources that compiles, ships, and answers every later question wrongly. It now stops, names the
-  nearest published face, and says to run `nichlink check` first.
+  nearest published face, and says to run `xirang check` first.
   **点名不到的认领被拒绝，而不是安静地变成空 crate（2026-10-07）。** 写错的路径（或一份由上一版声明
   构建的计划）过去会产出一个零源码的 crate——它能编译、能发布，并在之后每个问题上都答错。现在当场停下、
-  给出最近的那个已发布面，并说明先跑 `nichlink check`。
+  给出最近的那个已发布面，并说明先跑 `xirang check`。
 
 - **Refusals about the declaration say who checks the paths (2026-10-07).** They claimed "the compiler
   checks the paths", which no compiler can do: a partitioned host no longer compiles the subtrees its
@@ -234,22 +258,22 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
 ### Changed
 
 - **The publish surface is three crates now.** Batch 1 renamed the kernel (`core/` → `kernel/`,
-  `nichlink-core` → `nichlink-kernel`, library `nichlink` → `nichlink_kernel`); batch 2 merged the
-  seven thin execution surfaces into one crate, `nichlink-toolchain` (library `nichlink_toolchain`).
+  `nichlink-core` → `nichlink-kernel`, library `xirang` → `xirang_kernel`); batch 2 merged the
+  seven thin execution surfaces into one crate, `nichlink-toolchain` (library `xirang_toolchain`).
   Nine published names became three: **`nichlink-kernel`, `nichlink-macro`, `nichlink-toolchain`**.
   发布面现在是三个 crate：批 1 改了内核名（`core/` → `kernel/`、`nichlink-core` →
-  `nichlink-kernel`、库 `nichlink` → `nichlink_kernel`）；批 2 把七个薄执行面合并为一个 crate
-  `nichlink-toolchain`（库 `nichlink_toolchain`）。已发布的九个名字变成三个：**`nichlink-kernel`、
+  `nichlink-kernel`、库 `xirang` → `xirang_kernel`）；批 2 把七个薄执行面合并为一个 crate
+  `nichlink-toolchain`（库 `xirang_toolchain`）。已发布的九个名字变成三个：**`nichlink-kernel`、
   `nichlink-macro`、`nichlink-toolchain`**。
 
 - **Host usage.** A host writes `[dependencies] nichlink-toolchain` +
-  `[build-dependencies] nichlink-toolchain`, calls `nichlink_toolchain::run_method::host!();` at its
-  crate root, and its thin `build.rs` calls `nichlink_toolchain::build_method::run()`. The optional
+  `[build-dependencies] nichlink-toolchain`, calls `xirang_toolchain::run_method::host!();` at its
+  crate root, and its thin `build.rs` calls `xirang_toolchain::build_method::run()`. The optional
   backends stay behind features (`wasm`, `process-tools`, `node-graph`, `authoring`,
   `prototype-fixtures`, `dev-supervisor`); `build_method`/`runtime` are on by default.
   宿主用法：`[dependencies] nichlink-toolchain` + `[build-dependencies] nichlink-toolchain`，
-  crate 根部调用 `nichlink_toolchain::run_method::host!();`，薄 `build.rs` 调用
-  `nichlink_toolchain::build_method::run()`。可选后端留在特性后（`wasm`、`process-tools`、
+  crate 根部调用 `xirang_toolchain::run_method::host!();`，薄 `build.rs` 调用
+  `xirang_toolchain::build_method::run()`。可选后端留在特性后（`wasm`、`process-tools`、
   `node-graph`、`authoring`、`prototype-fixtures`、`dev-supervisor`）；
   `build_method`/`runtime` 默认开启。
 
@@ -268,14 +292,14 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   `nichlink-plugin-host`、`nichlink-studio`、`nichlink-mcp`、`nichlink-cli`。**`nichlink-macro`
   保留**（它没有被合并）。可按序执行的命令清单见 `docs/merge-batch3-publish.md`。
 
-- **Wired back (2026-09-29).** Batch 2's six target-less test files (**20** `#[test]` functions, the `(b)` class) are targets again: nineteen as integration tests under `toolchain/tests/` (an external caller reaches the tolerant arm of `__control_object!` — the in-crate ban is on absolute-path calls from inside an expansion), and one mounted in-crate because it collects *this* crate's opted-in declarations. Wiring them back exposed the branch only they reached: a `collector: debug` declaration could not compile (`$crate::submit!`, not `$crate::call_evidence::submit!`), and the merged crate gained `extern crate self as nichlink_toolchain;` for the expansions that carry `::nichlink_toolchain::…` paths. The earlier probe evidence — both build faces' `--list` matching none of them, and a `compile_error!` in each file leaving `cargo check --all-targets` at exit 0 — is kept as the record of what the gap was.
-  **已接回（2026-09-29）**：批 2 的六个没有 target 的测试文件（**20** 个 `#[test]`，即 `(b)` 类）重新有了 target：十九个是 `toolchain/tests/` 下的集成测试（外部调用者能到达 `__control_object!` 的宽容 arm——crate 内的禁令针对的是「展开里经绝对路径调用」），一个留在 crate 内挂载，因为它采集的是**本 crate** 已选择加入的声明。接回它们才暴露出「只有它们才会走到」的那一支：`collector: debug` 声明根本编译不过（应是 `$crate::submit!`，不是 `$crate::call_evidence::submit!`），而合并后的 crate 也补上了 `extern crate self as nichlink_toolchain;`，供那些带 `::nichlink_toolchain::…` 路径的展开解析。此前的探针证据（两个构建面 `--list` 命中 0、给每个文件插 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0）作为「当时的洞长什么样」的记录保留。
+- **Wired back (2026-09-29).** Batch 2's six target-less test files (**20** `#[test]` functions, the `(b)` class) are targets again: nineteen as integration tests under `toolchain/tests/` (an external caller reaches the tolerant arm of `__control_object!` — the in-crate ban is on absolute-path calls from inside an expansion), and one mounted in-crate because it collects *this* crate's opted-in declarations. Wiring them back exposed the branch only they reached: a `collector: debug` declaration could not compile (`$crate::submit!`, not `$crate::call_evidence::submit!`), and the merged crate gained `extern crate self as xirang_toolchain;` for the expansions that carry `::xirang_toolchain::…` paths. The earlier probe evidence — both build faces' `--list` matching none of them, and a `compile_error!` in each file leaving `cargo check --all-targets` at exit 0 — is kept as the record of what the gap was.
+  **已接回（2026-09-29）**：批 2 的六个没有 target 的测试文件（**20** 个 `#[test]`，即 `(b)` 类）重新有了 target：十九个是 `toolchain/tests/` 下的集成测试（外部调用者能到达 `__control_object!` 的宽容 arm——crate 内的禁令针对的是「展开里经绝对路径调用」），一个留在 crate 内挂载，因为它采集的是**本 crate** 已选择加入的声明。接回它们才暴露出「只有它们才会走到」的那一支：`collector: debug` 声明根本编译不过（应是 `$crate::submit!`，不是 `$crate::call_evidence::submit!`），而合并后的 crate 也补上了 `extern crate self as xirang_toolchain;`，供那些带 `::xirang_toolchain::…` 路径的展开解析。此前的探针证据（两个构建面 `--list` 命中 0、给每个文件插 `compile_error!` 后 `cargo check --all-targets` 仍 exit 0）作为「当时的洞长什么样」的记录保留。
 
 ### Added
 
 - **Host-declared crate partitioning (`add_crates.rs`, 2026-10-07).** A host declares at its package
   root which subtrees become crates of their own — ordinary Rust (`Crate::named("widgets").at(&[…::SUBTREE])`
-  inside a `Shape`), so the compiler checks the paths and an editor completes them. `nichlink crates
+  inside a `Shape`), so the compiler checks the paths and an editor completes them. `xirang crates
   --check` prints the plan, `--write` materializes it (one package per declared crate, plus a *facade*
   that carries the cross-crate half: the graft table and the two contract assertions), and `--revert`
   takes it back. The **development** shape mounts a fragment's files out of the host package (an edit
@@ -284,23 +308,23 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   carries the sources its own build reads, so no `#[path]` reaches outside a package and there is
   nothing to remap. Identities survive both shapes, because a face derives its identity input from
   `file!()` by dropping `CARGO_MANIFEST_DIR` and one leading `src/`. Generated packages are
-  materialized into the host's workspace `members` (merged, never rewritten), `NICHLINK_NAMESPACE` is
+  materialized into the host's workspace `members` (merged, never rewritten), `XIRANG_NAMESPACE` is
   the crate-root constant that names the identity namespace, and `tools/nichlink-partition-rehearsal`
   builds the workspace, standalone and release shapes in CI.
   **宿主声明的 crate 分区（`add_crates.rs`，2026-10-07）。** 宿主在包根声明哪些子树各自成为一个
   crate——就是普通 Rust（`Shape` 里的 `Crate::named("widgets").at(&[…::SUBTREE])`），因此编译器会查
-  路径、编辑器能补全。`nichlink crates --check` 打印计划，`--write` 物化它（每个声明的 crate 一个包，
+  路径、编辑器能补全。`xirang crates --check` 打印计划，`--write` 物化它（每个声明的 crate 一个包，
   外加承载跨 crate 那一半——graft 表与两条契约断言——的 *facade*），`--revert` 收回来。**开发**形状把
   碎片的文件从宿主包里挂载出来（一次编辑两个 crate 同时可见；工作区根的 `--remap-path-prefix` 让身份
   保持一致）；**`--release`** 把同一次拆分写成可发布的包——每个包携带自己构建要读的源码，因此没有
   `#[path]` 伸到包外、也没有任何东西需要 remap。身份在两个形状里都保得住，因为注册面的身份输入由
   `file!()` 去掉 `CARGO_MANIFEST_DIR` 与其后的一个 `src/` 得出。生成的包会被物化进宿主所在工作区的
-  `members`（合并、从不重写），`NICHLINK_NAMESPACE` 是点名身份命名空间的 crate 根常量，而
+  `members`（合并、从不重写），`XIRANG_NAMESPACE` 是点名身份命名空间的 crate 根常量，而
   `tools/nichlink-partition-rehearsal` 在 CI 里构建工作区、独立与发布三个形状。
 
 ### Fixed
 
-- **`nichlink.verify` no longer reports half a verdict (2026-09-29).** It printed
+- **`xirang.verify` no longer reports half a verdict (2026-09-29).** It printed
   `verdict ok (the kernel accepted the tree)` from the static face alone, while `apply`, `usages`
   and `converge` judge the same tree through `load_registry`, which reads every face file rather
   than the build's active scope. A tree could pass the first and be refused by the second, so an
@@ -308,7 +332,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   second line — `connector verdict: ok` or `connector verdict: rejected` followed by the same
   connector error tree — reusing `load_registry` and the existing reply bound. The `verdict ok`
   wording is unchanged.
-  **`nichlink.verify` 不再只报一半裁决（2026-09-29）。** 它原先只凭静态面打印
+  **`xirang.verify` 不再只报一半裁决（2026-09-29）。** 它原先只凭静态面打印
   `verdict ok (the kernel accepted the tree)`，而 `apply`、`usages`、`converge` 经
   `load_registry` 评判同一棵树，读的是每个面文件而不是构建的活跃作用域。一棵树因此可以通过
   前者、被后者拒绝，只读第一行的代理会把绿灯带进拒绝里。现在 `verify` 多印第二行
@@ -319,13 +343,13 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
 
 ### Added
 
-- **`nichlink.grafts`: the external graft plans, and whether the host entry keeps them.**
-  A plan under `.nichlink/external-grafts/<selector>/graft.plan` is an authoring record the
+- **`xirang.grafts`: the external graft plans, and whether the host entry keeps them.**
+  A plan under `.xirang/external-grafts/<selector>/graft.plan` is an authoring record the
   build never opens; when the host entry's `static_graft_plan!` does not name the slot a
   plan targets, the release prunes that slot and the record can never take effect. The
   build *warns* about that, and a long `cargo` log is where a warning goes to die — the CLI
-  answered it since `nichlink grafts`, and now the bridge does too, from one rule
-  (`nichlink_toolchain::build_method::graft_plan_rows`, extracted from the CLI in this release, so the
+  answered it since `xirang grafts`, and now the bridge does too, from one rule
+  (`xirang_toolchain::build_method::graft_plan_rows`, extracted from the CLI in this release, so the
   two surfaces cannot answer differently). Each row names the selector, the logical path
   and replacement the plan targets, whether it covers the whole subtree, and either the
   declaration that keeps it (`cut \`…\` graft \`…\`` at its entry line) or
@@ -343,13 +367,13 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   red (make every plan declared, skip an unreadable plan, turn `unknown` into
   `not declared`).
 
-- **`nichlink.diff` now also compares the external graft records against the sources
+- **`xirang.diff` now also compares the external graft records against the sources
   (`records: true`).** A record stores the identity it was written for, so a face that
   changed identity under an unmoved slot breaks it *silently*: the path is still there, the
   record still parses, and nothing in a text diff or a build log says so. The comparison
   reuses the tree diff's vocabulary, and every record lands in one of five buckets: `ok`;
   `undeclared` (the identity is in the tree, but no `static_graft_plan!` cut names its slot —
-  the release prunes that slot, which is what `nichlink.grafts` reports as `NOT declared by the
+  the release prunes that slot, which is what `xirang.grafts` reports as `NOT declared by the
   host entry` and counts under `unkept plans`); `stale` (nothing in the tree has that identity
   or that path); `re-identified` (the path is there and the identity moved, reported as
   `old -> now`), which is the one thing no symbol graph can tell you about a graft; and
@@ -363,8 +387,8 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   tests; the two load-bearing ones measured red (show the stale identity as "now"; let a
   typed cut fall through to `stale`).
 
-- **`nichlink.explain` renders the *overlay* projection (`overlay: true`), and the traversal
-  behind it moved into `nichlink_toolchain::build_method::overlay_projection`.** `explain` answered one face,
+- **`xirang.explain` renders the *overlay* projection (`overlay: true`), and the traversal
+  behind it moved into `xirang_toolchain::build_method::overlay_projection`.** `explain` answered one face,
   or projected the tree the build scoped; neither said which slot a declared graft cut replaces,
   which the CLI's `explain --overlay` had answered since it existed. The bridge now answers it
   from the same traversal, so the two surfaces cannot disagree about which slot is replaced —
@@ -382,7 +406,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   bridge tests and three for the shared traversal; two mutations measured red across both surfaces
   (let a selected child's parent fall into `pruned`; read a missing scope as `pruned`).
 
-- **A MIR artifact is now a *snapshot*, and `nichlink.mir` diffs two of them
+- **A MIR artifact is now a *snapshot*, and `xirang.mir` diffs two of them
   (`against: "<path>"`).** A MIR dump is a snapshot of *some* tree and rustc's text format cannot
   say which, so the JSONL this tool writes carries a header naming the identity namespace and
   registry root it came from — the convention the trace artifact already uses. Two snapshots of one
@@ -391,7 +415,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   the baseline forward. A snapshot of *another* tree is refused by name; an artifact that cannot
   name its tree (the ordinary `-Zunpretty=mir` dump) still diffs, and the reply says a comparison
   across two trees cannot be ruled out. Re-emitting another tree's artifact is refused rather than
-  relabelled, and `nichlink.unified` refuses to merge a foreign snapshot with this package's
+  relabelled, and `xirang.unified` refuses to merge a foreign snapshot with this package's
   trace. Measured through the bridge: `jsonl: true` on a dump writes
   `{"kind":"snapshot","namespace":"e2e-016","root":"7da1…"}` as the first line, and the delta
   reports `relations added 1 gone 1  functions added 1 gone 1` with `crate::outer -> crate::new`
@@ -400,12 +424,12 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   the unidentified caveat. Six bridge tests and one core snapshot test; three mutations measured
   red (swap the delta direction; skip the foreign-snapshot check; stop stamping the header).
 
-- **`nichlink.search` searches the tree, and each face hit says what the build thinks of it.** The
+- **`xirang.search` searches the tree, and each face hit says what the build thinks of it.** The
   tool answered "which file or function has this name" and nothing about the registry; it now
   matches logical path, `kind`, module and `registry_name` first — the spellings the other tools use —
   and annotates each hit `ok`, `added since build`, `re-identified` (with both identities) or
   `build unknown`, before the unchanged file and function hits. The verdict comes from
-  `crate::tree_delta`, the one rule `nichlink.diff` states (extracted here), so a face cannot be
+  `crate::tree_delta`, the one rule `xirang.diff` states (extracted here), so a face cannot be
   `ok` in one tool and `added` in the other. A root whose identity namespace cannot be learned
   still answers the source half and says the tree half is unavailable. Measured through the bridge
   on the same host: `face  root/slider … [ok]`; after adding a face,
@@ -415,8 +439,8 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   search together.
 
 - **Two kernel entry points replace the compact renderers the execution surfaces had to keep
-  themselves: `nichlink::authoring::parse::compact_admission` and
-  `nichlink::authoring::parse::compact_registration_rule`.** Studio's `admission_text` and
+  themselves: `xirang::authoring::parse::compact_admission` and
+  `xirang::authoring::parse::compact_registration_rule`.** Studio's `admission_text` and
   `registration_rule_text` assembled the compact clause form themselves in
   `toolchain/studio/src/studio/app/source_index.rs`, because no public entry could render it from the
   owned value — the second-implementation family `FIXR-01` recorded, whose admission copy
@@ -431,7 +455,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   `the_call_site_carries_no_second_rule_renderer`) pins that its call site carries no renderer
   of its own.
 
-- **`nichlink::authoring::parse::try_render_requirements`, the entry that refuses a `requires`
+- **`xirang::authoring::parse::try_render_requirements`, the entry that refuses a `requires`
   list it cannot render.** `render_requirements` rewrites an author's list from its parsed
   entries, so a malformed entry vanished from the result and a caller that wrote it back
   deleted a field the author had written. The strict sibling returns
@@ -442,7 +466,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   `a_malformed_requires_entry_refuses_the_rewrite`, measured red with the caller put back on
   the lossy entry.
 
-- **`nichlink_toolchain::build_method::face_views_and_unreadable`, so an unreadable face is named
+- **`xirang_toolchain::build_method::face_views_and_unreadable`, so an unreadable face is named
   instead of dropped.** `face_views` answered only with the faces that could be placed, so a
   registration file that does not parse and a node file whose syntax failed disappeared from
   the reply with nothing to look at. The new entry returns `(Vec<FaceView>, Vec<String>)` — the
@@ -452,7 +476,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   `a_registration_file_that_does_not_parse_is_named_not_dropped`, red before the fix with an
   empty unreadable set (audit `LGC-LG-11`).
 
-- **`nichlink::source::item_symbols` and `SourceItem`: the kernel owns the declaration
+- **`xirang::source::item_symbols` and `SourceItem`: the kernel owns the declaration
   vocabulary.** Studio's search view assembled symbol rows from a 13-entry `strip_prefix` word
   list of its own, so every keyword the kernel grew was a second place to forget and a
   bodyless `fn` in a trait was reported missing. `item_symbols` answers in source order with
@@ -462,7 +486,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   from outside the crate by `core/tests/b4_item_symbols.rs` (5 tests) and inside Studio by
   `source_rows_tests` (4), both measured red against the old word list (audit `STU-S-06`).
 
-- **`nichlink::authoring::parse::try_parse_requirements_owned`, the strict sibling that keeps a
+- **`xirang::authoring::parse::try_parse_requirements_owned`, the strict sibling that keeps a
   published signature published.** `parse_requirements_owned(&str) -> Vec<OwnedRequirementSpec>`
   is what hosts on the `0.1.x` line call, and it is lossy on purpose: it drops what it cannot
   parse. Tightening it would break an immutable version, so the strict judgement lives in a new
@@ -472,7 +496,7 @@ still spells the two host-facing modules `build_time` / `runtime`, and its kerne
   `a_malformed_requires_entry_is_refused_not_dropped`, red under a mutation that delegates the
   strict entry to the lossy one.
 
-- **`nichlink::authoring::parse::try_rule_syntax_from_text`, the strict reading of a rule text.**
+- **`xirang::authoring::parse::try_rule_syntax_from_text`, the strict reading of a rule text.**
   `rule_syntax_from_text` stays tolerant and keeps its published `-> String` signature, because
   hosts on the `0.1.x` line call it: a `.require_exports(…)` written inside a comment *is* read
   as the rule (the real declaration disappears), and a list named by a constant — `&EXPORTS`,
@@ -494,11 +518,11 @@ Studio now calls kernel entries that are not published yet. The contents half al
 new modules, and the release order stays core first.
 ### Changed
 
-- The CLI's `grafts` now renders rows computed by `nichlink_toolchain::build_method::graft_plan_rows`;
+- The CLI's `grafts` now renders rows computed by `xirang_toolchain::build_method::graft_plan_rows`;
   its JSON and text output are byte-identical (pinned by its own tests), and the rule that
   decides "is this plan's slot declared" has one home instead of two.
 - `explain --overlay`'s projection now comes from
-  `nichlink_toolchain::build_method::overlay_projection`, so the CLI and the bridge cannot disagree about
+  `xirang_toolchain::build_method::overlay_projection`, so the CLI and the bridge cannot disagree about
   which slot a cut replaces; its JSON and text output are unchanged.
 - **The naming batch (B7+B8): modules say what they mean, published names stay
   put.** Files that were named after their folder are named after their subject
@@ -523,7 +547,7 @@ new modules, and the release order stays core first.
   `0.1.0` forever.** Every scaffolded host carried `version = "0.1.0"` on both NichLink
   dependencies, from both dependency sources. Caret semantics hid it for four releases
   (`^0.1.0` accepts anything below `0.2.0`), so the literal was not merely stale — it
-  was *load-bearing-wrong*: the moment the line reached `0.2.0`, `nichlink new` would
+  was *load-bearing-wrong*: the moment the line reached `0.2.0`, `xirang new` would
   generate a host that cannot resolve, and the failure would read as a Cargo problem
   rather than a stale template. `dependency_specs` now writes
   `env!("CARGO_PKG_VERSION")` — the generating tool's own release, which cannot go
@@ -536,8 +560,8 @@ new modules, and the release order stays core first.
 
 ### Added
 
-- **`nichlink.impact`: how far a change to one face travels.** `nichlink.usages` gives
-  the direct neighbourhood and `nichlink.converge` one face's constraints; neither
+- **`xirang.impact`: how far a change to one face travels.** `xirang.usages` gives
+  the direct neighbourhood and `xirang.converge` one face's constraints; neither
   says what else a change touches. This walks the three dependency kinds this tree
   actually *declares*: a face's descendants (its registry owns them), the faces whose
   `requires` names a capability it provides, and the declared graft cuts that hand it
@@ -553,7 +577,7 @@ new modules, and the release order stays core first.
   name. Five tests, three measured red (drop the extra reasons, drop the cycle count,
   ignore the depth bound). Graft *records* and recorded traces naming the same identity
   are not traversed, and the reply says so.
-- **`nichlink.trace` now answers what a run *saw*, not only what it ran.** The call
+- **`xirang.trace` now answers what a run *saw*, not only what it ran.** The call
   report says which functions were active; `values: true` reads the same
   identity-checked artifact and reports the recorded locals grouped by the frame that
   captured them — name, rendered type and value, role (`input`/`let`/`return`/
@@ -569,14 +593,14 @@ new modules, and the release order stays core first.
   `count -> shown (transform)` / `shown -> value (used by paint::value)` as the data
   edges. Pinned by two tests, both measured red (one by folding every local out of its
   frame, one by disabling the query filter).
-- **`nichlink.converge` now also starts from a recorded run, not only from a face.**
+- **`xirang.converge` now also starts from a recorded run, not only from a face.**
   A bug report arrives in two shapes: an agent knows which face it is looking at, or
   it has a run that misbehaved and only the trace says what that run touched. With
   `trace: true` the tool reads the package's trace artifact (through the same
-  identity check `nichlink.trace` applies, absent and refused answers included),
+  identity check `xirang.trace` applies, absent and refused answers included),
   collapses the tree to the files that both declare a face and actually ran, names
   the frames that landed in each, counts the frames that fell outside any declared
-  face, and ends with the read plan and a pointer to `nichlink.converge node=<path>`
+  face, and ends with the read plan and a pointer to `xirang.converge node=<path>`
   for one face's constraints. Frames are matched to faces **by source file**, and the
   reply says so, because a face is a declaration and a frame is an active function —
   the honest boundary of this step, which is still the collapse that matters: a
@@ -589,15 +613,15 @@ new modules, and the release order stays core first.
   `/home/…/src/slider/slider.rs`, because the generated library mounts that module by
   absolute path. Pinned by three tests, the positive one measured red by reducing the
   match to an exact string comparison.
-- **The MIR channel now has a reader, a writer, and a merge.** `nichlink.mir` reads
+- **The MIR channel now has a reader, a writer, and a merge.** `xirang.mir` reads
   either a `rustc -Zunpretty=mir` text dump or the compact JSONL artifact, chosen by
   extension, and keeps the formats' asymmetry instead of flattening it: JSONL parses
   strictly, so a malformed line fails the whole read, while a text dump never fails
   because a line that is not a call is simply not a call. `jsonl: true` makes the tool
   the writer that existed nowhere in the workspace — Studio could render and parse
-  this artifact and nothing ever produced one. `nichlink.unified` then merges that
+  this artifact and nothing ever produced one. `xirang.unified` then merges that
   graph with the package's recorded trace through
-  `nichlink_toolchain::call_evidence::UnifiedCallGraph`, the one place the two evidence sources
+  `xirang_toolchain::call_evidence::UnifiedCallGraph`, the one place the two evidence sources
   are joined, so a call the trace confirms carries `evidence=Live` and *replaces* its
   compiler candidate rather than sitting beside it, while the rest stay `evidence=Mir`.
   An absent trace is a weaker answer and not a broken one: the merge still answers and
@@ -607,11 +631,11 @@ new modules, and the release order stays core first.
   demanding the move itself. The producer of the *text* stays outside the bridge, and the tool says
   so rather than hiding it: that is `cargo rustc -Zunpretty=mir` on a nightly
   toolchain.
-- `nichlink.verify` closes the loop the other tools opened: it re-runs the kernel's
+- `xirang.verify` closes the loop the other tools opened: it re-runs the kernel's
   registration validation over a package and reports the tree delta the run just
   published, so an edit is *confirmed* rather than merely written. It drives the same
   entry the CLI's `check` drives, which is why its verdict cannot drift from
-  `nichlink check`, and it refreshes the build evidence as a side effect. A failed
+  `xirang check`, and it refreshes the build evidence as a side effect. A failed
   verdict is the answer, not a tool failure: the diagnostics name the phase, node,
   source line, field and expected provider, and the reply stays `isError: false`.
   Writing it also pinned an API asymmetry that had been surviving review: `check_for`
@@ -620,43 +644,43 @@ new modules, and the release order stays core first.
   "is not a source directory". The CLI's local is named `manifest` and holds the
   directory, which is how the confusion hid.
 - A scaffolded host now demonstrates the whole runtime-evidence chain, which is the
-  half nothing in this workspace did. `nichlink new` writes a `src/main.rs` that
+  half nothing in this workspace did. `xirang new` writes a `src/main.rs` that
   records one frame under the mode the environment asks for and, when
-  `NICH_LINK_TRACE` (the mode) or `NICH_LINK_TRACE_FILE` (the path) is set, writes the
-  artifact where every reader looks — `.nichlink/traces/nichlink.trace`. Without one
+  `XIRANG_TRACE` (the mode) or `XIRANG_TRACE_FILE` (the path) is set, writes the
+  artifact where every reader looks — `.xirang/traces/xirang.trace`. Without one
   of those variables it records and writes nothing at all, so the release path still
   collects nothing; the point is that the chain is visible and runnable. Measured end
-  to end: scaffold → build → run (no file) → run with `NICH_LINK_TRACE=full` (a
-  141-byte artifact with `mode=full` and one `main` frame) → `nichlink.trace` renders
+  to end: scaffold → build → run (no file) → run with `XIRANG_TRACE=full` (a
+  141-byte artifact with `mode=full` and one `main` frame) → `xirang.trace` renders
   the call tree. A library host gets the pointer instead of the demo, because it has
   no `main` to write at the end of. Writing this also caught a stale claim of my own:
   the bridge's "no project in this workspace records one yet" message is now false.
 
 - **The build's evidence, the tree delta, and the runtime trace — three tools that
-  answer from something other than source text.** `nichlink.explain` reads the
-  files the build published under `target/nichlink/out` and answers what actually
+  answer from something other than source text.** `xirang.explain` reads the
+  files the build published under `target/xirang/out` and answers what actually
   ships per face: whether the scope selected it and whether release pruning strips
   its symbols, plus identity, path, kind, source, module, parent and slot — or the
-  whole scoped tree, bounded by `limit`. `nichlink.diff` states the face-level
+  whole scoped tree, bounded by `limit`. `xirang.diff` states the face-level
   delta between the sources now and the build's manifest: added, gone, and
   re-identified under an unmoved file (a `kind` change is an identity change, which
-  no text diff sees). `nichlink.trace` reads a recorded trace artifact and renders
+  no text diff sees). `xirang.trace` reads a recorded trace artifact and renders
   the headless call report — what actually ran — after checking the artifact's
   identity (namespace, registry root, every frame's node); a foreign artifact is
   refused by name rather than drawn, absence names the way to produce one, and a
   long report is truncated with its total named. Declared graft state and the
-  contract/admission fields stay out: the first belongs to `nichlink grafts`, the
+  contract/admission fields stay out: the first belongs to `xirang grafts`, the
   second needs a loaded registry and a build.
 - Two read-path defects the NichUI test project measured are fixed. The scan no
-  longer indexes `.nichlink/`, so a deleted fact stops answering `status` and
-  `search` from its own recoverable backup. And `nichlink.callgraph` is bounded —
+  longer indexes `.xirang/`, so a deleted fact stops answering `status` and
+  `search` from its own recoverable backup. And `xirang.callgraph` is bounded —
   definitions by `limit`, callers by a cap — names a multi-definition match as
   ambiguous and tells the reader to pass `path`, and labels its caller lists as
   name-matched. Measured before the fix: one `{"function":"new"}` reply against a
   350-file corpus was 4.5 MB, because 151 definitions each listed every call site
   of the name.
-- `nichlink.usages` closes the write path's read-back gap: the fields an agent can
-  *set* through `nichlink.apply` (preset, parts, localized names, exports,
+- `xirang.usages` closes the write path's read-back gap: the fields an agent can
+  *set* through `xirang.apply` (preset, parts, localized names, exports,
   `requires`, `provides`, handle and part traits and contracts, registration rule,
   admission, flow, runtime checks) are now reportable, together with a face's parent
   and children as the tree has them and the capability tokens other faces mention in
@@ -666,7 +690,7 @@ new modules, and the release order stays core first.
   pins taught the authoring contract twice: a parent must own a registry before the
   kernel admits a child, and a requirement is written `capability=>ProviderKind` —
   the kernel refuses a bare capability name by name.
-- `nichlink.converge` joins those answers into the one an agent needs before touching
+- `xirang.converge` joins those answers into the one an agent needs before touching
   a face: the build's scope and pruning verdicts, the tree's edges, the declared
   fields, whether each `capability=>ProviderKind` requirement is answered (named when
   it is), the files to read, and which tool carries the detail. The interesting half
@@ -681,16 +705,16 @@ new modules, and the release order stays core first.
 
 ### Changed
 
-- `mcp`'s READMEs say which path `nichlink.apply`'s `node`/`parent` take: the
-  *registry* path `nichlink.registry` reports (`root/control/button`), not the
+- `mcp`'s READMEs say which path `xirang.apply`'s `node`/`parent` take: the
+  *registry* path `xirang.registry` reports (`root/control/button`), not the
   file's (`control/object/button/button.rs`). Aiming with the file-shaped one is
   refused by name, which a play session against a scaffolded host walked into.
 
 ### Fixed
 
-- **`NICH_LINK_TRACE` is a lexicon constant now, so renaming it cannot break hosts
+- **`XIRANG_TRACE` is a lexicon constant now, so renaming it cannot break hosts
   silently — and it is the reason this release exists.** The collection-mode variable
-  was a bare literal in the recorder while its sibling `NICH_LINK_TRACE_FILE` was
+  was a bare literal in the recorder while its sibling `XIRANG_TRACE_FILE` was
   published as `lexicon::TRACE_FILE_ENV`, so the shared-contract test guarded one name
   and not the other; hosts are told to *set these variables* and the scaffold template
   *writes one into generated code*. `lexicon::TRACE_MODE_ENV` now carries it,
@@ -701,14 +725,14 @@ new modules, and the release order stays core first.
   `error[E0425]: cannot find value TRACE_MODE_ENV in module crate::registry_core::lexicon`
   against `nichlink-core-0.1.3`. That is the version rule working, not a defect, and
   this release is the move it asked for. Measured: a freshly scaffolded binary still
-  records and writes its artifact under `NICH_LINK_TRACE=full`; renaming the constant is
+  records and writes its artifact under `XIRANG_TRACE=full`; renaming the constant is
   red in the lexicon pin, and putting the literal back in the template is red in the
   scaffold pin.
 - **A second package built or verified in one process is no longer stamped with the
   first one's namespace.** `build_method`'s identity namespace was a first-write-wins
   process pin, and `check_for` set it from the package it was given — so in a
   long-lived process (the MCP bridge, a Studio session) the *second* package's
-  published evidence carried the first package's namespace, and `nichlink.diff`
+  published evidence carried the first package's namespace, and `xirang.diff`
   reported every face as re-identified. CI caught it in `verify`'s own test:
   `reidentified 1`, `ba9a8808…` on the run's side and `77fc3680…` on the sources',
   which the ids decode to `namespace=mcp-verify-broken path=label/label.rs
@@ -722,7 +746,7 @@ new modules, and the release order stays core first.
   measured red by neutering the scope, and the second by neutering the wiring
   separately — the unit pin tests the mechanism, the bridge pin tests that the
   mechanism is used.
-- A preview no longer reports the operation as done. `nichlink.apply` runs the real
+- A preview no longer reports the operation as done. `xirang.apply` runs the real
   operation on a throwaway copy, and the executor describes what it did in the past
   tense, so a delete preview printed `would move …` and then, in the same reply,
   ``moved `button` to …`` — a sentence true of the copy and false of the project.
@@ -736,14 +760,14 @@ new modules, and the release order stays core first.
 
 ### Added
 
-- The MCP bridge's write path, `nichlink.apply`: an agent can create or rewrite a
+- The MCP bridge's write path, `xirang.apply`: an agent can create or rewrite a
   registration face through the **same authoring executor Studio uses**, so the
   kernel's admission, parent-rule, and topology checks run on the change instead of
   being re-implemented in the bridge. `mcp` gained a `nichlink-toolchain`
   dependency (feature `authoring`) for it; the version line stays `0.1.3`, which is
   still unreleased, so no new symbol needed a new version to be distinguishable
   from a published one. `action` is `add` or `edit`, `parent` takes a logical path
-  (the one `nichlink.registry` reports) or an identity, and **a request is previewed
+  (the one `xirang.registry` reports) or an identity, and **a request is previewed
   unless `apply: true`**: the preview runs the real operation against a throwaway
   copy of the package — copying, rather than writing and reverting, is what cannot
   leave a half-edited tree behind — and returns the file diff plus the registration
@@ -762,21 +786,21 @@ new modules, and the release order stays core first.
   unchanged and now documented: it rewrites the faces **NichLink generated** and
   refuses a hand-written one (`this module was not generated by NichLink`), because
   rewriting a file it did not author would discard content it does not model.
-- `nichlink_toolchain::build_method::source_layout` and `SourceLayout` are public API: the
+- `xirang_toolchain::build_method::source_layout` and `SourceLayout` are public API: the
   write path needs the same answer the build uses about where a package's faces
   live, and guessing `src/` there would author a face the build never reads.
-- `nichlink-toolchain`'s `nichlink.registry` tool: the registration faces this package
+- `nichlink-toolchain`'s `xirang.registry` tool: the registration faces this package
   declares, one row per face with its logical path, kind, source, and the
   `NodeId` the host compiled. The rows are derived by
-  `nichlink_toolchain::build_method::face_views` — the same derivation the CLI's `explain`
+  `xirang_toolchain::build_method::face_views` — the same derivation the CLI's `explain`
   uses — so `mcp` gained a `nichlink-toolchain` dependency and the version line
   moved to `0.1.3`. This closes a standing dishonesty in the bridge: it
   registered only five source-text tools while its documentation had advertised a
   registry query, so an agent re-derived the tree by grepping for macro names.
   The namespace is the part that hides a real design question: a package name
-  *is* the `NodeId` namespace, so the tool resolves `NICH_LINK_NAMESPACE` first,
+  *is* the `NodeId` namespace, so the tool resolves `XIRANG_NAMESPACE` first,
   then the name Cargo reports, and otherwise **refuses** — it never falls back to
-  `nichlink.default`, because every id below such an answer names a node no host
+  `xirang.default`, because every id below such an answer names a node no host
   compiled. Contract, admission, and registration-rule data still need the built
   face snapshots and are still absent from the bridge.
 - A library target outside `src/` is read where it is. A package whose manifest
@@ -796,7 +820,7 @@ new modules, and the release order stays core first.
   back **under** the 450-line ceiling on the way (its conventional-entry choice
   moved to `entry_default.rs`), so its size-ratchet entry is deleted rather than
   enlarged.
-- `nichlink_toolchain::build_method::package_name`: the Cargo-authoritative package-name
+- `xirang_toolchain::build_method::package_name`: the Cargo-authoritative package-name
   read moved out of `nichlink-toolchain`, so the command line and the MCP bridge ask one
   authority instead of each carrying a copy. The CLI's commands behave exactly as
   before, and the two tests that pinned the private copy moved with it. Nothing in
@@ -804,7 +828,7 @@ new modules, and the release order stays core first.
   which is the same value.
 - `nichlink-toolchain`'s `PluginAdmission`: the host-side path from the plugin
   locks to a loadable artifact. It reads
-  `<package_root>/.nichlink/plugins/{official,user}.lock`, selects the manifest
+  `<package_root>/.xirang/plugins/{official,user}.lock`, selects the manifest
   against that catalogue, verifies it (`verify_signed` for an official source,
   `verify_artifact` for a user one), and names the lane the earned assurance
   buys; `install` (Wasm) and `load_process` (process) do admission and loading in
@@ -831,7 +855,7 @@ new modules, and the release order stays core first.
   (`docs/design-trace-ingest.md` §3.5). `write_trace_artifact` takes the host's
   identity namespace as a parameter — for a host crate that is
   `env!("CARGO_PKG_NAME")` — because the process cannot read its own compiled
-  namespace back and the reader's `NICH_LINK_NAMESPACE` is not it. The document is
+  namespace back and the reader's `XIRANG_NAMESPACE` is not it. The document is
   line-oriented text:
   values escape `\\`, `\t`, `\n`, `\r`, no raw control character reaches the
   file, and a malformed or unknown-key document is refused by line rather than
@@ -845,7 +869,7 @@ new modules, and the release order stays core first.
 - Documentation claims re-measured and corrected for the tool set and the trace
   loader: the root READMEs and both discussion introductions still said Studio
   rendered a built-in sample trace and had no ingest path, and that the bridge had
-  no registry query. The MCP tool lists now include `nichlink.registry`, and the
+  no registry query. The MCP tool lists now include `xirang.registry`, and the
   trace sentence says Studio loads the artifact its host writes and reports
   `TRACE: none` without one.
 - Studio's built-in trace sample is gone. With a loader in place it could only
@@ -855,15 +879,15 @@ new modules, and the release order stays core first.
   attached` or the mismatch reason. A session can no longer label evidence it
   does not have.
 - Studio reads the host crate's own package name and authors under it, instead of
-  defaulting to `nichlink.default`. The two ends have to agree — the host's build
+  defaulting to `xirang.default`. The two ends have to agree — the host's build
   script stamps `env!("CARGO_PKG_NAME")` as the identity namespace — and a session
   that rebuilt the tree under a different name put every recorded `NodeId` (a
   trace, a graft record) out of reach. The name now comes from Cargo
-  (`nichlink_toolchain::build_method::package_name`), the same authority the CLI and the MCP
+  (`xirang_toolchain::build_method::package_name`), the same authority the CLI and the MCP
   bridge use, rather than from a literal `[package] name` line scan: TOML's dotted
   `package.name = "x"` form is the same table without a `[package]` header, so the
   scan found nothing and Studio authored such a project in the wrong identity
-  domain. `NICH_LINK_NAMESPACE` still overrides everything verbatim, and a
+  domain. `XIRANG_NAMESPACE` still overrides everything verbatim, and a
   manifest Cargo names no package for (a virtual workspace root) still falls back
   to the documented default — authoring creates a tree, so a default is meaningful
   there.
@@ -881,19 +905,19 @@ new modules, and the release order stays core first.
 - Studio derived the wrong identity namespace for a TOML manifest that names its
   package in the dotted `package.name = "x"` form: that is the same table as
   `[package]`, a line scan sees no header, and the session fell back to
-  `nichlink.default` while the host compiled under the real name — so the same
+  `xirang.default` while the host compiled under the real name — so the same
   faces existed in two identity domains and a trace or graft record written on one
   side could not resolve on the other. The literal reader is gone and Studio takes
   Cargo's answer, one subprocess per project adoption (the adopted namespace is
   cached in the project context, so no write path pays for it).
 - The trace artifact's writer creates the directory it writes into. The
   documented host usage pairs `write_trace_artifact` with `trace_artifact_path`,
-  and on a fresh project that path's `.nichlink/traces/` does not exist yet: the
+  and on a fresh project that path's `.xirang/traces/` does not exist yet: the
   write failed with "No such file or directory", and the message named the
   writer's own temporary file instead of the missing directory. Creating it is
   what the authoring executor's writer already does for
-  `.nichlink/external-grafts/`. The `run_method` READMEs now document the
-  writer/reader pair and the `NICH_LINK_TRACE_FILE` override — the public API had
+  `.xirang/external-grafts/`. The `run_method` READMEs now document the
+  writer/reader pair and the `XIRANG_TRACE_FILE` override — the public API had
   no host-facing page, because the design document is not in the package.
 - Studio's writers require the project the reader opened. `package_root()` still
   falls back — the session, then the environment, then the working directory — and
@@ -937,10 +961,10 @@ new modules, and the release order stays core first.
   only remaining 1.0 item.
 - The bridge's own descriptions still called it read-only after the write path
   landed: the `mcp` crate docs, four module headers, the manifest `description`,
-  `nichlink mcp` in the CLI's usage text, and four places in each of the two
+  `xirang mcp` in the CLI's usage text, and four places in each of the two
   READMEs. Each now says what the bridge does — source and registry queries plus
   previewed authoring writes — so a `--help` line and a docs.rs page no longer
-  contradict `nichlink.apply`.
+  contradict `xirang.apply`.
 
 ## [0.1.1] — 2026-09-26
 
@@ -992,7 +1016,7 @@ new modules, and the release order stays core first.
   has its arrow on the callee's row, and that the header counts what the model
   holds. It prints the panel it checked, so the shape can be read as well as
   asserted.
-- One JSON string encoder in the kernel, `nichlink::json`, shared by the build
+- One JSON string encoder in the kernel, `xirang::json`, shared by the build
   diagnostics document, the MIR JSONL artifact and the generated editor
   snippets. It escapes exactly what RFC 8259 requires, and its tests assert the
   absence of raw control characters rather than a round trip, because this
@@ -1073,7 +1097,7 @@ new modules, and the release order stays core first.
   project only because Studio ingests no real trace yet.
 - Budgets in `toolchain/run_method/examples/scale_audit.rs`: 40 µs per node registered and
   20 µs per node indexed, roughly eight times the measured values and overridable
-  with `NICHLINK_SCALE_REGISTER_US` / `NICHLINK_SCALE_INDEX_US`, so an
+  with `XIRANG_SCALE_REGISTER_US` / `XIRANG_SCALE_INDEX_US`, so an
   order-of-magnitude regression fails the run instead of only printing a larger
   number.
 - Three steps in the `features` CI job for gaps no other job covered: clippy over
@@ -1170,7 +1194,7 @@ new modules, and the release order stays core first.
 - Package READMEs, `docs/discussion-introduction*.md`, and the workspace
   layout in the root README were corrected to describe the current nine-crate
   workspace.
-- `NICH_LINK_ENTRY` is now resolved once per build and drives both scope pruning
+- `XIRANG_ENTRY` is now resolved once per build and drives both scope pruning
   and the generated `BUILTIN_GRAFT_CUTS` table; a value that names no file fails
   the build instead of letting one reader fall back to Cargo's `main.rs`.
 - A build now **fails** when an external graft plan's target slot is named by no
@@ -1284,7 +1308,7 @@ new modules, and the release order stays core first.
   carry an explicit `macro-input` tag, with the reason stated where the gate
   reads it).
 - `atomic_write` uses a unique temporary name instead of a fixed
-  `<file>.nichlink.tmp`, which it used to delete before reuse — a sibling that
+  `<file>.xirang.tmp`, which it used to delete before reuse — a sibling that
   happened to carry that name was destroyed.
 - A graft plan with a repeated key is refused, as every other reader in the
   workspace refuses a repeated field; the second value used to win silently.
@@ -1335,7 +1359,7 @@ new modules, and the release order stays core first.
   escaping path is still refused by name. A read or write failure on the stdio
   transport is returned instead of ending the loop quietly, so a client that
   cannot be answered no longer sees a successful session.
-- `nichlink grafts` fails when it cannot answer its question instead of answering
+- `xirang grafts` fails when it cannot answer its question instead of answering
   part of it. An unreadable source tree, an unreadable host entry and a plans
   directory that exists but cannot be read now make the command exit non-zero
   after writing whatever was readable, because the declaration column would
@@ -1382,7 +1406,7 @@ new modules, and the release order stays core first.
   was compiled in — the checkout, or the installed crate's sources — so a launch
   from anywhere else looked healthy while the next authoring command wrote a new
   face into NichLink's own tree. The rule now takes the session's selection, then
-  a path argument, then `NICH_LINK_PACKAGE_ROOT`, then the working directory when
+  a path argument, then `XIRANG_PACKAGE_ROOT`, then the working directory when
   it holds a `Cargo.toml`, and refuses every candidate that names something
   unusable by name. `nichlink-toolchain` also accepts `[PROJECT]` and `--help`, and a
   failed launch prints one line and exits non-zero before the terminal is taken
@@ -1390,14 +1414,14 @@ new modules, and the release order stays core first.
 - Rewriting a face keeps its previous text where the reader can find it. The
   editor rebuilds a file from the fields it models, so anything hand-added is not
   in the result; the write was atomic, but the loss was silent and permanent. The
-  previous text now lands under the same `.nichlink/trash/` the delete path
+  previous text now lands under the same `.xirang/trash/` the delete path
   already uses, and the message names the backup path. `delete_module` moved to
   its own module in the process, which paid for the addition: the operations page
   is still inside the size ratchet.
 - A misconfigured entry or scope is a diagnostic instead of a panic.
-  `NICH_LINK_ENTRY` naming no file, a malformed `application!` declaration, an
+  `XIRANG_ENTRY` naming no file, a malformed `application!` declaration, an
   `application!` entry that is not `crate::…` or resolves to nothing, a
-  `NICH_LINK_SCOPE` value with the wrong schema or an identity no node owns, and a
+  `XIRANG_SCOPE` value with the wrong schema or an identity no node owns, and a
   malformed graft declaration in the entry all used to panic. They failed the
   build, but took the build script down with them and left `check --json`
   printing nothing at all. Each now reports a diagnostic (`entry`, `scope`,
@@ -1409,7 +1433,7 @@ new modules, and the release order stays core first.
 - An ordinary module beside the registration faces no longer fails the build. Any
   flat `.rs` under a host's `src/` — `src/helpers.rs`, say — used to panic with a
   layout message, from the host's own `cargo build` as well as from every
-  `nichlink` command that reads the tree, because discovery treated such a file
+  `xirang` command that reads the tree, because discovery treated such a file
   as a mislaid registration face. Discovery now asks the question the rest of the
   build asks (`parse_face` returning `Ok(None)` means "no face here"), skips
   ordinary modules in silence, and reports a file that really is a face as a
@@ -1510,13 +1534,13 @@ new modules, and the release order stays core first.
   works.
 - A graft selector that starts with `.` is refused by the rule the writer, the
   parser and Studio already share: `..` used to be accepted, wrote the plan to
-  `<pkg>/.nichlink/graft.plan`, and was then never listed — a record the runtime
+  `<pkg>/.xirang/graft.plan`, and was then never listed — a record the runtime
   never applied while the author saw a created plan.
 - Build output is trusted only while it still describes the sources:
-  `nichlink_toolchain::build_method::build_output_is_current` compares the published
+  `xirang_toolchain::build_method::build_output_is_current` compares the published
   `discovery.fingerprint` against a freshly computed one, the pipeline writes that
   fingerprint only on a clean run, and `explain` (and `--overlay`) reports
-  `known: false` with the existing "run `nichlink check`" note when it is missing or
+  `known: false` with the existing "run `xirang check`" note when it is missing or
   stale. A failing check no longer leaves output that `explain` presents as the
   current scope.
 - A malformed or unevaluable-gated `static_graft_plan!` is a `phase=graft-entry`
@@ -1555,7 +1579,7 @@ throwaway consumer outside the checkout. The chain was:
 → `nichlink-toolchain` → `nichlink-toolchain`. Dependency requirements are written as
 caret `0.1.0`, so a patch release does not force dependents to republish.
 
-- **`nichlink-core`** (library `nichlink`): the pure kernel — registration
+- **`nichlink-core`** (library `xirang`): the pure kernel — registration
   vocabulary, the `Registry` tree with atomic page-copy transactions, admission
   and flow contracts, graft declaration/application records, plugin policy,
   MIR/source evidence models, and the `syntax` registration-face parser.
@@ -1570,7 +1594,7 @@ caret `0.1.0`, so a patch release does not force dependents to republish.
   (`process-tools`) adapters with atomic hot deployment.
 - **`nichlink-toolchain`**: the Ratatui authoring and inspection surface.
 - **`nichlink-toolchain`**: the read-only MCP stdio bridge for five source queries.
-- **`nichlink-toolchain`**: the unified `nichlink` / `cargo-nichlink` binaries.
+- **`nichlink-toolchain`**: the unified `xirang` / `cargo-xirang` binaries.
 
 Known limits for this line are in the root `README.md`'s `## Boundaries`
 section and [`docs/threat-model.md`](docs/threat-model.md). Version-dependent behaviour
@@ -1594,9 +1618,9 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 变更：
 
-- **发布面合并的批次 1：内核是 `kernel/`，它的库是 `nichlink_kernel`。** 目录 `core/` 改为
-  `kernel/`，包名 `nichlink-core` 改为 `nichlink-kernel`，库名 `nichlink` 改为
-  `nichlink_kernel`，于是那个一身三职的历史名字（`nichlink` 既是项目、又曾是一个二进制、还是内核
+- **发布面合并的批次 1：内核是 `kernel/`，它的库是 `xirang_kernel`。** 目录 `core/` 改为
+  `kernel/`，包名 `nichlink-core` 改为 `nichlink-kernel`，库名 `xirang` 改为
+  `xirang_kernel`，于是那个一身三职的历史名字（`xirang` 既是项目、又曾是一个二进制、还是内核
   库名）只剩两职。代码引用、清单依赖、门禁落点、发布工具表、CI 行与活文档锚点都在同一次提交里
   一起跟上；七个执行面仍是各自独立的 crate（那是批次 2），已发布的 0.1.x 名字保持冻结。
   新旧对照与判别性谓词见 `docs/audit-2026-09-28/audit-merge-batch1-spec.md`。
@@ -1607,11 +1631,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
-- **`nichlink.grafts`：外部 graft 计划，以及宿主入口是否保住它们。**
-  `.nichlink/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录；宿主入口的
+- **`xirang.grafts`：外部 graft 计划，以及宿主入口是否保住它们。**
+  `.xirang/external-grafts/<selector>/graft.plan` 下的计划是构建从不打开的创作记录；宿主入口的
   `static_graft_plan!` 没有点名计划所针对的槽位时，发布态会剪掉那个槽位，这条记录便永远无法生效。
-  构建对此**只警告**，而冗长的 `cargo` 日志正是警告湮没的地方——CLI 从 `nichlink grafts` 起就在回答
-  它，现在桥也回答，而且用的是同一条规则（本发布把 `nichlink_toolchain::build_method::graft_plan_rows` 从 CLI
+  构建对此**只警告**，而冗长的 `cargo` 日志正是警告湮没的地方——CLI 从 `xirang grafts` 起就在回答
+  它，现在桥也回答，而且用的是同一条规则（本发布把 `xirang_toolchain::build_method::graft_plan_rows` 从 CLI
   提出来，因此两个执行面不可能给出不同答案）。每条记录点名 selector、计划针对的逻辑路径与替换件、
   是否覆盖整棵子树，以及保住它的那条声明（`cut \`…\` graft \`…\`` 与入口行号）或者
   `NOT declared by the host entry`——并以 `unkept plans N` 收尾，因为那才是读取方要据以行动的东西。
@@ -1623,11 +1647,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   declaration in the host entry names`），在任何人等到发布才发现之前。五条测试，其中三条实测为红
   （把每条计划都算作已声明、跳过读不了的计划、把 `unknown` 变成 `not declared`）。
 
-- **`nichlink.diff` 现在也能把外部 graft 记录与源码对照（`records: true`）。** 记录里存着它写下时
+- **`xirang.diff` 现在也能把外部 graft 记录与源码对照（`records: true`）。** 记录里存着它写下时
   针对的身份，因此槽位没动而面换了身份会**悄悄**弄坏它：路径还在、记录仍能解析，而文本 diff 与构建
   日志都不会说这件事。这次比较沿用树 diff 的词汇，而每条记录都落在五个桶之一：`ok`；`undeclared`
   （身份在树里，但没有任何 `static_graft_plan!` 切口点名它的槽位——发布态会剪掉那个槽位，这正是
-  `nichlink.grafts` 报成 `NOT declared by the host entry` 并计入 `unkept plans` 的那种）；`stale`
+  `xirang.grafts` 报成 `NOT declared by the host entry` 并计入 `unkept plans` 的那种）；`stale`
   （树里没有那个身份、也没有那条路径）；`re-identified`（路径在、身份换了，报成 `old -> now`），
   而这正是符号图对一条 graft 说不出的事；以及 `unreadable`（读不了的记录文件），它被计数而不是
   丢掉。类型化切口没有单独的桶：计划的路径永远是逻辑路径（每个写入方都用 `registry.path_for`），而
@@ -1637,8 +1661,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `00000000000000000000000000000001 -> 43c1869f312b81a54005c13a1af5b8ae (root/slider)`。两条测试，
   其中两条承载主张的实测为红（把旧身份当作"现在"；让类型化切口落进 `stale`）。
 
-- **`nichlink.explain` 渲染覆盖投影（`overlay: true`），而它背后的遍历搬进了
-  `nichlink_toolchain::build_method::overlay_projection`。** `explain` 一次回答一个面，或投影构建划定作用域的
+- **`xirang.explain` 渲染覆盖投影（`overlay: true`），而它背后的遍历搬进了
+  `xirang_toolchain::build_method::overlay_projection`。** `explain` 一次回答一个面，或投影构建划定作用域的
   那棵树；两者都不说哪个槽位被已声明 graft 切口替换——而 CLI 的 `explain --overlay` 从存在起就在回答
   它。桥现在用同一次遍历回答，因此两个执行面不可能就"哪个槽位被替换"产生分歧——这就是本发布里
   `graft_plan_rows` 那次搬家的下一项；`DeclaredGraft::form` 随之搬走，所以切口的拼法也只有一条规则，
@@ -1652,13 +1676,13 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   共享遍历三条测试；两次变异在两个执行面上实测为红（让被选中子级的父面落进 `pruned`；把缺失的
   作用域读成 `pruned`）。
 
-- **MIR artifact 现在是一份快照，而 `nichlink.mir` 能对两份作差（`against: "<path>"`）。** MIR
+- **MIR artifact 现在是一份快照，而 `xirang.mir` 能对两份作差（`against: "<path>"`）。** MIR
   转储是**某棵**树的快照，而 rustc 的文本格式说不出是哪一棵，因此本工具写出的 JSONL 携带一个表头，
   点名它来源的身份命名空间与注册树根——也就是 trace artifact 已经在用的那种约定。同一棵树的两份快照
   作差得到调用图差异：`caller -> callee` 关系的新增与消失（按对匹配并去重，因此 MIR 行号移动不算差异）
   以及函数符号，计数从基线指向后一份。属于**另一棵**树的快照会被按名拒绝；说不出自己那棵树的 artifact
   （普通的 `-Zunpretty=mir` 转储）仍能作差，而回复会说明"跨两棵树的比较无法排除"。给另一棵树的 artifact
-  重新盖戳会被拒绝而不是换标签，`nichlink.unified` 也拒绝把外来快照与本包的 trace 合并。经桥实测：
+  重新盖戳会被拒绝而不是换标签，`xirang.unified` 也拒绝把外来快照与本包的 trace 合并。经桥实测：
   对转储执行 `jsonl: true` 会把
   `{"kind":"snapshot","namespace":"e2e-016","root":"7da1…"}` 写成第一行，而差异报出
   `relations added 1 gone 1  functions added 1 gone 1`，新增 `crate::outer -> crate::new`、消失
@@ -1666,19 +1690,19 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `REFUSED: the two artifacts describe different trees`；两份文本转储则带着"未标识"的限定作答。
   桥六条测试、内核一条快照测试；三次变异实测为红（交换差异方向；跳过外来快照检查；不再盖戳表头）。
 
-- **`nichlink.search` 现在会搜树，而每个面命中都会说出构建对它的看法。** 本工具过去只回答"哪个文件或
+- **`xirang.search` 现在会搜树，而每个面命中都会说出构建对它的看法。** 本工具过去只回答"哪个文件或
   函数叫这个名字"、对注册树一无所知；现在它优先匹配逻辑路径、`kind`、模块与 `registry_name`——也就是其它工具
   使用的那些拼法——并给每个命中标注 `ok`、`added since build`、`re-identified`（带上新旧两个身份）或
   `build unknown`，随后才是与此前相同的文件与函数命中。结论来自 `crate::tree_delta`，也就是
-  `nichlink.diff` 说出的那一条规则（本轮提取出来），因此一个面不可能在一个工具里是 `ok`、在另一个里是
+  `xirang.diff` 说出的那一条规则（本轮提取出来），因此一个面不可能在一个工具里是 `ok`、在另一个里是
   `added`。身份命名空间无从得知的根仍然回答源码那一半，并说明树那一半不可用。经桥在同一个宿主上实测：
   `face  root/slider … [ok]`；新增一个面之后是
   `face  root/gauge … [added since build]`（其上还有构建过期那一行）；而在文件没动的情况下改了 `kind`
   之后是 `[re-identified (daca0f7b… -> bc2df33a…)]`。五条测试；那条共享规则做了变异实测（把每个已发布
   的面都读成 `ok`），diff 与 search 合计四条测试同时变红。
 
-- **两个内核入口取代了执行面过去只能自己保留的紧凑渲染器：`nichlink::authoring::parse::compact_admission`
-  与 `nichlink::authoring::parse::compact_registration_rule`。** Studio 的 `admission_text` 与
+- **两个内核入口取代了执行面过去只能自己保留的紧凑渲染器：`xirang::authoring::parse::compact_admission`
+  与 `xirang::authoring::parse::compact_registration_rule`。** Studio 的 `admission_text` 与
   `registration_rule_text` 在 `toolchain/studio/src/studio/app/source_index.rs` 里自己装配紧凑子句，因为当时没有
   任何公开入口能从 owned 值渲染它——这正是 `FIXR-01` 记录的第二份实现一族，其中 admission 那份副本还
   放宽了内核刚修好的 deny 门禁。现在两个入口都是公开 API、Studio 的调用点变成纯委派，而内核自己的历史
@@ -1688,7 +1712,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `registration_rule_text_tests`（`the_call_site_renders_what_the_kernel_renders`、
   `the_call_site_carries_no_second_rule_renderer`）钉住它的调用点不再自带渲染器。
 
-- **`nichlink::authoring::parse::try_render_requirements`：渲染不了就**拒绝**的入口。**
+- **`xirang::authoring::parse::try_render_requirements`：渲染不了就**拒绝**的入口。**
   `render_requirements` 用解析出的条目重写作者的列表，因此一条畸形条目会从结果里消失——把它写回
   文件的调用方就删掉了作者写下的一个字段。严格兄弟返回 `Result<String, FaceParseError>` 并点名它
   拒绝的那条（`capability=>provider`），manifest 渲染器改调它。`render_requirements` 仍是 `-> String`
@@ -1696,7 +1720,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   由 `a_malformed_requires_entry_refuses_the_rewrite` 走真实 `render_source` 钉住，变异（调用方改回
   有损入口）实测变红。
 
-- **`nichlink_toolchain::build_method::face_views_and_unreadable`：读不出来的面要**被点名**，而不是被丢掉。**
+- **`xirang_toolchain::build_method::face_views_and_unreadable`：读不出来的面要**被点名**，而不是被丢掉。**
   过去 `face_views` 只回答"安放得了"的面，于是安放不了的注册面文件、语法失败的节点文件从回答里消失、
   无处可查。新入口返回 `(Vec<FaceView>, Vec<String>)`——面加上读不出来的路径（复用
   `validation::face_syntax_errors`）——`face_views` 委托它，两者因此不可能不一致；文档写明
@@ -1704,7 +1728,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `a_registration_file_that_does_not_parse_is_named_not_dropped` 钉住，修前实测红（不可读集合为空，
   审计 `LGC-LG-11`）。
 
-- **`nichlink::source::item_symbols` 与 `SourceItem`：声明词表由内核持有。**
+- **`xirang::source::item_symbols` 与 `SourceItem`：声明词表由内核持有。**
   Studio 的搜索视图用自己的 13 条 `strip_prefix` 词表拼符号行，于是内核每长出一个关键字就多一处
   会忘记的地方，而 trait 里无函数体的 `fn` 反而被报成缺失。`item_symbols` 按源码顺序回答，只用一张
   `INTRODUCERS` 表（`name`/`signature`/`line`/`is_function`；`let` 刻意不在表内，因为绑定没有调用图
@@ -1712,7 +1736,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   由 crate 之外的 `core/tests/b4_item_symbols.rs`（5 条）与 Studio 的 `source_rows_tests`（4 条）钉住，
   两者对着旧词表都实测变红（审计 `STU-S-06`）。
 
-- **`nichlink::authoring::parse::try_parse_requirements_owned`：让"已发布的签名"继续是已发布的签名。**
+- **`xirang::authoring::parse::try_parse_requirements_owned`：让"已发布的签名"继续是已发布的签名。**
   `parse_requirements_owned(&str) -> Vec<OwnedRequirementSpec>` 是 `0.1.x` 线上宿主调用的入口，它
   有意是有损的：解不出来的就丢。收紧它会破坏一个不可变的版本，因此"拒绝"的判断放在新入口里，已发布
   的那个保持逐字签名与行为；两者走同一条 `requirement_item` 规则，于是已发布入口、严格入口与校验器由
@@ -1724,7 +1748,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 要等一个 crate 的带版本号 `nichlink-*` 依赖进入 index，因此 `0.1.6` 未发布期间那些 crate 会被跳过
 （是跳过，不是失败）；本批把这段等待**加深**了一层，因为 Studio 现在调用尚未发布的内核入口。内容半边
 已经包含这些新模块，发布顺序仍是 core 在前。
-- **`nichlink::authoring::parse::try_rule_syntax_from_text`：规则文本的**严格**读法。**
+- **`xirang::authoring::parse::try_rule_syntax_from_text`：规则文本的**严格**读法。**
   `rule_syntax_from_text` 保持宽容、签名仍是已发布的 `-> String`，因为 `0.1.x` 线上的宿主在调它：
   写在**注释里**的 `.require_exports(…)` 会被当成真规则（真正声明的那条就此消失），而由常量点名的清单
   ——`&EXPORTS`，文本扫描看不到它的字面量——会静默降级成 `ANY`，那正是"没有结构要求"，于是作者声明的
@@ -1735,9 +1759,9 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   走：已发布的宽容入口与依赖表都不动。
 变更：
 
-- CLI 的 `grafts` 现在渲染由 `nichlink_toolchain::build_method::graft_plan_rows` 计算出的记录；它的 JSON 与文本
+- CLI 的 `grafts` 现在渲染由 `xirang_toolchain::build_method::graft_plan_rows` 计算出的记录；它的 JSON 与文本
   输出逐字节相同（由它自己的测试钉住），而"这条计划的槽位是否被声明"这条规则从此只有一个家。
-- `explain --overlay` 的投影现在来自 `nichlink_toolchain::build_method::overlay_projection`，因此 CLI 与桥不可能
+- `explain --overlay` 的投影现在来自 `xirang_toolchain::build_method::overlay_projection`，因此 CLI 与桥不可能
   就"哪个槽位被切口替换"产生分歧；它的 JSON 与文本输出不变。
 - **命名批次（B7+B8）：模块按它意味的东西命名，公开名一个不动。** 原先按所在目录取名的文件
   改成按它的主语取名：`run_method` 的 trace 快照目录、`authoring/context` 与
@@ -1757,7 +1781,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - **生成的清单现在要求"生成它的那个发布版本"，而不是永远要求 `0.1.0`。** 每个脚手架出来的宿主在
   两条 NichLink 依赖上都写着 `version = "0.1.0"`，两种依赖来源都是。caret 语义把它藏了四个发布
   （`^0.1.0` 接受 `0.2.0` 以下的一切），因此这个字面量不只是陈旧——它**错得会咬人**：版本线一到
-  `0.2.0`，`nichlink new` 生成的宿主就无法解析，而失败看起来会像 Cargo 的问题而不是模板陈旧。
+  `0.2.0`，`xirang new` 生成的宿主就无法解析，而失败看起来会像 Cargo 的问题而不是模板陈旧。
   现在 `dependency_specs` 写 `env!("CARGO_PKG_VERSION")`——生成工具自己的发布版本，它不会陈旧——
   而脚手架钉子改成对着这个值断言、不再对着字面量断言，因此下一次发布自动带上它。实测：已发布的
   `0.1.4` CLI 生成 `version = "0.1.0"`；`0.1.5` 的生成 `version = "0.1.5"`。把旧字面量放回去即实测为红。
@@ -1766,7 +1790,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
-- **`nichlink.impact`：改动一个面能走多远。** `nichlink.usages` 给直接邻域，`nichlink.converge` 给
+- **`xirang.impact`：改动一个面能走多远。** `xirang.usages` 给直接邻域，`xirang.converge` 给
   一个面的约束；两者都不说这次改动还碰了什么。这个工具遍历这棵树真正**声明**的三种依赖：一个面的后代
   （它的注册机拥有它们）、`requires` 点名了该面所提供能力的面，以及把该面交出去的已声明 graft 切口。
   每个到达的节点都带上最短跳数、**所有**到达它的理由（既是子面又是消费者的节点必须把两者都说出来）与
@@ -1777,7 +1801,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `because: consumer: requires `cap.paint=>Slider``；未知节点按名拒绝。五条测试，其中三条实测为红
   （去掉多余理由、去掉环计数、忽略深度上限）。点名同一身份的 graft **记录**与已记录 trace 不在遍历
   范围内，回复里写明了这一点。
-- **`nichlink.trace` 现在也回答一次运行**看见**了什么，而不只是跑了什么。** 调用报告说哪些函数处于
+- **`xirang.trace` 现在也回答一次运行**看见**了什么，而不只是跑了什么。** 调用报告说哪些函数处于
   活动状态；`values: true` 读同一份经身份核验的 artifact，报告记录下的局部值——按捕获它们的帧分组，
   带上名字、渲染后的类型与值、角色（`input`/`let`/`return`/`consumer`）、`observed`/`unobserved` 与
   调用点——外加在任何被追踪调用之前捕获的那些，以及被观察到的数据边与每条边承载的变换。这正是符号图
@@ -1787,12 +1811,12 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   在 `frame 2 Slider::render` 之下、调用点落在面自己的文件里，数据边为
   `count -> shown (transform)` 与 `shown -> value (used by paint::value)`。两条测试钉住，均实测为红
   （一条把所有局部值折出它们的帧，一条关掉 query 过滤）。
-- **`nichlink.converge` 现在也能从一次已记录的运行出发，而不只是从一个面出发。** 缺陷报告有两种
+- **`xirang.converge` 现在也能从一次已记录的运行出发，而不只是从一个面出发。** 缺陷报告有两种
   形状：代理知道自己在看哪个面，或者它手上只有一次行为不对的运行、而"那次运行碰了什么"只有 trace
-  说得出来。给出 `trace: true` 时，工具读取本包的 trace artifact（走 `nichlink.trace` 那同一套身份
+  说得出来。给出 `trace: true` 时，工具读取本包的 trace artifact（走 `xirang.trace` 那同一套身份
   核验，缺失与拒绝的答案也一并继承），把整棵树收敛到"既声明了面、又真的跑了"的那些文件，点名落在
   各自的帧，统计落在任何声明面之外的帧，最后给出读计划，并指向
-  `nichlink.converge node=<路径>` 去看某一个面的约束。帧是**按源文件**匹配到面的，回复里也这么写，
+  `xirang.converge node=<路径>` 去看某一个面的约束。帧是**按源文件**匹配到面的，回复里也这么写，
   因为面是声明、帧是正在活动的函数——这是这一步诚实的边界，而它仍然是要紧的那次收敛：350 个文件的树
   变成跑过的那几个文件。真实宿主实测：一次 3 帧的运行、一个面的包，回答
   `faces that ran (1 of 1 declared)` + `frames in a face 1 / outside any declared face 2` + 一份
@@ -1800,48 +1824,48 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   同一次运行把 `main` 记成 `src/main.rs`，却把面模块里的帧记成**绝对路径**
   `/home/…/src/slider/slider.rs`，因为生成的库是按绝对路径挂载那个模块的。三条测试钉住它，其中正向
   那条把匹配退化成精确字符串比较即实测为红。
-- **MIR 通道现在有读取方、写入方与合并。** `nichlink.mir` 读 `rustc -Zunpretty=mir`
+- **MIR 通道现在有读取方、写入方与合并。** `xirang.mir` 读 `rustc -Zunpretty=mir`
   文本转储或紧凑 JSONL artifact，按扩展名选择，并保留两种格式的不对称而不是抹平它：JSONL 严格解析，
   一行畸形就整体失败；文本转储从不失败，因为不是调用的行就只是不是调用。`jsonl: true` 让这个工具成为
   工作区里从来不存在的那个写入方——Studio 能渲染、也能解析这种 artifact，而从没有任何东西产出过一份。
-  `nichlink.unified` 随后把该图与本包已记录的 trace 经
-  `nichlink_toolchain::call_evidence::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——因此被 trace 确认的调用
+  `xirang.unified` 随后把该图与本包已记录的 trace 经
+  `xirang_toolchain::call_evidence::UnifiedCallGraph` 合并——那是两份证据唯一的汇合处——因此被 trace 确认的调用
   带 `evidence=Live` 并**取代**它的编译器候选、而不是与它并列，其余保持 `evidence=Mir`。缺失 trace
   是更弱的答案、不是坏掉的答案：合并仍然作答，并把每条关系标为编译器候选。`mcp` 为此新增
   `nichlink-toolchain` 依赖；版本线移到 `0.1.4` 是另一条原因（一个被 `run_method` 消费的 core
   符号），因此这一条是随车走，而不是它本身要求移动。*文本*的生产者仍在桥之外，工具
   把这一点说出来而不是藏起来：那是 nightly 工具链上的 `cargo rustc -Zunpretty=mir`。
-- `nichlink.verify` 关上了别的工具打开的那个环：它对一个包重跑内核的注册校验，并报告那次运行刚刚发布
+- `xirang.verify` 关上了别的工具打开的那个环：它对一个包重跑内核的注册校验，并报告那次运行刚刚发布
   的树差异，因此一次编辑是被**确认过**的，而不只是被写下。它驱动 CLI 的 `check` 所驱动的同一个入口，
-  所以它的判断不可能与 `nichlink check` 漂移；它还顺带刷新构建证据。判断失败是答案而不是工具故障：
+  所以它的判断不可能与 `xirang check` 漂移；它还顺带刷新构建证据。判断失败是答案而不是工具故障：
   诊断点名阶段、节点、源码行、字段与期望的提供者，而回复的 `isError` 仍为 false。写它时还钉住了一个
   一直躲过审阅的 API 不对称：`check_for` 收包**目录**，而 `package_name` 收它的清单**文件**——把文件
   传给前者，管线就会去找 `<Cargo.toml>/src` 并报 "is not a source directory"。CLI 的局部变量名叫
   `manifest` 却装着目录，混淆就是这样藏起来的。
 - 脚手架出来的宿主现在演示整条运行期证据链，而这正是本工作区里别的任何东西都不做的那一半。
-  `nichlink new` 写出的 `src/main.rs` 会按环境要求的模式记录一个帧，并在设置了 `NICH_LINK_TRACE`
-  （模式）或 `NICH_LINK_TRACE_FILE`（路径）时，把 artifact 写到所有读取方都看的地方——
-  `.nichlink/traces/nichlink.trace`。没有这两个变量之一时它什么都不记录、也不写文件，因此发布路径
+  `xirang new` 写出的 `src/main.rs` 会按环境要求的模式记录一个帧，并在设置了 `XIRANG_TRACE`
+  （模式）或 `XIRANG_TRACE_FILE`（路径）时，把 artifact 写到所有读取方都看的地方——
+  `.xirang/traces/xirang.trace`。没有这两个变量之一时它什么都不记录、也不写文件，因此发布路径
   仍然什么都不收集；意义在于那条链可见且可跑。端到端实测：脚手架 → 构建 → 运行（无文件）→
-  `NICH_LINK_TRACE=full` 运行（141 字节 artifact、`mode=full`、一个 `main` 帧）→ `nichlink.trace`
+  `XIRANG_TRACE=full` 运行（141 字节 artifact、`mode=full`、一个 `main` 帧）→ `xirang.trace`
   渲染出调用树。库宿主拿到的是指引而不是演示，因为它没有可在结尾写入的 `main`。写这一条时还抓到自己
   一处陈旧的说法：桥那句"本工作区还没有宿主记录"现在是假的。
 
-- **构建的证据、树的差量与运行期的 trace——三个不靠源码文本作答的工具。** `nichlink.explain`
-  读构建发布在 `target/nichlink/out` 下的文件，逐个面回答真正会发布什么——作用域是否选中它、发布
+- **构建的证据、树的差量与运行期的 trace——三个不靠源码文本作答的工具。** `xirang.explain`
+  读构建发布在 `target/xirang/out` 下的文件，逐个面回答真正会发布什么——作用域是否选中它、发布
   剪枝是否剥掉它的符号——外加身份、路径、kind、源码、模块、父级与槽位；也可以给出整棵被划定作用域的
-  树（受 `limit` 限制）。`nichlink.diff` 说出源码现在与构建清单之间的面级差异：新增、消失，以及文件
-  没动而身份变了（`kind` 变化就是身份变化，文本 diff 看不见）。`nichlink.trace` 读取已记录的 trace
+  树（受 `limit` 限制）。`xirang.diff` 说出源码现在与构建清单之间的面级差异：新增、消失，以及文件
+  没动而身份变了（`kind` 变化就是身份变化，文本 diff 看不见）。`xirang.trace` 读取已记录的 trace
   artifact，在核验它的身份（命名空间、注册机根、每个帧的节点）之后渲染无终端调用报告——真正跑了
   什么；异树 artifact 被按名拒绝而不是画出来，缺失时说出产出它的办法，报告过长会截断并给出总行数。
-  声明的 graft 状态与 contract/admission 字段仍不在内：前者归 `nichlink grafts`，后者需要一个已加载
+  声明的 graft 状态与 contract/admission 字段仍不在内：前者归 `xirang grafts`，后者需要一个已加载
   的注册机与一次构建。
-- 修掉 NichUI 测试项目实测到的两个读路径缺陷。扫描不再索引 `.nichlink/`，因此被删掉的东西不再从
-  自己的可恢复备份里回答 `status` 与 `search`。`nichlink.callgraph` 也有了上限——定义数由 `limit`
+- 修掉 NichUI 测试项目实测到的两个读路径缺陷。扫描不再索引 `.xirang/`，因此被删掉的东西不再从
+  自己的可恢复备份里回答 `status` 与 `search`。`xirang.callgraph` 也有了上限——定义数由 `limit`
   限制、调用者由上限截断——多定义命中会说明歧义并提示传 `path`，调用者清单也标明是按名字匹配的。
   修复前的实测：在 350 文件的语料上，一条 `{"function":"new"}` 回复是 4.5 MB，因为 151 个定义各自
   列出了该名字的每一个调用点。
-- `nichlink.usages` 补上了写入路径的读回缺口：代理能经 `nichlink.apply` **设置**的那些字段
+- `xirang.usages` 补上了写入路径的读回缺口：代理能经 `xirang.apply` **设置**的那些字段
   （preset、parts、本地化名称、exports、`requires`、`provides`、handle 与 part 的 traits/contracts、
   registration rule、admission、flow、runtime checks）现在都能被报告，外加一个面在树里的父级与子面，
   以及别的面双向提到的能力记号。能力匹配发生在声明的记号上而不是一棵已解析的图，回复里写明了这一点；
@@ -1849,7 +1873,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   父级必须先拥有注册机内核才准入子面，而需求要写成 `capability=>ProviderKind`——裸能力名会被内核按名
   拒绝。
 
-- `nichlink.converge` 把那些答案拼成代理在动一个面之前真正需要的那一个：构建的作用域与剪枝判断、
+- `xirang.converge` 把那些答案拼成代理在动一个面之前真正需要的那一个：构建的作用域与剪枝判断、
   树的边、声明的字段、每条 `capability=>ProviderKind` 需求是否有答案（有就点名是谁）、该读哪些文件，
   以及细节在哪个工具里。有意思的是被拒绝的那一半，而写它的钉子发现了它：加载本包自己的面会**校验**它们，
   因此一棵需求没有提供者的树会让所有依赖注册机的工具拒绝加载——而那恰恰是代理最想要一个判断的时刻。
@@ -1859,8 +1883,8 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 修复：
 
-- **`NICH_LINK_TRACE` 现在是 lexicon 常量，因此改它的名字不可能悄悄弄坏宿主——而这也是本次发布存在
-  的原因。** 收集模式那个变量过去是记录器里的裸字面量，而它的同类 `NICH_LINK_TRACE_FILE` 是公开的
+- **`XIRANG_TRACE` 现在是 lexicon 常量，因此改它的名字不可能悄悄弄坏宿主——而这也是本次发布存在
+  的原因。** 收集模式那个变量过去是记录器里的裸字面量，而它的同类 `XIRANG_TRACE_FILE` 是公开的
   `lexicon::TRACE_FILE_ENV`，因此共享契约测试只守住了其中一个名字；而宿主是**被告知去设置这些变量**
   的，脚手架模板还会把其中一个**写进生成的代码**。现在由 `lexicon::TRACE_MODE_ENV` 承载它，
   `trace_mode_from_env` 读该常量，生成的 `src/main.rs` 也像它早已读取 `TRACE_FILE_ENV` 那样读取
@@ -1868,11 +1892,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   **已发布的**依赖构建每个 tarball，于是对着 `nichlink-core-0.1.3` 报
   `error[E0425]: cannot find value TRACE_MODE_ENV in module crate::registry_core::lexicon`。
   那是版本规则在生效、不是缺陷，而本次发布正是它要求的移动。实测：刚脚手架出来的二进制在
-  `NICH_LINK_TRACE=full` 下仍能记录并写出 artifact；把常量改名会让 lexicon 钉子变红，把模板改回
+  `XIRANG_TRACE=full` 下仍能记录并写出 artifact；把常量改名会让 lexicon 钉子变红，把模板改回
   字面量会让脚手架钉子变红。
 - **在一个进程里构建或校验第二个包时，它不再被盖上第一个包的命名空间。** `build_method` 的身份
   命名空间过去是"先到先得"的进程固定值，而 `check_for` 用它收到的包去设置它——于是在长生命周期进程
-  （MCP 桥、Studio 会话）里，**第二个**包发布的证据带着第一个包的命名空间，`nichlink.diff` 于是把
+  （MCP 桥、Studio 会话）里，**第二个**包发布的证据带着第一个包的命名空间，`xirang.diff` 于是把
   每个面都报成身份变了。CI 在 `verify` 自己的测试里抓到它：`reidentified 1`，运行侧
   `ba9a8808…`、源码侧 `77fc3680…`，而这两个 id 解出来分别是
   `namespace=mcp-verify-broken path=label/label.rs name=Label` 与 `namespace=mcp-verify-healthy …`
@@ -1882,7 +1906,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `a_run_namespace_wins_over_the_pin_and_puts_it_back`，以及通过代理真正调用的工具实现的
   `a_second_package_in_one_process_keeps_its_own_namespace`。前者把作用域去掉即实测为红；后者分别
   去掉作用域、去掉接线各测一次——单元钉子钉的是机制，桥的钉子钉的是"机制确实被用上"。
-- 预览不再把操作报告成已完成。`nichlink.apply` 在一份一次性副本上运行真实操作，而执行器用过去时
+- 预览不再把操作报告成已完成。`xirang.apply` 在一份一次性副本上运行真实操作，而执行器用过去时
   描述它做了什么，因此删除预览会先打印 `would move …`，又在同一份回复里打印
   ``moved `button` to …``——这句话对副本成立、对项目不成立。现在回复给这句话限定作用域
   （`preview effect: …`）而不是丢掉它，因为它带着 diff 没有的父级身份与改名前后的模块名；落盘
@@ -1893,11 +1917,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 
 新增：
 
-- MCP 桥的写入路径 `nichlink.apply`：代理可以经**与 Studio 相同的 authoring 执行器**创建或重写
+- MCP 桥的写入路径 `xirang.apply`：代理可以经**与 Studio 相同的 authoring 执行器**创建或重写
   注册面，因此内核的准入、父规则与拓扑校验会作用在改动上，而不是在桥里重新实现一遍。为此 `mcp`
   新增 `nichlink-toolchain` 依赖（`authoring` 特性）；版本线仍是尚未发布的 `0.1.3`，因此没有
   新符号需要靠新版本与已发布版本区分。`action` 为 `add` 或 `edit`，`parent` 接受逻辑路径
-  （`nichlink.registry` 报告的那条）或身份，而**除非 `apply: true`，请求只做预览**：预览在一份
+  （`xirang.registry` 报告的那条）或身份，而**除非 `apply: true`，请求只做预览**：预览在一份
   一次性的包副本上运行真实操作——用复制而不是"先写再回滚"，正是它不会留下改了一半的树的原因——
   并返回文件 diff 与将得到的注册树；`apply: true` 才写入项目，给出它写下的文件，并把产生的声明锚成
   `<path>:<line>`（与拒绝时 `file:line:column` 同一种形状）。预览的两端都是
@@ -1909,15 +1933,15 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   （`docs/roadmap-1.0.md` 第 7 条）。执行器自己的边界被原样继承并已记录在文档里：它重写的是
   **NichLink 生成**的面，对手写的面以 `this module was not generated by NichLink` 拒绝，因为
   重写一个并非它创作的文件会丢掉它并未建模的内容。
-- `nichlink_toolchain::build_method::source_layout` 与 `SourceLayout` 成为公开 API：写入路径需要与构建相同
+- `xirang_toolchain::build_method::source_layout` 与 `SourceLayout` 成为公开 API：写入路径需要与构建相同
   的答案——包的注册面住在哪里——而在那里猜 `src/` 会创作出构建永远不读的注册面。
-- `nichlink-toolchain` 的 `nichlink.registry` 工具：本包声明的注册面，每个面一行——逻辑路径、kind、
-  源码，以及宿主编译出的 `NodeId`。这些行由 `nichlink_toolchain::build_method::face_views` 推导——也就是
+- `nichlink-toolchain` 的 `xirang.registry` 工具：本包声明的注册面，每个面一行——逻辑路径、kind、
+  源码，以及宿主编译出的 `NodeId`。这些行由 `xirang_toolchain::build_method::face_views` 推导——也就是
   CLI 的 `explain` 所用的同一份推导——因此 `mcp` 新增了 `nichlink-toolchain` 依赖，版本线随之
   移到 `0.1.3`。这修掉了桥里一处长期存在的不实：它只注册了五个源码文本工具，文档却宣称具备注册树
   查询，于是代理靠 grep 宏名重建那棵树。命名空间是这里藏着的真正设计问题：包名**就是** `NodeId`
-  命名空间，因此工具先解 `NICH_LINK_NAMESPACE`，再解 Cargo 报告的包名，否则**拒绝作答**——绝不
-  回落到 `nichlink.default`，因为那种答案之下的每个 id 都指的是宿主从未编译过的节点。contract、
+  命名空间，因此工具先解 `XIRANG_NAMESPACE`，再解 Cargo 报告的包名，否则**拒绝作答**——绝不
+  回落到 `xirang.default`，因为那种答案之下的每个 id 都指的是宿主从未编译过的节点。contract、
   admission 与 registration rule 数据仍需已构建的面快照，桥里仍然没有。
 - `src/` 之外的库目标就地读取。清单声明 `[lib] path = "host/lib.rs"` 的包，其注册面现在从
   `host/` 读入，而每个面的身份路径是 `host/…`——相对清单的路径，因为声明宏只去掉一个前导
@@ -1929,7 +1953,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   并且绝不 spawn `cargo`，因为管线是在构建脚本里运行的。`[[bin]]` 目标不移动源码根：一个包可能有
   多个二进制目标，没有任何东西能在它们之间做选择。顺带把 `toolchain/build_method/src/entry.rs` 带回 450 行
   **上限之内**（它的约定入口选择移到 `entry_default.rs`），因此它的尺寸棘轮项是被删除而不是被放大。
-- `nichlink_toolchain::build_method::package_name`：Cargo 权威的包名读取从 `nichlink-toolchain` 移出，因此命令行
+- `xirang_toolchain::build_method::package_name`：Cargo 权威的包名读取从 `nichlink-toolchain` 移出，因此命令行
   与 MCP 桥问的是同一个权威，而不是各带一份副本。CLI 各命令行为完全不变，钉住那份私有副本的两条
   测试随它一同移动。构建管线不调用它：构建脚本从 Cargo 拿到 `CARGO_PKG_NAME`，也就是同一个值。
 - Studio 的 trace **加载方**，即上面那份 artifact 的消费一半：`TraceStatus { Absent, Loaded,
@@ -1941,7 +1965,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `true`）清空环境，`ProcessProgram::environment` 指明子进程随后能看到哪些变量，
   `ProcessProgram::current_dir` 决定它在哪里运行。
 - `nichlink-toolchain` 的 `PluginAdmission`：宿主侧从插件锁到可加载工件的那条路。它读
-  `<package_root>/.nichlink/plugins/{official,user}.lock`、按这份目录筛选 manifest、校验它
+  `<package_root>/.xirang/plugins/{official,user}.lock`、按这份目录筛选 manifest、校验它
   （官方来源走 `verify_signed`，用户来源走 `verify_artifact`），并给出换来的保证等级所对应的
   通道；`install`（Wasm）与 `load_process`（进程）一步完成准入与加载。在此之前**树内 `core`
   之外没有任何代码调用过 `verify_signed`**，Official 通道因此不可达。
@@ -1957,19 +1981,19 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - `nichlink-toolchain` 为 `package_name` 依赖 `serde_json`。这是本 crate 读取的唯一一份 JSON，
   而 `syn` 本来就在，因此宿主的构建脚本多付的是一片叶子，而不是这条规则的第二份实现。
 - 重新实测并更正了工具集与 trace 加载方的文档主张：根 README 与两份讨论引言仍在说 Studio 渲染内置
-  样例 trace、尚无 ingest 路径，以及桥没有注册树查询。MCP 工具清单现在包含 `nichlink.registry`，
+  样例 trace、尚无 ingest 路径，以及桥没有注册树查询。MCP 工具清单现在包含 `xirang.registry`，
   而 trace 那句改成：Studio 读入宿主写出的 artifact，没有 artifact 时报告 `TRACE: none`。
 - Studio 的内置 trace 示例已删除。有了加载方之后它只会误导，因此图例在什么都没装入时读
   `TRACE: none`、在 artifact 通过身份检查时读 `LIVE`、在被拒绝时读 `TRACE mismatch`；DATA
   面板不再有 `· built-in sample ·`，而是显示 `no trace attached` 或拒绝原因。会话再也不能为
   自己并不拥有的证据贴标签。
-- Studio 读出宿主 crate 自己的包名，并在它之下创作，不再默认 `nichlink.default`。两端必须一致
+- Studio 读出宿主 crate 自己的包名，并在它之下创作，不再默认 `xirang.default`。两端必须一致
   ——宿主的构建脚本把 `env!("CARGO_PKG_NAME")` 盖成身份命名空间——而一个在别的名字下重建注册树的
   会话会让每个已记录的 `NodeId`（trace、graft 记录）都指不到东西。包名现在来自 Cargo
-  （`nichlink_toolchain::build_method::package_name`），也就是 CLI 与 MCP 桥所用的同一个权威，而不再来自对
+  （`xirang_toolchain::build_method::package_name`），也就是 CLI 与 MCP 桥所用的同一个权威，而不再来自对
   `[package] name` 的逐行字面扫描：TOML 的点式写法 `package.name = "x"` 是同一张表却没有
   `[package]` 表头，扫描什么也找不到，于是 Studio 把这样的项目创作在错误的身份域里。
-  `NICH_LINK_NAMESPACE` 仍原样覆盖一切，而 Cargo 说不出包名的清单（虚拟工作区根）仍回落到文档化
+  `XIRANG_NAMESPACE` 仍原样覆盖一切，而 Cargo 说不出包名的清单（虚拟工作区根）仍回落到文档化
   的默认值——创作是在创建一棵树，默认值在那里是有意义的。
 - Studio 的手绘调用树画布已删除：`rataflow`（`node-graph` 特性，默认开启）成为唯一的调用树
   绘制者，1756 行画布代码与它们的几何测试随之消失，`g`（切换绘制者）与 `v`（切换排布）两个按键
@@ -1980,15 +2004,15 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 修复：
 
 - Studio 对以点式 `package.name = "x"` 命名包的 TOML 清单推导出**错误的**身份命名空间：那是与
-  `[package]` 相同的表，逐行扫描看不到表头，于是会话回落到 `nichlink.default`，而宿主在真实包名
+  `[package]` 相同的表，逐行扫描看不到表头，于是会话回落到 `xirang.default`，而宿主在真实包名
   之下编译——同一批面因此存在于两个身份域里，一侧写下的 trace 或 graft 记录在另一侧解析不了。
   字面读取方已删除，Studio 改为取 Cargo 的答案，每次采纳项目一次子进程（已采纳的命名空间缓存在
   项目上下文里，因此没有写入路径为它付代价）。
 - trace artifact 的写入方创建自己要写入的目录。文档化的宿主用法把 `write_trace_artifact` 与
-  `trace_artifact_path` 配成一对，而在一个全新的项目里那条路径的 `.nichlink/traces/` 还不存在：
+  `trace_artifact_path` 配成一对，而在一个全新的项目里那条路径的 `.xirang/traces/` 还不存在：
   写入以 "No such file or directory" 失败，而且消息点名的是写入方自己的临时文件，而不是缺失的
-  目录。创建它正是 authoring 执行器的写入方对 `.nichlink/external-grafts/` 已经在做的事。
-  `run_method` 的两份 README 现在也记下了这一对写入方/读取方与 `NICH_LINK_TRACE_FILE` 覆盖
+  目录。创建它正是 authoring 执行器的写入方对 `.xirang/external-grafts/` 已经在做的事。
+  `run_method` 的两份 README 现在也记下了这一对写入方/读取方与 `XIRANG_TRACE_FILE` 覆盖
   ——这份公开 API 此前没有任何面向宿主的页面，因为设计文档并不在包里。
 - Studio 的写入方要求"读者打开的那个项目"。`package_root()` 仍会回落——先会话、再环境、最后
   工作目录——而这个猜测对读取是合理的，因为读错树看得见。写入承担不起：一次删除曾这样解析根，
@@ -2013,9 +2037,9 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   测试钉住）；post-fix 审核的第 21/22/26/27/28 条与它的 `build.rs` 作用域发现都已修完，并就地
   标注；路线图不再把首次发布称作 1.0 唯一剩余项。
 - 写入路径落地之后，桥自己的描述仍称自己是"只读"：`mcp` 的 crate 文档、四处模块头、清单
-  `description`、CLI 用法文本里的 `nichlink mcp`，以及两份 README 里各四处。现在每一处
+  `description`、CLI 用法文本里的 `xirang mcp`，以及两份 README 里各四处。现在每一处
   都写出桥真正做的事——源码与注册树查询，加上先预览后落盘的创作写入——因此 `--help` 的一行与
-  docs.rs 的一页不再和 `nichlink.apply` 自相矛盾。
+  docs.rs 的一页不再和 `xirang.apply` 自相矛盾。
 
 ### [0.1.1] 2026-09-26
 
@@ -2053,7 +2077,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   画出的四角把该面板从页面里裁出，然后检查窗口内每个节点都在屏幕上有标签、同一列的两个节点不重叠、
   层号更大的画在更小的右边、每一跳一列的边都在被调用者那一行有箭头、表头数出的数量与模型一致。
   它会把检查过的面板打印出来，因此这个形状既可断言也可阅读。
-- 内核新增唯一的 JSON 字符串编码器 `nichlink::json`，由构建诊断文档、MIR JSONL 工件与
+- 内核新增唯一的 JSON 字符串编码器 `xirang::json`，由构建诊断文档、MIR JSONL 工件与
   生成的编辑器片段共用。它只转义 RFC 8259 要求的那一份；其测试断言"不存在原样控制字符"
   而不是做往返，因为本工作区自己的解析器宽松到会接受非法输出。
 - `lexicon` 现在拥有 `PACKAGE_ROOT_ENV`、`NAMESPACE_ENV` 与 `DEFAULT_NAMESPACE`，以及纯的
@@ -2105,7 +2129,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   通过。换成针对已加载注册面的追踪后，同一份枚举恰好报出那条追踪记录过的边。所以 `Live`
   不是死代码；它对真实工程不可达的唯一原因是 Studio 目前不载入真实追踪。
 - `toolchain/run_method/examples/scale_audit.rs` 现在带预算：注册 40 µs/节点、索引 20 µs/节点，约为实测值
-  的八倍，可用 `NICHLINK_SCALE_REGISTER_US` / `NICHLINK_SCALE_INDEX_US` 覆盖，因此数量级回归会
+  的八倍，可用 `XIRANG_SCALE_REGISTER_US` / `XIRANG_SCALE_INDEX_US` 覆盖，因此数量级回归会
   让运行失败，而不是只打印一个更大的数字。
 - `features` CI 任务新增三步，补上没有其他任务覆盖的缺口：`--all-targets
   --all-features` 的 clippy、tmux 视觉检查（`tools/nichlink-visual home graph tree-demo`，
@@ -2163,7 +2187,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   变成 `values[new_project_field::DIRECTORY]`，渲染器原先各自携带的两张标签表也随之消失；
 - 包 README、`docs/discussion-introduction*.md` 与根 README 的工作区结构已更正为当前
   的九 crate 工作区；
-- `NICH_LINK_ENTRY` 现在每次构建只解析一次，同时驱动作用域剪枝与生成的
+- `XIRANG_ENTRY` 现在每次构建只解析一次，同时驱动作用域剪枝与生成的
   `BUILTIN_GRAFT_CUTS` 表；指不到文件的值会让构建失败，而不是让一个读取者回退到 Cargo 的
   `main.rs`；
 - 外部 graft 计划的目标槽位没有任何声明命名时，构建现在**失败**（原为
@@ -2239,7 +2263,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `ignore` 的块，因此一个永远无法成为本 crate doctest 的宏用法示例会给每个读者看到、却没有任何
   程序检查；24 个注册面宏示例现在标为 `rust,ignore`，其中 21 个进入门禁解析（另外 3 个的形状由宏
   匹配器决定，带显式的 `macro-input` 标记，理由写在门禁能读到的地方）。
-- `atomic_write` 改用唯一临时名，不再用固定的 `<file>.nichlink.tmp`——它过去会在复用前删掉该名字，
+- `atomic_write` 改用唯一临时名，不再用固定的 `<file>.xirang.tmp`——它过去会在复用前删掉该名字，
   于是一个恰好带着它的同级文件会被销毁。
 - 重复键的 graft 计划会被拒绝，正如本工作区其他每个读取者都拒绝重复字段；过去第二个取值静默获胜。
 - Studio 的内置样本记录一个被观测到的局部值，因此 DATA 面板能显示数值，而不是它一直渲染的占位。
@@ -2269,7 +2293,7 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   跟随，因为遍历问的是 `is_dir` 而读取只比较路径前缀；两者现在都经规范路径，而对逃逸路径的
   直接请求仍会按名字被拒绝。stdio 传输上的读或写失败会被返回，而不是安静地结束循环，因此
   一个服务不了的客户端不会看到"会话成功"。
-- `nichlink grafts` 在答不出问题时失败，而不是只答一部分。读不了的源码树、读不了的宿主入口、
+- `xirang grafts` 在答不出问题时失败，而不是只答一部分。读不了的源码树、读不了的宿主入口、
   以及存在却读不了的计划目录，现在都会让命令在写出可读部分之后以非零退出，因为声明那一列否则
   就是猜的。文本本身损坏的计划仍然是一次成功的"计划已损坏"报告。
 - 写不成的生成树会被报告，而不是从结构化调用方那里 panic 出去。构建脚本仍带着原因停下——它
@@ -2298,23 +2322,23 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
 - 没有可打开的项目时 Studio 拒绝启动，而不是显示一棵空树并以 0 退出。旧的解析会回退到本
   crate 编译时所在的目录——检出目录，或已安装 crate 的源码——因此从别处启动看起来一切正常，
   而下一条创作命令会把新注册面写进 NichLink 自己的树里。规则现在依次取：本会话的选择、路径
-  参数、`NICH_LINK_PACKAGE_ROOT`、持有 `Cargo.toml` 的当前目录，并把每个指不到东西的候选按
+  参数、`XIRANG_PACKAGE_ROOT`、持有 `Cargo.toml` 的当前目录，并把每个指不到东西的候选按
   名字拒绝。`nichlink-toolchain` 另外接受 `[PROJECT]` 与 `--help`；启动失败会打印一行并在接管
   终端之前以非零退出。
 - 重写注册面时把先前的文本留在读者找得到的地方。编辑器用自己建模的字段重建文件，因此手工
   加进去的内容不在结果里；写入本身是原子的，但那次丢失既静默又永久。现在先前的文本落在删除
-  路径本就使用的 `.nichlink/trash/` 下，且消息点出备份路径。顺带把 `delete_module` 拆成独立
+  路径本就使用的 `.xirang/trash/` 下，且消息点出备份路径。顺带把 `delete_module` 拆成独立
   模块，正好付掉这次新增的代价：operations 页仍在尺寸棘轮之内。
-- 入口或范围配置错误是诊断而不是 panic。`NICH_LINK_ENTRY` 指不到文件、畸形的
+- 入口或范围配置错误是诊断而不是 panic。`XIRANG_ENTRY` 指不到文件、畸形的
   `application!` 声明、不以 `crate::` 开头或解析不到的 `application!` 入口、schema 不对或
-  含有任何节点都不拥有的身份的 `NICH_LINK_SCOPE` 取值、以及入口里畸形的 graft 声明，过去
+  含有任何节点都不拥有的身份的 `XIRANG_SCOPE` 取值、以及入口里畸形的 graft 声明，过去
   全都会 panic：构建确实失败了，但它把构建脚本一起打死，并让 `check --json` 什么都不打印。
   现在每一处都给出诊断（`entry`、`scope`、`graft-entry`）并**保守回退**——Cargo 约定、全树、
   空切口表——因此一次运行能报出它查得到的每个问题，而任何被拒绝的配置都不可能静默把注册面
   剪掉。范围取值由纯函数 `SourceScope::from_raw` 解析，因此这些拒绝无需改动进程环境即可钉住。
 - 注册面旁边的普通模块不再让构建失败。宿主 `src/` 下任何平铺 `.rs`——比如
   `src/helpers.rs`——过去会以布局消息 panic，宿主自己的 `cargo build` 与每条读取该树的
-  `nichlink` 命令都一样，因为发现过程把这种文件当成了放错位置的注册面。现在发现过程问的是
+  `xirang` 命令都一样，因为发现过程把这种文件当成了放错位置的注册面。现在发现过程问的是
   构建其余部分问的同一个问题（`parse_face` 返回 `Ok(None)` 即"这里没有面"），普通模块静默
   跳过，而确实是面的文件变成 `phase=face-layout` 诊断并点出路径与它该在的布局——因此
   `check --json` 产出的是文档而不是空白 stdout。解析不了的面同样被报告（`face-syntax`），
@@ -2381,11 +2405,11 @@ NichLink 工作区的所有变更都记录在这一份文件里。九个 crate �
   `PluginTrustError::SignatureLaneRequired`，而不是记录一个没有检查过任何东西的 `Signature` 保证；
   同一工件的纯摘要路径仍然可用。
 - 以 `.` 开头的 graft 选择器被写入方、解析方与 Studio 已在共用的那条规则拒绝：`..` 过去会被接受、
-  把计划写到 `<pkg>/.nichlink/graft.plan`，然后永远不会被列出——一份运行期从不应用、作者却看到
+  把计划写到 `<pkg>/.xirang/graft.plan`，然后永远不会被列出——一份运行期从不应用、作者却看到
   "计划已创建"的记录。
-- 构建产物只在仍然描述当前源码时才被信任：`nichlink_toolchain::build_method::build_output_is_current` 把已发布
+- 构建产物只在仍然描述当前源码时才被信任：`xirang_toolchain::build_method::build_output_is_current` 把已发布
   的 `discovery.fingerprint` 与新算出的指纹比对，pipeline 只在干净的一次运行写下那枚指纹，而
-  `explain`（以及 `--overlay`）在它缺失或过期时报 `known: false` 并沿用既有的"跑 `nichlink
+  `explain`（以及 `--overlay`）在它缺失或过期时报 `known: false` 并沿用既有的"跑 `xirang
   check`"提示。失败的 check 不再留下会被 `explain` 当作当前作用域提供的产物。
 - 畸形或带不可求值门控的 `static_graft_plan!` 现在是 `phase=graft-entry` 诊断而不是 panic：
   `check --json` 过去以 101 退出、stdout 为空，并把 `scope` 已经产出的诊断丢掉。读取者现在接收构建

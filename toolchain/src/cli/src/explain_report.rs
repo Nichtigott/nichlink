@@ -14,8 +14,8 @@ use std::path::Path;
 use crate::build_method::{
     DeclaredGraft, FaceView, declared_grafts, read_build_scope, read_pruning_manifest,
 };
-use nichlink_kernel::identity::NodeId;
 use serde_json::{Value, json};
+use xirang_kernel::identity::NodeId;
 
 /// Report whether the build's published scope keeps the face, and why.
 /// 报告构建发布的作用域是否保留该面，以及原因。
@@ -49,7 +49,7 @@ pub(super) fn scope_report(out_dir: &Path, face: &FaceView, current: bool) -> (V
             }),
             vec![
                 "  scope: unknown (build output is out of date with the sources); \
-                 run `nichlink check` to publish source_scope.tsv"
+                 run `xirang check` to publish source_scope.tsv"
                     .to_owned(),
             ],
         );
@@ -100,7 +100,7 @@ pub(super) fn scope_report(out_dir: &Path, face: &FaceView, current: bool) -> (V
                 "error": error,
             }),
             vec![format!(
-                "  scope: unknown ({error}); run `nichlink check` to publish source_scope.tsv"
+                "  scope: unknown ({error}); run `xirang check` to publish source_scope.tsv"
             )],
         ),
     }
@@ -123,7 +123,7 @@ pub(super) fn pruning_report(
             }),
             vec![
                 "  pruning: unknown (build output is out of date with the sources); \
-                 run `nichlink check` to publish pruning_manifest.tsv"
+                 run `xirang check` to publish pruning_manifest.tsv"
                     .to_owned(),
             ],
         );
@@ -166,7 +166,7 @@ pub(super) fn pruning_report(
                 "error": error,
             }),
             vec![format!(
-                "  pruning: unknown ({error}); run `nichlink check` to publish pruning_manifest.tsv"
+                "  pruning: unknown ({error}); run `xirang check` to publish pruning_manifest.tsv"
             )],
         ),
     }

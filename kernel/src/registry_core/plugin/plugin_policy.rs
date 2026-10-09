@@ -252,7 +252,7 @@ mod tests {
             name: "local",
             crate_name: "local",
             version: "1.0.0",
-            framework: FrameworkId::new("nichlink.default"),
+            framework: FrameworkId::new("xirang.default"),
             source: PluginSource::User,
             mode: PluginMode::Extension,
             checksum: "fixture-development",
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn strict_policy_accepts_prefixed_sha256_checksums() {
-        let framework = FrameworkId::new("nichlink.default");
+        let framework = FrameworkId::new("xirang.default");
         let manifest = PluginManifest {
             name: "local",
             crate_name: "local",
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn strict_policy_rejects_an_unsigned_official_face() {
-        let framework = FrameworkId::new("nichlink.default");
+        let framework = FrameworkId::new("xirang.default");
         let manifest = PluginManifest {
             name: "official",
             crate_name: "official",

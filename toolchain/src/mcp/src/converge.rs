@@ -59,8 +59,7 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
         .get("node")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "nichlink.converge requires node (one face) or trace: true (the recorded run)"
-                .to_owned()
+            "xirang.converge requires node (one face) or trace: true (the recorded run)".to_owned()
         })?;
     let id = resolve_node(root, &namespace, target)?;
     let face = faces
@@ -191,8 +190,8 @@ pub(crate) fn converge(root: &Path, arguments: &Value) -> Result<String, String>
         ));
     }
     output.push_str(
-        "detail: nichlink.explain (build evidence) · nichlink.usages (fields and capability refs) · \
-         nichlink.trace (what ran) · nichlink.diff (what changed since the build)\n",
+        "detail: xirang.explain (build evidence) · xirang.usages (fields and capability refs) · \
+         xirang.trace (what ran) · xirang.diff (what changed since the build)\n",
     );
     // The layered answer ends by naming the next call, because that is the one place guidance was
     // measured to work (the `literal` pointer in `search`): prose at `initialize` was ignored 4/4.

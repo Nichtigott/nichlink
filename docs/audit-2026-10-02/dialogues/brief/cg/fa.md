@@ -139,11 +139,11 @@ Then implement for fb/g3:
 pub struct ButtonPreset;
 pub struct ButtonParts;
 
-impl nichlink_toolchain::runtime::PresetContract for ButtonPreset {
+impl xirang_toolchain::runtime::PresetContract for ButtonPreset {
     type Output = Button;   // hmm, Output must match PartsContract::Output
     const REQUIRED_PARTS: &'static [&'static str] = &["label"];
 }
-impl nichlink_toolchain::runtime::PartsContract for ButtonParts {
+impl xirang_toolchain::runtime::PartsContract for ButtonParts {
     type Output = Button;
     const PROVIDED_PARTS: &'static [&'static str] = &["label"];
 }
@@ -219,7 +219,7 @@ Let me start: read fa's slider.rs (model for a new fa
 2	//! Button leaf face: a direct child of Control that owns no Registry of its own.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract, NON_EMPTY_TEXT};
 6	
 7	pub struct Button;
 8	
@@ -281,7 +281,7 @@ Let me read that region of fa's registry.rs.
 2	//! Control folder face: it owns a Registry, and every direct child must satisfy
 3	//! the rule kept beside it.
 4	
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	/// 父注册面交给子对象的绘制结果。
 8	/// The frame a parent face hands to its children for painting.
@@ -380,7 +380,7 @@ Now: does the new face get into the static plan automatically (from the collecto
 37	use std::sync::atomic::{AtomicUsize, Ordering};
 38	
 39	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-40	use nichlink_toolchain::runtime::registry_core::{GraftPlan, Registry};
+40	use xirang_toolchain::runtime::registry_core::{GraftPlan, Registry};
 41	
 42	/// Number of successful allocations since the last reset.
 43	/// 自上次重置以来成功分配的次数。
@@ -471,8 +471,8 @@ So I need to update 4 spots in registry.rs. Let me look at the failing assertion
 ```
 **src/lib.rs** — 86 lines, 3 symbols · used by 2 files: tests/registry.rs, tests/static_plan_allocations.rs
 
-1	//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-2	//! NichLink example: the README Control/Button two-level tree as a real host
+1	//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+2	//! XiRang example: the README Control/Button two-level tree as a real host
 3	//! library.
 4	//!
 5	//! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -481,7 +481,7 @@ So I need to update 4 spots in registry.rs. Let me look at the failing assertion
 8	//! step generated; face code stays ordinary Rust and no parent keeps a child
 9	//! roster.
 10	
-11	nichlink_toolchain::runtime::host!();
+11	xirang_toolchain::runtime::host!();
 12	
 13	// 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 14	// 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -497,7 +497,7 @@ So I need to update 4 spots in registry.rs. Let me look at the failing assertion
 24	
 25	/// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 26	/// The example's host identity. A graft requires both sides to share it.
-27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-button");
+27	pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-button");
 28	
 29	// 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 30	// 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -518,7 +518,7 @@ So I need to update 4 spots in registry.rs. Let me look at the failing assertion
 45	// 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 46	//   cut "root/control/button" graft "button_fast"
 47	// The string form still works and needs no link, but tooling cannot complete it.
-48	nichlink_toolchain::runtime::static_graft_plan!(
+48	xirang_toolchain::runtime::static_graft_plan!(
 49	    FRAMEWORK,
 50	    cut(crate::control::object::button::NODE_ID)
 51	        graft(control_button_graft::button_fast::NODE_ID),
@@ -589,12 +589,12 @@ Let me print lines 344-395.
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -735,7 +735,7 @@ Let me run these.
 3	//! over a contiguous range of siblings under one parent.
 4	
 5	use crate::control::{ControlFrame, ControlHandle};
-6	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+6	use xirang_toolchain::runtime::{ContractId, FlowContract};
 7	
 8	pub struct Slider;
 9	
@@ -794,12 +794,12 @@ fa's answer content:
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -980,7 +980,7 @@ Let me write it.
 37	use std::sync::atomic::{AtomicUsize, Ordering};
 38	
 39	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
-40	use nichlink_toolchain::runtime::registry_core::{GraftPlan, Registry};
+40	use xirang_toolchain::runtime::registry_core::{GraftPlan, Registry};
 41	
 42	/// Number of successful allocations since the last reset.
 43	/// 自上次重置以来成功分配的次数。
@@ -1063,12 +1063,12 @@ Let me write it.
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -1223,12 +1223,12 @@ Then the final report to the captain with:
 6	
 7	use control_button::{FRAMEWORK, base_registry, builtin_static_plan};
 8	use control_button_graft::FRAMEWORK as GRAFT_FRAMEWORK;
-9	use nichlink_toolchain::runtime::registry_core::lexicon;
-10	use nichlink_toolchain::runtime::registry_core::{
+9	use xirang_toolchain::runtime::registry_core::lexicon;
+10	use xirang_toolchain::runtime::registry_core::{
 11	    FrameworkId, GraftPlan, NodeId, OwnedFlowContract, PluginManifest, PluginMode, PluginSource,
 12	    PluginTrustError, PluginTrustPolicy, Registry, StaticGraftCut,
 13	};
-14	use nichlink_toolchain::runtime::{
+14	use xirang_toolchain::runtime::{
 15	    GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 16	};
 17	
@@ -1399,7 +1399,7 @@ Linking dynamic dispatch...
 2	//! Toggle leaf face: Control's third direct child, shaped like Button/Slider.
 3	
 4	use crate::control::{ControlFrame, ControlHandle};
-5	use nichlink_toolchain::runtime::{ContractId, FlowContract};
+5	use xirang_toolchain::runtime::{ContractId, FlowContract};
 6	
 7	pub struct Toggle;
 8	

@@ -33,10 +33,10 @@ fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-shape-{label}-{}-{sequence}",
+            "xirang-shape-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
@@ -89,7 +89,7 @@ fn package(label: &str, declaration: &str) -> (PathBuf, PathBuf, PathBuf) {
 /// The declaration a host writes, in the shape the reader accepts.
 /// 宿主写下的声明，读取器接受的那种形状。
 const DECLARATION: &str = r#"//! The shape.
-use nichlink_toolchain::run_method::{Crate, Shape};
+use xirang_toolchain::run_method::{Crate, Shape};
 
 pub const SHAPE: Shape = Shape {
     package_prefix: "myapp",
@@ -148,10 +148,10 @@ fn the_lock_says_which_faces_each_crate_would_own() {
     let rows = crate::build_method::manifests::write_pruning_manifest(&src, &nodes, &out)
         .expect("the record writes");
     write_shape_lock(&out, &declaration, &rows).expect("the lock writes");
-    let lock = fs::read_to_string(out.join(nichlink_kernel::lexicon::ADD_CRATES_LOCK_FILE))
+    let lock = fs::read_to_string(out.join(xirang_kernel::lexicon::ADD_CRATES_LOCK_FILE))
         .expect("the lock reads");
     assert!(
-        lock.starts_with("# add-crates\tnichlink-crate-shape\n"),
+        lock.starts_with("# add-crates\txirang-crate-shape\n"),
         "{lock}"
     );
     assert!(lock.contains("package_prefix\tmyapp"), "{lock}");
@@ -393,7 +393,7 @@ fn a_refusal_says_who_checks_the_paths_and_names_the_spelling_to_write() {
     let refusal = read_shape_declaration(&root).expect_err("it is refused");
     assert!(
         refusal.contains("resolves these paths against the registration tree"),
-        "it says NichLink resolves them: {refusal}"
+        "it says XiRang resolves them: {refusal}"
     );
     assert!(
         !refusal.contains("the compiler checks the paths"),
@@ -480,7 +480,7 @@ fn declaring_a_non_path_is_refused() {
 /// **单行**列表里的最后一条没有结尾逗号，而它同样可以被移除。
 #[test]
 fn undeclaring_works_on_a_single_line_declaration() {
-    let inline = "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+    let inline = "use xirang_toolchain::run_method::{Crate, Shape};\n\n\
                   pub const SHAPE: Shape = Shape {\n    package_prefix: \"myapp\",\n\
                   crates: &[Crate::named(\"widgets\").at(&[crate::control::object::SUBTREE])],\n};\n";
     let (root, _, _) = package("inline", inline);
@@ -554,10 +554,10 @@ fn declaration_root(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join("shape-decl")
         .join(format!(
-            "nichlink-declaration-{label}-{}-{sequence}",
+            "xirang-declaration-{label}-{}-{sequence}",
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
@@ -585,22 +585,22 @@ fn every_layout_gains_an_entry_that_parses() {
     let layouts = [
         // The template's constructor, one entry per line.
         // 模板的构造器，一条 entry 一行。
-        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+        "use xirang_toolchain::run_method::{Crate, Shape};\n\n\
          pub fn add_crates() -> Shape {\n    Shape::of(\"app\", &[\n        \
          Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE]),\n    ])\n}\n",
         // The same, all on one line: no trailing comma to inherit.
         // 同上，但全在一行里：没有可继承的尾逗号。
-        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+        "use xirang_toolchain::run_method::{Crate, Shape};\n\n\
          pub fn add_crates() -> Shape {\n    \
          Shape::of(\"app\", &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])])\n}\n",
         // The struct literal, one entry per line.
         // 结构体字面量，一条 entry 一行。
-        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+        "use xirang_toolchain::run_method::{Crate, Shape};\n\n\
          pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n    \
          crates: &[\n        Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE]),\n    ],\n};\n",
         // The struct literal inline.
         // 结构体字面量，单行。
-        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+        "use xirang_toolchain::run_method::{Crate, Shape};\n\n\
          pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n    \
          crates: &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])],\n};\n",
     ];

@@ -19,7 +19,7 @@ use crate::run_method::runtime::{
     LoadedGraft, graft_record_root, load_graft_record, load_graft_records,
 };
 use crate::run_method::{GraftPlanDocument, NodeId, Registry};
-use nichlink_kernel::lexicon;
+use xirang_kernel::lexicon;
 
 use super::super::context::package_root;
 use super::super::filesystem::atomic_write;
@@ -39,8 +39,8 @@ pub fn external_graft_root() -> PathBuf {
 /// 宿主包拥有的外部覆盖声明。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalGraftPlanFile {
-    /// The plan's directory name under `.nichlink/external-grafts/`.
-    /// 计划在 `.nichlink/external-grafts/` 下的目录名。
+    /// The plan's directory name under `.xirang/external-grafts/`.
+    /// 计划在 `.xirang/external-grafts/` 下的目录名。
     pub selector: String,
     /// The parsed plan body.
     /// 解析后的计划主体。
@@ -82,16 +82,16 @@ impl ExternalGraftPlanFile {
     }
 }
 
-/// One directory under `.nichlink/external-grafts/`.
-/// `.nichlink/external-grafts/` 下的一个目录。
+/// One directory under `.xirang/external-grafts/`.
+/// `.xirang/external-grafts/` 下的一个目录。
 ///
 /// A plan the tooling can read and a plan it cannot are both listed: a broken
 /// file is something the author has to see, not something to hide.
 /// 读得懂与读不懂的计划都会被列出：坏文件是作者必须看见的东西，不该被藏起来。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalGraftPlanEntry {
-    /// The plan's directory name under `.nichlink/external-grafts/`.
-    /// 计划在 `.nichlink/external-grafts/` 下的目录名。
+    /// The plan's directory name under `.xirang/external-grafts/`.
+    /// 计划在 `.xirang/external-grafts/` 下的目录名。
     pub selector: String,
     /// The plan directory itself.
     /// 该计划所在目录。
@@ -233,8 +233,8 @@ pub fn rewrite_external_graft(selector: &str, full: bool) -> Result<ExternalGraf
     Ok(plan)
 }
 
-/// Move one plan directory to the recoverable NichLink trash, returning its path.
-/// 把一个计划目录移到可恢复的 NichLink 回收目录，并返回其路径。
+/// Move one plan directory to the recoverable XiRang trash, returning its path.
+/// 把一个计划目录移到可恢复的 XiRang 回收目录，并返回其路径。
 ///
 /// The plan is not parsed: a record whose text is broken still has a directory,
 /// and removing it is the repair. The trash keeps the bytes, so a removal that
@@ -249,12 +249,12 @@ pub fn remove_external_graft(selector: &str) -> Result<PathBuf, String> {
         .map_err(|error| format!("clock error: {error}"))?
         .as_nanos();
     let trash = package_root()
-        .join(lexicon::NICHLINK_DIR)
+        .join(lexicon::XIRANG_DIR)
         .join("trash")
         .join(lexicon::EXTERNAL_GRAFT_DIR)
         .join(format!("{selector}-{stamp}"));
     fs::create_dir_all(trash.parent().expect("trash has a parent"))
-        .map_err(|error| format!("cannot create NichLink trash: {error}"))?;
+        .map_err(|error| format!("cannot create XiRang trash: {error}"))?;
     fs::rename(&root, &trash).map_err(|error| {
         format!(
             "cannot move {} to {}: {error}",

@@ -1,5 +1,5 @@
-//! NichLink 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
-//! NichLink example: the README Control/Button two-level tree as a real host
+//! XiRang 示例：README 里的 Control / Button 两层树，作为一个真实宿主库。
+//! XiRang example: the README Control/Button two-level tree as a real host
 //! library.
 //!
 //! 整个 crate 只有这里一处构建接线。`host!()` 引入构建期生成的注册计划；
@@ -8,7 +8,7 @@
 //! step generated; face code stays ordinary Rust and no parent keeps a child
 //! roster.
 
-nichlink_toolchain::run_method::host!();
+xirang_toolchain::run_method::host!();
 
 // 这个 crate 自己调用 `host!()`，所以类型化 graft 计划里的 `crate::...` 与生成
 // 树解析到同一个 crate。宿主如果把库和二进制分开，计划必须写在调用 `host!()`
@@ -24,7 +24,7 @@ nichlink_toolchain::run_method::host!();
 
 /// 这个示例的宿主身份。graft 要求覆盖双方共享同一个 framework。
 /// The example's host identity. A graft requires both sides to share it.
-pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-suite");
+pub const FRAMEWORK: FrameworkId = FrameworkId::new("xirang.example.control-suite");
 
 // 宿主入口的 graft 计划，用**类型化**写法：两侧都是指向真实注册面的 Rust 路径，
 // 因此编译器与编辑器都能解析它们——写在 `cut(` 之后会补全宿主注册面路径，
@@ -45,7 +45,7 @@ pub const FRAMEWORK: FrameworkId = FrameworkId::new("nichlink.example.control-su
 // 字符串写法仍然完全可用，只是工具无法补全它，也不需要链接外部实现：
 //   cut "root/control/button" graft "button_fast"
 // The string form still works and needs no link, but tooling cannot complete it.
-nichlink_toolchain::run_method::static_graft_plan!(
+xirang_toolchain::run_method::static_graft_plan!(
     FRAMEWORK,
     cut(crate::control::object::button::NODE_ID)
         graft(control_button_graft::button_fast::NODE_ID),
@@ -58,15 +58,15 @@ nichlink_toolchain::run_method::static_graft_plan!(
 ///
 /// The same named entry `examples/control-button` uses: two hosts, one incantation — and this one is
 /// **not a workspace member**, so it is the half that proves the entry works from a crate whose
-/// `build.rs` ran outside the workspace build. `tools/nichlink-daily-behaviors` is what builds it
-/// (measured: it was the only device naming this example, and `tools/nichlink-external-rehearsal`
+/// `build.rs` ran outside the workspace build. `tools/xirang-daily-behaviors` is what builds it
+/// (measured: it was the only device naming this example, and `tools/xirang-external-rehearsal`
 /// does not touch it).
 /// 与 `examples/control-button` 用的是同一个具名入口：两个宿主、一句咒语——而这一份**不是工作区成员**，
 /// 因此它是"该入口能从'不在工作区构建里'的 crate 用起来"的那一半。构建它的是
-/// `tools/nichlink-daily-behaviors`（实测：只有它点名这个示例，而 `tools/nichlink-external-rehearsal`
+/// `tools/xirang-daily-behaviors`（实测：只有它点名这个示例，而 `tools/xirang-external-rehearsal`
 /// 根本不碰它）。
 pub fn base_registry() -> Registry {
-    nichlink_toolchain::host_registry!().expect("example faces register")
+    xirang_toolchain::host_registry!().expect("example faces register")
 }
 
 /// 打印注册树的逻辑路径，供示例二进制和集成测试共用。
@@ -94,12 +94,12 @@ pub fn outline() -> Vec<String> {
 mod tests {
     /// What the host still compiles: `panel` stays with it, and its own plan is non-empty. The
     /// subtrees it handed away are **not** nameable here — by design, and the reason the deep paths
-    /// are checked through the tool's records instead (`nichlink explain …`).
+    /// are checked through the tool's records instead (`xirang explain …`).
     /// 宿主还编译什么：`panel` 留在它这里，它自己的计划非空。它交出去的那些子树在这里**叫不出来**——这是设计，
-    /// 也正是深路径改由工具的记录来核对的原因（`nichlink explain …`）。
+    /// 也正是深路径改由工具的记录来核对的原因（`xirang explain …`）。
     #[test]
     fn the_host_still_owns_what_it_did_not_hand_away() {
         assert!(!crate::panel::NODE_ID.to_string().is_empty());
-        assert!(!crate::NICHLINK_NAMESPACE.is_empty(), "the host keeps a namespace");
+        assert!(!crate::XIRANG_NAMESPACE.is_empty(), "the host keeps a namespace");
     }
 }

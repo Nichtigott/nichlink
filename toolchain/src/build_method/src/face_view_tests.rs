@@ -15,10 +15,10 @@ fn temporary_root(label: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir()
-        .join("nichlink-scratch")
+        .join("xirang-scratch")
         .join(module_path!().replace("::", "-"))
         .join(format!(
-            "nichlink-face-view-{label}-{}-{}-{sequence}",
+            "xirang-face-view-{label}-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -67,7 +67,7 @@ fn faces_carry_their_logical_path_and_default_registry_name() {
     assert!(button.parent_resolved);
     assert!(
         button.id
-            == nichlink_kernel::identity::NodeId::from_namespaced_path(
+            == xirang_kernel::identity::NodeId::from_namespaced_path(
                 "host",
                 "control/object/button/button.rs",
                 "Button"
@@ -254,7 +254,7 @@ fn an_external_face_is_reported_as_external_rather_than_unparsable() {
     let root = temporary_root("external");
     fs::write(
         root.join("src/button_fast.rs"),
-        "nichlink_toolchain::run_method::external_object! {\n    source: \"button_fast/button_fast.rs\",\n    kind: ButtonFast,\n}\n",
+        "xirang_toolchain::run_method::external_object! {\n    source: \"button_fast/button_fast.rs\",\n    kind: ButtonFast,\n}\n",
     )
     .expect("external face");
     let (views, unreadable, external) =

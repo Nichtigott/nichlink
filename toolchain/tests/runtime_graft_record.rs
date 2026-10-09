@@ -1,5 +1,5 @@
-//! Integration tests: a `.nichlink` graft record must reach `Registry::overlay`.
-//! 集成测试：`.nichlink` 里的 graft 记录必须抵达 `Registry::overlay`。
+//! Integration tests: a `.xirang` graft record must reach `Registry::overlay`.
+//! 集成测试：`.xirang` 里的 graft 记录必须抵达 `Registry::overlay`。
 //!
 //! `a_record_on_disk_reaches_overlay` is the test that would have caught the gap
 //! this feature closes: before it, a `graft.plan` Studio wrote changed the screen
@@ -11,13 +11,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use nichlink_toolchain::run_method::registry_core::lexicon;
-use nichlink_toolchain::run_method::registry_core::{
+use xirang_toolchain::run_method::registry_core::lexicon;
+use xirang_toolchain::run_method::registry_core::{
     Admission, FrameworkId, NodeId, OwnedFlowContract, OwnedLocalizedText, OwnedObjectContract,
     OwnedSourceLocation, RegistrationRule, RegistrationSnapshot, Registry, StaticGraftCut,
     root_node_id,
 };
-use nichlink_toolchain::run_method::{
+use xirang_toolchain::run_method::{
     GraftPlanDocument, RecordReport, apply_recorded_grafts, graft_record_root,
 };
 // The ungated tests never call the loader directly; only the no-`authoring` pin
@@ -25,7 +25,7 @@ use nichlink_toolchain::run_method::{
 // 不受门控的测试不直接调用加载器；只有那条“无 authoring”钉子会调用，因此这些名字
 // 不出现在 `authoring` 构建里。
 #[cfg(not(feature = "authoring"))]
-use nichlink_toolchain::run_method::{LoadedGraft, load_graft_records};
+use xirang_toolchain::run_method::{LoadedGraft, load_graft_records};
 
 const FRAMEWORK: FrameworkId = FrameworkId::new("graft-record-test");
 const BASE_NAMESPACE: &str = "graft-record-base";
@@ -40,7 +40,7 @@ impl TempRoot {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-graft-record-{tag}-{}-{sequence}",
+            "xirang-graft-record-{tag}-{}-{sequence}",
             std::process::id()
         ));
         std::fs::create_dir_all(&root).expect("create temp root");

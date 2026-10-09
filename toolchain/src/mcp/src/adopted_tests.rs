@@ -13,7 +13,7 @@ fn package(label: &str) -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-mcp-adopted-{label}-{}-{sequence}",
+        "xirang-mcp-adopted-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -31,11 +31,11 @@ fn write_fixture(path: &Path, text: &str) {
 fn adopt_current(root: &Path) -> String {
     let contents = std::fs::read_to_string(root.join("src/lib.rs")).expect("fixture source");
     let fingerprint =
-        nichlink_kernel::adoption::adoption_fingerprint(&[("src/lib.rs".to_owned(), contents)]);
+        xirang_kernel::adoption::adoption_fingerprint(&[("src/lib.rs".to_owned(), contents)]);
     let line = format!(
         "root/button|chain+impl|converge: 6 live edges|maintainer|2026-09-29T14:00:00Z|src/lib.rs|{fingerprint}|first adoption\n"
     );
-    write_fixture(&root.join(".nichlink/adopted/entries"), &line);
+    write_fixture(&root.join(".xirang/adopted/entries"), &line);
     line
 }
 
@@ -109,8 +109,7 @@ fn an_entry_reads_as_a_verdict_rather_than_a_print() {
     // (measured in T-21: an arm spent ~15,000 characters deriving what one of these prints meant).
     // 台账里仍然存着完整的 sha——那是记录、也是比较键——但**答案**不许拿它当主语：十二位十六进制是比较键、
     // 不是信息，读者既不能拿它找文件、也不能拿它改一行（T-21 实测：某一臂花了约 15,000 字符去推它是什么意思）。
-    let ledger =
-        std::fs::read_to_string(root.join(".nichlink/adopted/entries")).expect("the ledger");
+    let ledger = std::fs::read_to_string(root.join(".xirang/adopted/entries")).expect("the ledger");
     let recorded = ledger
         .lines()
         .find(|line| !line.trim().is_empty() && !line.starts_with('#'))
@@ -142,12 +141,12 @@ fn a_multi_file_lease_says_that_the_record_cannot_name_the_file_that_moved() {
     let contents = std::fs::read_to_string(root.join("src/lib.rs")).expect("fixture source");
     let other = "// a second covered file\n".to_owned();
     write_fixture(&root.join("src/other.rs"), &other);
-    let print = nichlink_kernel::adoption::adoption_fingerprint(&[
+    let print = xirang_kernel::adoption::adoption_fingerprint(&[
         ("src/lib.rs".to_owned(), contents),
         ("src/other.rs".to_owned(), other),
     ]);
     write_fixture(
-        &root.join(".nichlink/adopted/entries"),
+        &root.join(".xirang/adopted/entries"),
         &format!(
             "root/button|chain+impl|converge|maintainer|2026-09-29T14:00:00Z|src/lib.rs,src/other.rs|{print}|first adoption\n"
         ),
@@ -181,7 +180,7 @@ fn a_renewal_is_a_preview_until_it_is_applied_and_confirmed() {
     });
     let preview = adopted(&root, &request).expect("a preview");
     assert!(preview.contains("nothing was written"), "{preview}");
-    assert!(!root.join(".nichlink/adopted/entries").exists());
+    assert!(!root.join(".xirang/adopted/entries").exists());
     let applied = adopted(
         &root,
         &json!({
@@ -197,7 +196,7 @@ fn a_renewal_is_a_preview_until_it_is_applied_and_confirmed() {
     )
     .expect("an append");
     assert!(applied.contains("append-only"), "{applied}");
-    let written = std::fs::read_to_string(root.join(".nichlink/adopted/entries")).expect("ledger");
+    let written = std::fs::read_to_string(root.join(".xirang/adopted/entries")).expect("ledger");
     assert!(
         written.contains("re-confirmed after the chain fix"),
         "{written}"
@@ -212,9 +211,9 @@ fn a_renewal_is_a_preview_until_it_is_applied_and_confirmed() {
 fn conformance_answers_unknown_lapsed_and_in_force() {
     let root = std::env::temp_dir().join(format!("mcp-conformance-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join(".nichlink/adopted")).expect("ledger directory");
+    std::fs::create_dir_all(root.join(".xirang/adopted")).expect("ledger directory");
     std::fs::write(root.join("src.rs"), "pub fn one() {}\n").expect("a file to cover");
-    let ledger = root.join(".nichlink/adopted/entries");
+    let ledger = root.join(".xirang/adopted/entries");
     std::fs::write(
         &ledger,
         "root/control/button|first reading|traced once|nich|2026-10-01T10:00:00+08:00|src.rs|cafe|first\n\
@@ -308,7 +307,7 @@ fn a_lapsed_line_names_whose_print_it_carries() {
     let ledger = format!(
         "{borrowed}root/other|chain+impl|converge: 1 live edge|maintainer|2026-09-30T14:00:00Z|src/other.rs|{fingerprint}|a second adoption\n"
     );
-    write_fixture(&root.join(".nichlink/adopted/entries"), &ledger);
+    write_fixture(&root.join(".xirang/adopted/entries"), &ledger);
     let answer = adopted(&root, &json!({})).expect("the ledger answers");
     assert!(
         answer.contains("the recorded print is `root/button`'s current print, not this file's"),
@@ -320,10 +319,10 @@ fn a_lapsed_line_names_whose_print_it_carries() {
 /// A populated ledger names its own file, exactly as an empty one does.
 /// 有内容的台账与空台账一样，点名它自己那个文件。
 ///
-/// Measured (T-21): the arm spent shell calls on `find`/`ls` to locate `.nichlink/adopted/entries`
+/// Measured (T-21): the arm spent shell calls on `find`/`ls` to locate `.xirang/adopted/entries`
 /// before it could read the two lines it was asking about — the path was printed only in the empty
 /// case, so the reader that had something to read was the one that had to go looking.
-/// 量到的（T-21）：那一臂先花了若干 shell 调用 `find`/`ls` 去找 `.nichlink/adopted/entries`，才能读它在问的
+/// 量到的（T-21）：那一臂先花了若干 shell 调用 `find`/`ls` 去找 `.xirang/adopted/entries`，才能读它在问的
 /// 那两行——路径只在空台账时印，于是**有东西可读的读者**恰恰是得自己去找的那一个。
 #[test]
 fn a_populated_ledger_names_its_own_file() {
@@ -331,7 +330,7 @@ fn a_populated_ledger_names_its_own_file() {
     adopt_current(&root);
     let answer = adopted(&root, &json!({})).expect("the ledger answers");
     assert!(
-        answer.contains(".nichlink/adopted/entries (provisional by construction)"),
+        answer.contains(".xirang/adopted/entries (provisional by construction)"),
         "the first line carries the path a reader would open: {answer}"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -369,7 +368,7 @@ fn a_two_file_lease_can_say_which_file_moved() {
         &super::ledger_path(&root),
     )
     .expect("the lease is written");
-    let ledger = std::fs::read_to_string(root.join(".nichlink/adopted/entries")).expect("a ledger");
+    let ledger = std::fs::read_to_string(root.join(".xirang/adopted/entries")).expect("a ledger");
     assert!(
         ledger.contains("# prints root/x |"),
         "the per-file line is written beside the entry: {ledger}"

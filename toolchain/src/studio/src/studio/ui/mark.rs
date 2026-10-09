@@ -3,7 +3,7 @@
 
 /// Seven-row ASCII logo rendered by the brand header.
 /// 品牌页眉渲染的七行 ASCII 字标。
-pub(super) const NICH_LINK_MARK: [&str; 7] = [
+pub(super) const XIRANG_MARK: [&str; 7] = [
     r"________   ___  ________  ___  ___  ___       ___  ________   ___  __",
     r"|\   ___  \|\  \|\   ____\|\  \|\  \|\  \     |\  \|\   ___  \|\  \|\  \",
     r"\ \  \\ \  \ \  \ \  \___|\ \  \\\  \ \  \    \ \  \ \  \\ \  \ \  \/  /|_",

@@ -1,5 +1,5 @@
-//! Tests for the two bounds `nichlink.callgraph` needs: definitions and callers.
-//! `nichlink.callgraph` 需要的两道上限的测试：定义数与调用者数。
+//! Tests for the two bounds `xirang.callgraph` needs: definitions and callers.
+//! `xirang.callgraph` 需要的两道上限的测试：定义数与调用者数。
 //!
 //! The measured failure these exist against: a common name (`new`) has 142
 //! definitions in the NichUI corpus, and every call site of that name was listed for

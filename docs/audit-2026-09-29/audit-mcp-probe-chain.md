@@ -4,7 +4,7 @@
 
 来源与抽取：
 - 会话 id：`5fe8e506-261a-491e-957f-ca9be9e29af7`（mcp-prober，t1 的 owner）
-- 日志：`~/.dsh/sessions/--home-nich-Moirai_N3-nichlink--/5fe8e506-261a-491e-957f-ca9be9e29af7/session.v4.jsonl.zstd`
+- 日志：`~/.dsh/sessions/--home-nich-Moirai_N3-xirang--/5fe8e506-261a-491e-957f-ca9be9e29af7/session.v4.jsonl.zstd`
 - 该日志是**多帧 zstd**（531 帧），`zstdDecompressSync` 只解得出第一帧（284 字节的 session 头）⇒ 按魔数 `28 b5 2f fd` 切帧逐帧解，得 **2,161,964 字节 / 822 个事件**（其中 assistant/message 125、tool/call 150、tool/result 150）。
 - 本文只含 assistant 消息里的 `reasoning` 与 `text` 两块，逐 step 照抄；推理合计 123183 字节，正文合计 1280 字节。
 - 工具往返（含 MCP 的请求与响应原文）在 `audit-mcp-probe-raw.md`；两份合起来才是完整证据。
@@ -58,7 +58,7 @@ Note: stdout has a BufWriter with flush after each response, so line-based readi
 
 Let me build a driver that takes a list of calls and prints results as JSON.
 
-Also need to determine the package root. The repo root is /home/nich/Moirai_N3/nichlink — is that a cargo package? Let's check Cargo.toml. The mcp resolve_root: NICH_LINK_PACKAGE_ROOT else cwd. The workspace root Cargo.toml is a virtual manifest probably. Let me check which package has registration faces — "button 这个注册面" mentioned. Let me check target/nichlink/out and examples.
+Also need to determine the package root. The repo root is /home/nich/Moirai_N3/nichlink — is that a cargo package? Let's check Cargo.toml. The mcp resolve_root: XIRANG_PACKAGE_ROOT else cwd. The workspace root Cargo.toml is a virtual manifest probably. Let me check which package has registration faces — "button 这个注册面" mentioned. Let me check target/xirang/out and examples.
 
 Let me look at what's around: examples/ dir with host packages.
 
@@ -66,9 +66,9 @@ Let me look at what's around: examples/ dir with host packages.
 
 推理：
 
-Let me check where target/nichlink/out is — no `out` under target/nichlink. Maybe the examples have their own target dir? Let's check examples/control-button/target/nichlink/out.
+Let me check where target/xirang/out is — no `out` under target/xirang. Maybe the examples have their own target dir? Let's check examples/control-button/target/xirang/out.
 
-Also let's look at what the workspace target/nichlink contains — "cache" only.
+Also let's look at what the workspace target/xirang contains — "cache" only.
 
 Let's check both example dirs.
 
@@ -76,11 +76,11 @@ Let's check both example dirs.
 
 推理：
 
-Interesting: target/nichlink/out doesn't exist. Let me check what's in the cache dir and whether a build has been run.
+Interesting: target/xirang/out doesn't exist. Let me check what's in the cache dir and whether a build has been run.
 
-Actually `target/nichlink/cache` — let me look. Also `examples/control-button/target/nichlink/cache`.
+Actually `target/xirang/cache` — let me look. Also `examples/control-button/target/xirang/cache`.
 
-Let me check if there's `out` somewhere else. Maybe the build publishes to `target/nichlink/out` but hasn't been run in this checkout for the workspace root. Let's check the mcp registry.rs / build_evidence.rs for the exact path.
+Let me check if there's `out` somewhere else. Maybe the build publishes to `target/xirang/out` but hasn't been run in this checkout for the workspace root. Let's check the mcp registry.rs / build_evidence.rs for the exact path.
 
 Let's now write the Python driver and start probing tools/list. Meanwhile check build job.
 
@@ -110,7 +110,7 @@ Now for the "registered not implemented / implemented not registered" check: the
 
 Also check the tools_tests to see what's pinned.
 
-Let me now run all 17 tools against the control-button example. First, let's initialize the environment properly: NICH_LINK_PACKAGE_ROOT=/home/nich/.../examples/control-button. But note `resolve_root` — let me check it accepts a root argument.
+Let me now run all 17 tools against the control-button example. First, let's initialize the environment properly: XIRANG_PACKAGE_ROOT=/home/nich/.../examples/control-button. But note `resolve_root` — let me check it accepts a root argument.
 
 Let me look at resolve.rs.
 
@@ -122,9 +122,9 @@ Now let me write a batch probe script that runs all 17 tools with real arguments
 
 First I need to know the real objects:
 - registry faces: control-button example, logical paths like `root/control/object/button`
-- graft plan: `.nichlink/external-grafts/...` — check if it exists in the example
+- graft plan: `.xirang/external-grafts/...` — check if it exists in the example
 - MIR text: need a -Zunpretty=mir dump; maybe there are test fixtures. Check for .mir files in repo.
-- trace: `.nichlink/traces/nichlink.trace` — check existence.
+- trace: `.xirang/traces/xirang.trace` — check existence.
 
 Let me gather.
 
@@ -132,11 +132,11 @@ Let me gather.
 
 推理：
 
-No .mir, no .nichlink, no graft.plan in the workspace. So MIR text must be fabricated (I can write a small MIR text dump to /tmp). The task says use real objects from the repo — "MIR 文本" — I could generate a real MIR dump with `cargo rustc -Zunpretty=mir` but that needs nightly. Let me check the toolchain.
+No .mir, no .xirang, no graft.plan in the workspace. So MIR text must be fabricated (I can write a small MIR text dump to /tmp). The task says use real objects from the repo — "MIR 文本" — I could generate a real MIR dump with `cargo rustc -Zunpretty=mir` but that needs nightly. Let me check the toolchain.
 
 Actually let me check rustc version and whether nightly is available.
 
-Also `.nichlink/external-grafts/...` — no such dir; the graft plan may be constructed. `nichlink.grafts` reads `.nichlink/external-grafts/<selector>/graft.plan`. No such files. Let me check tests for the format, or the graft example. There's `examples/control-button/examples/graft_record.rs`.
+Also `.xirang/external-grafts/...` — no such dir; the graft plan may be constructed. `xirang.grafts` reads `.xirang/external-grafts/<selector>/graft.plan`. No such files. Let me check tests for the format, or the graft example. There's `examples/control-button/examples/graft_record.rs`.
 
 Let me check what these look like.
 
@@ -154,21 +154,21 @@ Let me look at mir.rs to understand MIR text parsing.
 
 推理：
 
-Let me look at the MIR text format parser in kernel: `nichlink_kernel::mir`. Actually easier: check mir_tests.rs for a sample text dump.
+Let me look at the MIR text format parser in kernel: `xirang_kernel::mir`. Actually easier: check mir_tests.rs for a sample text dump.
 
 ## step 19（turn 1，in 1543 / out 265 tokens）
 
 推理：
 
-Good. Now let me set up the probe root. I'll use the control-button example as the package root. But `root` argument can override too. Let me use NICH_LINK_PACKAGE_ROOT for the process.
+Good. Now let me set up the probe root. I'll use the control-button example as the package root. But `root` argument can override too. Let me use XIRANG_PACKAGE_ROOT for the process.
 
-But note: for `nichlink.mir` path must be within root (relative). Let me check load_mir / path resolution — probably requires path relative to root and safe. Let me check.
+But note: for `xirang.mir` path must be within root (relative). Let me check load_mir / path resolution — probably requires path relative to root and safe. Let me check.
 
 ## step 20（turn 1，in 1267 / out 1728 tokens）
 
 推理：
 
-Now let me set up probe artifacts: I'll create a small probe directory inside the control-button example? No — that would modify the repo (untracked files), violating "git status --porcelain should only show the report". I could create files in /tmp and use them as the package root via NICH_LINK_PACKAGE_ROOT. The package root itself can be a throwaway package in /tmp that has a Cargo.toml (so cargo metadata names it) plus `.nichlink/external-grafts/...` and a MIR text file.
+Now let me set up probe artifacts: I'll create a small probe directory inside the control-button example? No — that would modify the repo (untracked files), violating "git status --porcelain should only show the report". I could create files in /tmp and use them as the package root via XIRANG_PACKAGE_ROOT. The package root itself can be a throwaway package in /tmp that has a Cargo.toml (so cargo metadata names it) plus `.xirang/external-grafts/...` and a MIR text file.
 
 But requirement 2 says "用仓库里真实的对象" — use real objects from the repo. I can:
 - run tools against the real control-button package root (real faces, real graft plan declared in lib.rs).
@@ -176,35 +176,35 @@ But requirement 2 says "用仓库里真实的对象" — use real objects from t
 
 Alternative: I create a /tmp probe package whose root contains a copy? copy is not "real object from repo".
 
-Better plan: use the real package root `examples/control-button` for most tools. For artifacts that need files under root (mir, trace, grafts records), use the `root` argument to point at... no, root must stay inside NICH_LINK_PACKAGE_ROOT.
+Better plan: use the real package root `examples/control-button` for most tools. For artifacts that need files under root (mir, trace, grafts records), use the `root` argument to point at... no, root must stay inside XIRANG_PACKAGE_ROOT.
 
-Hmm, `resolve_root(base, requested)`: base = canonicalized NICH_LINK_PACKAGE_ROOT, requested joined to base. So root must stay inside.
+Hmm, `resolve_root(base, requested)`: base = canonicalized XIRANG_PACKAGE_ROOT, requested joined to base. So root must stay inside.
 
-So if I set NICH_LINK_PACKAGE_ROOT to the repo root `/home/nich/Moirai_N3/nichlink`, then roots inside (like `examples/control-button`) can be requested. And then `load_mir(root=examples/control-button, path=...)` requires path inside the example. Hmm but for `mir`, `root` argument goes through resolve_root, so root can be e.g. `docs` — wait root must be a directory. `tools/call` resolves root from `arguments.root` relative to the package root (repo root). So I can set root to any dir inside the repo. But `mir`'s snapshot_for(root) calls registry::namespace(root) which runs cargo metadata to get package name.
+So if I set XIRANG_PACKAGE_ROOT to the repo root `/home/nich/Moirai_N3/nichlink`, then roots inside (like `examples/control-button`) can be requested. And then `load_mir(root=examples/control-button, path=...)` requires path inside the example. Hmm but for `mir`, `root` argument goes through resolve_root, so root can be e.g. `docs` — wait root must be a directory. `tools/call` resolves root from `arguments.root` relative to the package root (repo root). So I can set root to any dir inside the repo. But `mir`'s snapshot_for(root) calls registry::namespace(root) which runs cargo metadata to get package name.
 
 Hmm. Actually a simpler approach for MIR: I need a MIR text file inside the repo... but I can't create repo files except the report.
 
-Wait — can I? "不改仓库代码、不提交；收工时 git status --porcelain 应只看到你那个报告文件." So any file I create in the repo must be cleaned up. I could create a temp file inside the repo (untracked), probe, then delete. But risk. Better: is /tmp writable as package root? Yes: NICH_LINK_PACKAGE_ROOT=/tmp/mcp-probe-pkg. That package can contain a `Cargo.toml` (needed for namespace) and MIR text, graft plans. That's a synthetic package though, not "real objects".
+Wait — can I? "不改仓库代码、不提交；收工时 git status --porcelain 应只看到你那个报告文件." So any file I create in the repo must be cleaned up. I could create a temp file inside the repo (untracked), probe, then delete. But risk. Better: is /tmp writable as package root? Yes: XIRANG_PACKAGE_ROOT=/tmp/mcp-probe-pkg. That package can contain a `Cargo.toml` (needed for namespace) and MIR text, graft plans. That's a synthetic package though, not "real objects".
 
-Compromise: use the real control-button package as the primary root (real faces/real graft plan). For the MIR text and graft plan artifacts, the tool's inputs are files; there are no real ones in the repo (no `.nichlink/`, no `.mir`). I'll note that and construct the inputs from the repo's *real* declarations: the graft plan content I write comes from copying the real typed plan in `examples/control-button/src/lib.rs`; the MIR text comes from the real byte content of a real function in `button_fast.rs` (I'll reflect real functions). And the JSONL round trip will use the real package namespace.
+Compromise: use the real control-button package as the primary root (real faces/real graft plan). For the MIR text and graft plan artifacts, the tool's inputs are files; there are no real ones in the repo (no `.xirang/`, no `.mir`). I'll note that and construct the inputs from the repo's *real* declarations: the graft plan content I write comes from copying the real typed plan in `examples/control-button/src/lib.rs`; the MIR text comes from the real byte content of a real function in `button_fast.rs` (I'll reflect real functions). And the JSONL round trip will use the real package namespace.
 
 Actually, better idea for MIR: check if `graft.plan` documents exist as fixture in tests — e.g. `toolchain/src/mcp/src/grafts_tests.rs` writes plan documents. Let me look at the format so I can produce one identical to what the repo's own writer writes.
 
-Also, does .nichlink/external-grafts exist anywhere in repo? No. So grafts tool will report "no external graft plans" against the real example — that's a real result and worth recording as such. Then I can create a real plan in a temp package to test the positive path.
+Also, does .xirang/external-grafts exist anywhere in repo? No. So grafts tool will report "no external graft plans" against the real example — that's a real result and worth recording as such. Then I can create a real plan in a temp package to test the positive path.
 
-Hmm, let me reconsider: a temp package in /tmp is legitimate because the tool reads files; the report can say the input was constructed at /tmp (not committed). The task explicitly says write the driver in /tmp. For probe *inputs* it doesn't forbid /tmp. But requirement says "用仓库里真实的对象（button 这个注册面、graft 计划、MIR 文本、某条 diff 之类）". The graft 计划 refers to the declared plan in the host entry (lib.rs static_graft_plan!) — that IS real. And `nichlink.grafts` joins plans on disk with declarations from the host entry; with no on-disk plans the tool answers "no external graft plans under .nichlink/external-grafts/". That's a real (negative) result.
+Hmm, let me reconsider: a temp package in /tmp is legitimate because the tool reads files; the report can say the input was constructed at /tmp (not committed). The task explicitly says write the driver in /tmp. For probe *inputs* it doesn't forbid /tmp. But requirement says "用仓库里真实的对象（button 这个注册面、graft 计划、MIR 文本、某条 diff 之类）". The graft 计划 refers to the declared plan in the host entry (lib.rs static_graft_plan!) — that IS real. And `xirang.grafts` joins plans on disk with declarations from the host entry; with no on-disk plans the tool answers "no external graft plans under .xirang/external-grafts/". That's a real (negative) result.
 
 I think best approach:
-- Primary: NICH_LINK_PACKAGE_ROOT = examples/control-button (real). Run all 17 tools with real args.
-- Secondary: create a temp package in /tmp with `.nichlink/external-grafts/<selector>/graft.plan` copied from repo's writer format, plus a MIR text file, to exercise positive paths. Document clearly that these inputs are synthetic because the repo ships no such artifacts.
+- Primary: XIRANG_PACKAGE_ROOT = examples/control-button (real). Run all 17 tools with real args.
+- Secondary: create a temp package in /tmp with `.xirang/external-grafts/<selector>/graft.plan` copied from repo's writer format, plus a MIR text file, to exercise positive paths. Document clearly that these inputs are synthetic because the repo ships no such artifacts.
 
-Actually wait — better: I could exercise the positive graft path by creating the `.nichlink/external-grafts/` dir inside the real example temporarily and removing it after. That's what the example's own `graft_record.rs` does in temp_dir though. Hmm, `grafts.rs` reads root/.nichlink/external-grafts. If I create it under examples/control-button, it's untracked file → I delete it after. That gives a real host entry's declaration joined with a real plan. That's much better evidence. Risk: leaving files. I'll be careful, use a trap/cleanup.
+Actually wait — better: I could exercise the positive graft path by creating the `.xirang/external-grafts/` dir inside the real example temporarily and removing it after. That's what the example's own `graft_record.rs` does in temp_dir though. Hmm, `grafts.rs` reads root/.xirang/external-grafts. If I create it under examples/control-button, it's untracked file → I delete it after. That gives a real host entry's declaration joined with a real plan. That's much better evidence. Risk: leaving files. I'll be careful, use a trap/cleanup.
 
-Actually, is that acceptable given "不改仓库代码"? It says don't modify repo code and don't commit; final git status must be clean except the report. Creating and deleting temp probe inputs is transient. Hmm, but a `.nichlink/` dir might be gitignored, so git status wouldn't show it anyway — which is dangerous for verification. I'll use the /tmp package approach for artifacts to be safe, and note it. Actually let me check .gitignore.
+Actually, is that acceptable given "不改仓库代码"? It says don't modify repo code and don't commit; final git status must be clean except the report. Creating and deleting temp probe inputs is transient. Hmm, but a `.xirang/` dir might be gitignored, so git status wouldn't show it anyway — which is dangerous for verification. I'll use the /tmp package approach for artifacts to be safe, and note it. Actually let me check .gitignore.
 
 Let me be pragmatic: use /tmp package for artifact-based tools (mir, grafts, trace, unified), and real example for registry/search/inspect/callgraph/read/status/explain/diff/impact/usages/converge/verify/apply. I'll clearly label synthetic inputs.
 
-Hmm, but actually for `nichlink.diff` — needs build evidence (`target/nichlink/out`) which doesn't exist. So diff will report "no build evidence". That's a real finding: the tools that need build evidence are unusable in this checkout without running `nichlink check`. Let me verify by running.
+Hmm, but actually for `xirang.diff` — needs build evidence (`target/xirang/out`) which doesn't exist. So diff will report "no build evidence". That's a real finding: the tools that need build evidence are unusable in this checkout without running `xirang check`. Let me verify by running.
 
 Let me now run the full sweep. First, set up the probe package in /tmp.
 
@@ -214,34 +214,34 @@ Let me check the grafts.rs and trace.rs for input formats.
 
 推理：
 
-Good. `.nichlink/` is NOT gitignored, so I'd see it in git status. I'll avoid creating it in the repo.
+Good. `.xirang/` is NOT gitignored, so I'd see it in git status. I'll avoid creating it in the repo.
 
 Plan: create a synthetic package in /tmp for artifact tools. But the `namespace` requires `cargo metadata` to name the package. Let me check registry::namespace.
 
-Actually — for MIR/grafts, root resolution requires root to be inside NICH_LINK_PACKAGE_ROOT. If NICH_LINK_PACKAGE_ROOT = /tmp/pkg, root defaults to /tmp/pkg. That works.
+Actually — for MIR/grafts, root resolution requires root to be inside XIRANG_PACKAGE_ROOT. If XIRANG_PACKAGE_ROOT = /tmp/pkg, root defaults to /tmp/pkg. That works.
 
 But wait, for a /tmp package, `cargo metadata` runs in that dir; offline shouldn't matter (no deps). Let me test.
 
-Alternatively: I can set NICH_LINK_PACKAGE_ROOT=/tmp/probe-root and *copy* the real control-button example there. Hmm, but that changes file!() / NodeId. Simplest: one /tmp package with a couple of faces matching repo style.
+Alternatively: I can set XIRANG_PACKAGE_ROOT=/tmp/probe-root and *copy* the real control-button example there. Hmm, but that changes file!() / NodeId. Simplest: one /tmp package with a couple of faces matching repo style.
 
 Actually, hold on. Better idea for MIR: use the real repo package as root, and place the MIR text file... requires inside root. Nope.
 
-Hmm — what about running the MCP process with cwd = repo root and NICH_LINK_PACKAGE_ROOT unset? Then base = repo root (cwd has Cargo.toml → resolve_package_root returns cwd presumably). Then root argument can be any dir inside the repo including `kernel/src`? No, mir requires path inside root; root=kernel/src is a dir → mir path can be `registry_core/mir/text.rs`... but that's not MIR text. A MIR *text dump* needs a `.mir` file. Actually extension only distinguishes jsonl; so any text file works, e.g. I could point at an actual `.rs` file — but that wouldn't be MIR.
+Hmm — what about running the MCP process with cwd = repo root and XIRANG_PACKAGE_ROOT unset? Then base = repo root (cwd has Cargo.toml → resolve_package_root returns cwd presumably). Then root argument can be any dir inside the repo including `kernel/src`? No, mir requires path inside root; root=kernel/src is a dir → mir path can be `registry_core/mir/text.rs`... but that's not MIR text. A MIR *text dump* needs a `.mir` file. Actually extension only distinguishes jsonl; so any text file works, e.g. I could point at an actual `.rs` file — but that wouldn't be MIR.
 
 OK: decision — create a probe package at /tmp/mcp-probe-pkg containing:
 - Cargo.toml (name mcp-probe-pkg)
 - src/button/button.rs (a real registration face copied in style from the repo's example, using `crate::root_object!`)
-- .nichlink/external-grafts/button_fast/graft.plan — generated by the repo's own writer? I don't have a CLI for that easily. I can hand-write the document format. Let me check GraftPlanDocument::render_graft_plan_document format.
+- .xirang/external-grafts/button_fast/graft.plan — generated by the repo's own writer? I don't have a CLI for that easily. I can hand-write the document format. Let me check GraftPlanDocument::render_graft_plan_document format.
 
 - button.mir containing a real MIR text dump — I'll take genuine MIR text for a function? I can hand-write a plausible one AND additionally verify the tool's behavior on a real file: actually rustc 1.96 stable... Hmm, can I get MIR on stable? `-Zunpretty` is nightly-only. But `cargo rustc -- --emit=mir` is *stable*! `--emit=mir` produces `.mir` files (binary-ish, not -Zunpretty text). Not the same. And `RUSTC_BOOTSTRAP=1` lets stable rustc accept -Z flags! That's a real known trick. Let me try `RUSTC_BOOTSTRAP=1 cargo rustc ... -Zunpretty=mir`. That would produce *genuinely real* MIR text from the real example crate. That's excellent evidence.
 
 Let me try that on the control-button example.
 
-Then I'd need the .mir file inside the root to read it — I can write it to /tmp and set NICH_LINK_PACKAGE_ROOT to a root that contains it... no. Alternatively copy the .mir into the repo temporarily, probe, delete. Risk manageable: `*.mir` untracked → I delete it right after. Actually the report requires git status clean at the end; a temp file inside repo during probing is fine if deleted. Let me consider: does `load_mir` allow absolute paths? `root.join(relative)` with absolute relative → join with absolute path yields the absolute path; then `candidate.is_absolute()` → lexically_inside = false → refused. So no absolute.
+Then I'd need the .mir file inside the root to read it — I can write it to /tmp and set XIRANG_PACKAGE_ROOT to a root that contains it... no. Alternatively copy the .mir into the repo temporarily, probe, delete. Risk manageable: `*.mir` untracked → I delete it right after. Actually the report requires git status clean at the end; a temp file inside repo during probing is fine if deleted. Let me consider: does `load_mir` allow absolute paths? `root.join(relative)` with absolute relative → join with absolute path yields the absolute path; then `candidate.is_absolute()` → lexically_inside = false → refused. So no absolute.
 
 OK: temporary copy into repo, then delete. I'll do it carefully with explicit rm and verify git status.
 
-Hmm, actually simpler and cleaner: set NICH_LINK_PACKAGE_ROOT to a /tmp directory that I populate by *copying* the generated MIR + a Cargo.toml. The MIR text itself is genuinely produced by rustc from the real example crate. That satisfies "real object" (real rustc MIR of real code) while keeping the repo clean. And the snapshot namespace would be that of the /tmp package, but the delta comparison would use two MIR files with same namespace.
+Hmm, actually simpler and cleaner: set XIRANG_PACKAGE_ROOT to a /tmp directory that I populate by *copying* the generated MIR + a Cargo.toml. The MIR text itself is genuinely produced by rustc from the real example crate. That satisfies "real object" (real rustc MIR of real code) while keeping the repo clean. And the snapshot namespace would be that of the /tmp package, but the delta comparison would use two MIR files with same namespace.
 
 Hmm but then `mir` with jsonl:true stamps the *probe package's* namespace, not the example's. Fine.
 
@@ -305,9 +305,9 @@ Let me write the full spec.
 
 Very useful. Notes:
 - Logical paths are `root/control/button`, NOT `root/control/object/button`. The task prompt said "button 这个注册面" — fine. Interesting: the tool's own description example in `converge` says "root/...". The `impact`/`usages`/`converge` errors match.
-- `nichlink.verify` actually ran the build and produced `target/nichlink/out`? It said "build current". So verify publishes build evidence as a side effect. But this now means the example's target dir got files. That's under target/ (gitignored). Fine.
+- `xirang.verify` actually ran the build and produced `target/xirang/out`? It said "build current". So verify publishes build evidence as a side effect. But this now means the example's target dir got files. That's under target/ (gitignored). Fine.
 
-Wait — verify ran and now `explain` should say current. Let me re-run explain/diff now that build evidence exists. Also note that before verify, explain said "build stale" and diff said "no build evidence" — that's because a prior `verify`? Actually explain's freshness said stale, meaning out dir existed but outdated. Hmm — "build stale (run nichlink check)". Let me check whether target/nichlink/out now exists in the example.
+Wait — verify ran and now `explain` should say current. Let me re-run explain/diff now that build evidence exists. Also note that before verify, explain said "build stale" and diff said "no build evidence" — that's because a prior `verify`? Actually explain's freshness said stale, meaning out dir existed but outdated. Hmm — "build stale (run xirang check)". Let me check whether target/xirang/out now exists in the example.
 
 Let me re-run explain and diff after verify to see the fresh state.
 
@@ -321,17 +321,17 @@ Let me run batch 3.
 
 Excellent. All working with real paths.
 
-Important finding: `nichlink.usages` says "fields unreadable (this module was not generated by NichLink)" and "unreadable faces 3 (hand-written modules are not read back)". This is the interesting negative: the tool's advertised promise is "every field the write path accepts read back from the generated module" — but the repo's only real host is hand-written, so the flagship `usages`/`converge` field reporting is entirely unavailable on the repo's own example. That's a capability-face gap worth naming.
+Important finding: `xirang.usages` says "fields unreadable (this module was not generated by XiRang)" and "unreadable faces 3 (hand-written modules are not read back)". This is the interesting negative: the tool's advertised promise is "every field the write path accepts read back from the generated module" — but the repo's only real host is hand-written, so the flagship `usages`/`converge` field reporting is entirely unavailable on the repo's own example. That's a capability-face gap worth naming.
 
 Wait — actually, is the example hand-written? It uses `crate::control_object!` macro (declarative). The generated module path is for faces produced by the authoring executor (`fields.module`). Let's check what "generated module" means: `getting_from_other_registry`... Let me check usages.rs to know the exact criterion.
 
-Now let me also test `nichlink.apply` (preview), and test the "generated module" path by using preview of add.
+Now let me also test `xirang.apply` (preview), and test the "generated module" path by using preview of add.
 
 Also need:
-- `nichlink.mir` with real MIR text (RUSTC_BOOTSTRAP).
-- `nichlink.unified` with real MIR + absent trace.
-- `nichlink.grafts` with a real plan on disk.
-- `nichlink.trace` with a real trace artifact (can I record one? The repo's scaffolded host records traces; the control-button example doesn't. Maybe `nichlink new` scaffold... too heavy). Could I craft a trace artifact? It needs matching identity namespace/registry root and frame nodes. That's doable: the format? Let me check trace.rs / read_trace_artifact.
+- `xirang.mir` with real MIR text (RUSTC_BOOTSTRAP).
+- `xirang.unified` with real MIR + absent trace.
+- `xirang.grafts` with a real plan on disk.
+- `xirang.trace` with a real trace artifact (can I record one? The repo's scaffolded host records traces; the control-button example doesn't. Maybe `xirang new` scaffold... too heavy). Could I craft a trace artifact? It needs matching identity namespace/registry root and frame nodes. That's doable: the format? Let me check trace.rs / read_trace_artifact.
 
 Let me first try RUSTC_BOOTSTRAP for real MIR.
 
@@ -339,11 +339,11 @@ Let me first try RUSTC_BOOTSTRAP for real MIR.
 
 推理：
 
-Real MIR text produced (2174 lines). Now, to feed it to `nichlink.mir`, it must be inside the package root. I'll set up a /tmp probe package whose root contains the .mir file. But the tool needs the package to be named by cargo metadata (for snapshot). Let me create /tmp/mcp-probe-pkg with Cargo.toml.
+Real MIR text produced (2174 lines). Now, to feed it to `xirang.mir`, it must be inside the package root. I'll set up a /tmp probe package whose root contains the .mir file. But the tool needs the package to be named by cargo metadata (for snapshot). Let me create /tmp/mcp-probe-pkg with Cargo.toml.
 
 But wait — better: I could use the `root` argument of the MCP call to point at a subdirectory of the *actual* root... The MIR file isn't inside the repo. 
 
-Alternative: set NICH_LINK_PACKAGE_ROOT=/tmp/mcp-probe and copy the real example's src there? No, keep it minimal — the MIR text is the real rustc output of the real example; that's the "real object". The containing package only supplies a namespace. I'll document that.
+Alternative: set XIRANG_PACKAGE_ROOT=/tmp/mcp-probe and copy the real example's src there? No, keep it minimal — the MIR text is the real rustc output of the real example; that's the "real object". The containing package only supplies a namespace. I'll document that.
 
 Hmm, actually there's a neater option: put the package root at /tmp/mcp-probe-pkg and ALSO copy the control-button example there (cp -r), so graft plans etc. are the real ones. But copying changes NodeId (file!() paths... actually file!() is relative to workspace root, so copying might preserve relative paths). Not worth it.
 
@@ -351,18 +351,18 @@ Decision: /tmp/mcp-probe-pkg with:
 - Cargo.toml (name = "mcp-probe-pkg")
 - src/lib.rs
 - button.mir (real rustc MIR text of the example)
-- .nichlink/external-grafts/button_fast/graft.plan (a real plan document)
-- .nichlink/traces/nichlink.trace (maybe crafted)
+- .xirang/external-grafts/button_fast/graft.plan (a real plan document)
+- .xirang/traces/xirang.trace (maybe crafted)
 
 Let me check the graft plan document format and trace format.
 
-Actually, for grafts: the plan must reference an identity in the tree and a slot path. With a synthetic package, I need faces. Let me instead build the probe package with faces copied from the example... hmm, but then face_views need the nichlink macros → requires the toolchain dependency. Too heavy? Actually it's a workspace with path deps; a /tmp package with path dep to the repo would work offline but changes the workspace... `cargo metadata` would need to resolve path deps: `nichlink-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain" }` — offline should work since deps are already vendored/cached.
+Actually, for grafts: the plan must reference an identity in the tree and a slot path. With a synthetic package, I need faces. Let me instead build the probe package with faces copied from the example... hmm, but then face_views need the xirang macros → requires the toolchain dependency. Too heavy? Actually it's a workspace with path deps; a /tmp package with path dep to the repo would work offline but changes the workspace... `cargo metadata` would need to resolve path deps: `xirang-toolchain = { path = "/home/nich/Moirai_N3/nichlink/toolchain" }` — offline should work since deps are already vendored/cached.
 
-That's getting heavy but gives real positive-path evidence for grafts on a package with faces. Alternatively — simplest — I can temporarily create `.nichlink/external-grafts/...` inside the real control-button example, run grafts, then delete. The `.nichlink` dir is not gitignored so I'd see it, and I delete it. Risk is low and cleanup verifiable. And it uses the REAL host entry declaration (the strongest evidence). I'll do that: create, probe, delete, verify git status clean of it.
+That's getting heavy but gives real positive-path evidence for grafts on a package with faces. Alternatively — simplest — I can temporarily create `.xirang/external-grafts/...` inside the real control-button example, run grafts, then delete. The `.xirang` dir is not gitignored so I'd see it, and I delete it. Risk is low and cleanup verifiable. And it uses the REAL host entry declaration (the strongest evidence). I'll do that: create, probe, delete, verify git status clean of it.
 
-Actually careful: `verify` published build evidence into `target/nichlink/out` — gitignored. Fine.
+Actually careful: `verify` published build evidence into `target/xirang/out` — gitignored. Fine.
 
-Plan for grafts: create `examples/control-button/.nichlink/external-grafts/button_fast/graft.plan` with a document targeting `root/control/button`, then call grafts, then rm -rf the `.nichlink` dir.
+Plan for grafts: create `examples/control-button/.xirang/external-grafts/button_fast/graft.plan` with a document targeting `root/control/button`, then call grafts, then rm -rf the `.xirang` dir.
 
 Let me check the plan document format from GraftPlanDocument::render_graft_plan_document.
 
@@ -382,21 +382,21 @@ Let me check trace artifact format first — for `unified` I need a trace. Let m
 
 推理：
 
-Trace artifact is a rendered text format. Let me find `render_trace_artifact` and `from_trace` to know if I can craft one. Better: is there a way to actually record one? The scaffolded project `nichlink new` produces a host with trace_call!. I could scaffold a project in /tmp with the CLI... `cargo run -p nichlink-toolchain --bin nichlink -- new /tmp/x`. That would be genuinely real (produced by the toolchain), then run it with NICH_LINK_TRACE, producing a real trace artifact. Then point MCP at that root. That's the strongest real-object evidence, and it also gives a "generated module" face for `usages` fields!
+Trace artifact is a rendered text format. Let me find `render_trace_artifact` and `from_trace` to know if I can craft one. Better: is there a way to actually record one? The scaffolded project `xirang new` produces a host with trace_call!. I could scaffold a project in /tmp with the CLI... `cargo run -p xirang-toolchain --bin xirang -- new /tmp/x`. That would be genuinely real (produced by the toolchain), then run it with XIRANG_TRACE, producing a real trace artifact. Then point MCP at that root. That's the strongest real-object evidence, and it also gives a "generated module" face for `usages` fields!
 
 That's very valuable: it tests `usages`' generated-field path and `converge`'s requires-verdict, plus trace/unified.
 
-Let me check the CLI: `nichlink new`. Let me look at cli commands.
+Let me check the CLI: `xirang new`. Let me look at cli commands.
 
 Time budget: this is worth it — the "usages fields unreadable" finding is a big deal for the capability-face conclusion, and I want to know whether generated faces work.
 
-Let me check the nichlink CLI binary exists in target/debug.
+Let me check the xirang CLI binary exists in target/debug.
 
 ## step 32（turn 1，in 586 / out 242 tokens）
 
 推理：
 
-Let me scaffold a project in /tmp. `nichlink new <name> --path <workspace>`? --path means source from a local checkout. Let's try `nichlink new probehost --lib --path /home/nich/Moirai_N3/nichlink` in /tmp.
+Let me scaffold a project in /tmp. `xirang new <name> --path <workspace>`? --path means source from a local checkout. Let's try `xirang new probehost --lib --path /home/nich/Moirai_N3/nichlink` in /tmp.
 
 Actually the scaffold probably uses templates from `toolchain/build_time`. Let's try.
 
@@ -416,9 +416,9 @@ Confirmed: `is_checkout` looks for pre-batch-2 directory names. Let me check `is
 
 Anyway. I'll record it as an adjacent finding (out of the MCP scope but explains the reachability of the `usages` field path). Actually, hold on — I should focus. Let me check if there's a fixture with a generated module in the repo: `toolchain/tests/fixtures/node-editor/` (prototype-fixtures). Let me look.
 
-Also, `apply.rs` writes generated modules. So I can use `nichlink.apply` with `action: add, apply: true`... no, that writes to the repo. But `apply` preview runs on a throwaway copy and reports the resulting tree + diff. Does the preview create a generated module in the copy? Yes! And then... the copy is deleted, so I can't run `usages` on it.
+Also, `apply.rs` writes generated modules. So I can use `xirang.apply` with `action: add, apply: true`... no, that writes to the repo. But `apply` preview runs on a throwaway copy and reports the resulting tree + diff. Does the preview create a generated module in the copy? Yes! And then... the copy is deleted, so I can't run `usages` on it.
 
-Hmm. Alternative: `apply` with `root` pointing at a /tmp package inside NICH_LINK_PACKAGE_ROOT... root must be inside package root. So set NICH_LINK_PACKAGE_ROOT=/tmp/mcp-probe-pkg, put a copy of the control-button example there as `probe`, then root="probe". But copying the example needs its Cargo.toml path deps fixed (they point to ../../../toolchain presumably). Let me check.
+Hmm. Alternative: `apply` with `root` pointing at a /tmp package inside XIRANG_PACKAGE_ROOT... root must be inside package root. So set XIRANG_PACKAGE_ROOT=/tmp/mcp-probe-pkg, put a copy of the control-button example there as `probe`, then root="probe". But copying the example needs its Cargo.toml path deps fixed (they point to ../../../toolchain presumably). Let me check.
 
 Actually the example Cargo.toml uses `path = "../../kernel"` etc. If I copy to /tmp, I can rewrite those to absolute paths. That is a "copy of real objects" — acceptable, and I'd document it.
 
@@ -449,7 +449,7 @@ Let me decide how much depth to invest. Time budget: I should aim for a solid re
 2. `apply` actually writing → do it in a copied package under /tmp (so repo untouched), then `usages` on the generated face — this is the strongest positive path test. Worth it.
 3. MIR real text → /tmp root.
 4. grafts with a real plan → /tmp root (if I copy the example there, the host entry declaration is the real one).
-5. trace artifact — could produce by running a host that records traces. The scaffold is broken, so I'd need to write a small host myself that calls trace_call!. There may be a test that produces a trace artifact. Let me check if any test writes `.nichlink/traces`. Simpler: craft the trace artifact via the documented render format — let me look at TraceArtifact::render and parse; if it's simple text, I can hand-write a valid one and note it's synthetic.
+5. trace artifact — could produce by running a host that records traces. The scaffold is broken, so I'd need to write a small host myself that calls trace_call!. There may be a test that produces a trace artifact. Let me check if any test writes `.xirang/traces`. Simpler: craft the trace artifact via the documented render format — let me look at TraceArtifact::render and parse; if it's simple text, I can hand-write a valid one and note it's synthetic.
 
 Given the "6-question debug comparison" is the most important part, I shouldn't burn too much on trace. Let me check trace artifact format quickly and decide.
 
@@ -457,9 +457,9 @@ Let me set up the /tmp copy package now. Steps:
 - cp -r examples/control-button /tmp/probe/control-button (excluding target)
 - fix Cargo.toml path deps to absolute
 - cp -r examples/control-button-graft too
-- set NICH_LINK_PACKAGE_ROOT=/tmp/probe, root default = /tmp/probe/control-button? No: root must be inside package root; if NICH_LINK_PACKAGE_ROOT=/tmp/probe then root="control-button".
+- set XIRANG_PACKAGE_ROOT=/tmp/probe, root default = /tmp/probe/control-button? No: root must be inside package root; if XIRANG_PACKAGE_ROOT=/tmp/probe then root="control-button".
 
-Wait, but `resolve_package_root` may pick cwd. Setting NICH_LINK_PACKAGE_ROOT=/tmp/probe works (base). And each call passes root="control-button". But then `namespace` runs cargo metadata in /tmp/probe/control-button → it's a member of no workspace; path deps absolute → fine.
+Wait, but `resolve_package_root` may pick cwd. Setting XIRANG_PACKAGE_ROOT=/tmp/probe works (base). And each call passes root="control-button". But then `namespace` runs cargo metadata in /tmp/probe/control-button → it's a member of no workspace; path deps absolute → fine.
 
 Let me do it.
 
@@ -469,7 +469,7 @@ Let me do it.
 
 Good. Now add graft plan + MIR file into this sandbox copy.
 
-- `/tmp/probe/control-button/.nichlink/external-grafts/button_fast/graft.plan` with target = the real NodeId `ff1c57d9b110ef57eac134a3cb4e46b6` and target_path=root/control/button, graft=button_fast, full=false. And an orphan one to check unkept.
+- `/tmp/probe/control-button/.xirang/external-grafts/button_fast/graft.plan` with target = the real NodeId `ff1c57d9b110ef57eac134a3cb4e46b6` and target_path=root/control/button, graft=button_fast, full=false. And an orphan one to check unkept.
 - `/tmp/probe/control-button/button.mir` = real MIR text.
 
 Then run grafts/mir/unified/apply/usages/converge on root="control-button".
@@ -484,7 +484,7 @@ Let's set up and run.
 
 Excellent — mir, unified, jsonl all work on real rustc MIR.
 
-But there's a REAL BUG found: `nichlink.grafts` reports `orphan_fast` as "declared at entry line 48 as cut `crate::control::object::button::NODE_ID` graft `control_button_graft::button_fast::NODE_ID`" — but orphan_fast targets `root/elsewhere`, which no declaration names. The expected verdict is "NOT declared by the host entry" / unkept. So the grafts tool — with a *typed* declaration plan (`cut(NODE_ID) graft(NODE_ID)`) — marks every plan as declared by the same first cut. That is exactly the "会误导" case: a plan the release prunes is reported as kept.
+But there's a REAL BUG found: `xirang.grafts` reports `orphan_fast` as "declared at entry line 48 as cut `crate::control::object::button::NODE_ID` graft `control_button_graft::button_fast::NODE_ID`" — but orphan_fast targets `root/elsewhere`, which no declaration names. The expected verdict is "NOT declared by the host entry" / unkept. So the grafts tool — with a *typed* declaration plan (`cut(NODE_ID) graft(NODE_ID)`) — marks every plan as declared by the same first cut. That is exactly the "会误导" case: a plan the release prunes is reported as kept.
 
 Wait, let me check: with typed declarations, `cut.cut_label()` returns the Rust path `crate::control::object::button::NODE_ID`. How does graft_plan_rows decide `declared`? Let me look at build_time::graft_plan_rows. Possibly for typed cuts it compares the numeric identity of the cut target's *resolved* id. Hmm, but the tool reported declared for root/elsewhere which doesn't match.
 
@@ -494,7 +494,7 @@ Also maybe the row is matched differently. Let me check. This could be a genuine
 
 Hmm wait — but interesting: both rows got the SAME declaration (cut label button). So matching must be positional/first-cut rather than by name. Let's read the code.
 
-Also let me run `nichlink grafts` CLI on the same root to compare — the module doc claims "the same answer as the CLI, from the same rule".
+Also let me run `xirang grafts` CLI on the same root to compare — the module doc claims "the same answer as the CLI, from the same rule".
 
 Let me look at graft_plan_rows.
 
@@ -526,7 +526,7 @@ My earlier orphan test was a malformed combination. I should test the realistic 
 
 Let me now redo the graft test with a realistic orphan.
 
-Also test the CLI `nichlink grafts` on the same root for the "same answer" claim.
+Also test the CLI `xirang grafts` on the same root for the "same answer" claim.
 
 Let me also test apply (preview + real write in sandbox) and then usages on generated face.
 
@@ -568,7 +568,7 @@ Let me run apply preview again with string fields.
 
 More findings:
 - `fields.module` must be a bare snake_case module name, not a path. The tool description says "`add` (create `fields.module` under `parent`)" and "`rename` (change `fields.module`)" — it doesn't say "a bare snake_case name". Also catalog says "`node` names the face and `parent` the parent, by logical path". Let's retry with module "widget".
-- `edit` on a hand-written face fails "this module was not generated by NichLink" — consistent with usages. So the write path only works on NichLink-generated modules — meaning in this repo, `apply` cannot edit any of the real faces. That's a major capability-face finding: the write tool is unavailable on hand-written faces (which are all real faces in the repo).
+- `edit` on a hand-written face fails "this module was not generated by XiRang" — consistent with usages. So the write path only works on XiRang-generated modules — meaning in this repo, `apply` cannot edit any of the real faces. That's a major capability-face finding: the write tool is unavailable on hand-written faces (which are all real faces in the repo).
 - delete requires confirm.
 
 Let me retry add with module "widget" and see the preview (does it need to write to a file? "create fields.module under parent").
@@ -666,7 +666,7 @@ I can craft a valid trace artifact: header version/namespace/root/mode + frames 
 Let me craft:
 ```
 version=1
-namespace=nichlink-example-control-button
+namespace=xirang-example-control-button
 root=b6a6bea94077152dbb7dd780a2708acf
 mode=...
 frame=1	-	ff1c57d9b110ef57eac134a3cb4e46b6	control::object::button::paint	src/control/object/button/button.rs	10	5
@@ -695,11 +695,11 @@ Rather than crafting by hand (error-prone, and any error would be my bug not the
 
 Hmm, cost/benefit: trace is 1 of 17 tools. The task requires "每个工具真跑一次" and "记录返回要点/可用不可用". I already ran `trace` against a real project → "trace absent" + how to produce one. That's a valid run and a valid (negative) result. But to claim 可用 I'd want a positive path.
 
-Let me try the Rust writer approach — it's the most trustworthy. Actually simpler: `trace` requires the artifact at `<root>/.nichlink/traces/nichlink.trace`. I can write a small Rust binary in /tmp/probe that depends on nichlink-toolchain and writes the artifact for a given root+namespace. Let me estimate: cargo build of a tiny crate linking the toolchain (already compiled, but a new target dir → recompile deps ~ 1-2 min). Acceptable.
+Let me try the Rust writer approach — it's the most trustworthy. Actually simpler: `trace` requires the artifact at `<root>/.xirang/traces/xirang.trace`. I can write a small Rust binary in /tmp/probe that depends on xirang-toolchain and writes the artifact for a given root+namespace. Let me estimate: cargo build of a tiny crate linking the toolchain (already compiled, but a new target dir → recompile deps ~ 1-2 min). Acceptable.
 
 Actually, wait: /tmp/probe/control-button is already a crate depending on the toolchain with `run` feature. I can add a small `examples/` file there and run it with `cargo run --example`. It has dev-dependencies with run+authoring. Let me add `/tmp/probe/control-button/examples/trace_probe.rs` that constructs a CallTrace via trace_call! macro... The macro-based recording needs the runtime environment. Simpler: use the public API: `CallTrace::with_mode`, `CallSite { node, function, frame_id, source }`, `write_trace_artifact`.
 
-Let me check what's public: `nichlink_toolchain::runtime::{CallTrace, write_trace_artifact, trace_artifact_path}` and `FrameRecord`, `CallSite`.
+Let me check what's public: `xirang_toolchain::runtime::{CallTrace, write_trace_artifact, trace_artifact_path}` and `FrameRecord`, `CallSite`.
 
 Let me check the re-exports quickly.
 
@@ -723,13 +723,13 @@ Better: use `CallTrace` + `write_trace_artifact`. `CallSite` fields? `trace.fram
 
 So in a /tmp example:
 ```rust
-use nichlink_toolchain::runtime::{CallTrace, CallSite, FrameRecord, write_trace_artifact, trace_artifact_path};
-use nichlink_toolchain::runtime::registry_core::NodeId;
+use xirang_toolchain::runtime::{CallTrace, CallSite, FrameRecord, write_trace_artifact, trace_artifact_path};
+use xirang_toolchain::runtime::registry_core::NodeId;
 
 let node: NodeId = "ff1c57...".parse().unwrap();
 let mut trace = CallTrace::with_mode(...TraceMode::Full);
 trace.frames = vec![FrameRecord{ call: CallSite{ node, function: "control::object::button::paint", frame_id: 1, source: None }, parent: None }];
-write_trace_artifact(&trace, &trace_artifact_path(root), "nichlink-example-control-button")?;
+write_trace_artifact(&trace, &trace_artifact_path(root), "xirang-example-control-button")?;
 ```
 Need `TraceMode` in scope. Let me check `with_mode` param and FrameRecord pub path. Let me grep for a test that does this.
 
@@ -753,13 +753,13 @@ Let me write:
 ```rust
 //! probe: write a real trace artifact for the control-button tree.
 use std::path::Path;
-use nichlink_toolchain::runtime::{CallTrace, LocalKind, trace_artifact_path, write_trace_artifact};
+use xirang_toolchain::runtime::{CallTrace, LocalKind, trace_artifact_path, write_trace_artifact};
 
 fn main() {
     let root = Path::new("/tmp/probe/control-button");
-    let namespace = "nichlink-example-control-button";
-    let button: nichlink_toolchain::NodeId = "ff1c57d9b110ef57eac134a3cb4e46b6".parse().unwrap();
-    let control: nichlink_toolchain::NodeId = "fb97ddd5f2b803d1b7f40a776d8a22d9".parse().unwrap();
+    let namespace = "xirang-example-control-button";
+    let button: xirang_toolchain::NodeId = "ff1c57d9b110ef57eac134a3cb4e46b6".parse().unwrap();
+    let control: xirang_toolchain::NodeId = "fb97ddd5f2b803d1b7f40a776d8a22d9".parse().unwrap();
     let mut recorded = CallTrace::full();
     recorded.with(control, "base_registry", |r| {
         r.with(button, "button::paint", |r| {
@@ -774,11 +774,11 @@ fn main() {
 ```
 Need to check `with`, `local`, `transform`, `consume` signatures and `NodeId` path. From the test: `recorded.with(node, "button", |recorded| { recorded.local("input", "u32", 1, LocalKind::Input); });` and `let input = recorded.local(...)` returns something, `recorded.transform(input, "doubled", "u32", 2)`, `recorded.consume(doubled, "render", "count")`.
 
-`user_node` parse: `nichlink_kernel::identity::NodeId`; the example crate has `nichlink_toolchain::NodeId` re-export? In lib.rs of the example they use `NodeId` bare after host!(). Let me use `nichlink_toolchain::runtime::registry_core::NodeId`. Hmm, from mcp resolve.rs: `use nichlink_kernel::NodeId;`. The example crate doesn't depend on kernel directly. Let me check `nichlink_toolchain::NodeId` export: in the example's lib.rs they write `pub const FRAMEWORK: FrameworkId` after host!() which re-exports kernel at crate root... For the example crate, they'd need `use nichlink_toolchain::...`. Let me just check if `nichlink_toolchain::NodeId` exists.
+`user_node` parse: `xirang_kernel::identity::NodeId`; the example crate has `xirang_toolchain::NodeId` re-export? In lib.rs of the example they use `NodeId` bare after host!(). Let me use `xirang_toolchain::runtime::registry_core::NodeId`. Hmm, from mcp resolve.rs: `use xirang_kernel::NodeId;`. The example crate doesn't depend on kernel directly. Let me check `xirang_toolchain::NodeId` export: in the example's lib.rs they write `pub const FRAMEWORK: FrameworkId` after host!() which re-exports kernel at crate root... For the example crate, they'd need `use xirang_toolchain::...`. Let me just check if `xirang_toolchain::NodeId` exists.
 
 Let me grep the example for NodeId import.
 
-Actually `crate::control::NODE_ID` is used, and in button.rs they don't import NodeId. Simpler: parse with `.parse()` on a type annotation from `FrameView`... I'll try `nichlink_toolchain::NodeId` and fall back.
+Actually `crate::control::NODE_ID` is used, and in button.rs they don't import NodeId. Simpler: parse with `.parse()` on a type annotation from `FrameView`... I'll try `xirang_toolchain::NodeId` and fall back.
 
 Let me check quickly.
 
@@ -786,7 +786,7 @@ Let me check quickly.
 
 推理：
 
-Good. Now write the probe example. NodeId type: need to construct. Let me find how to parse a NodeId from hex string — `NodeId: FromStr`. Type: `nichlink_kernel::identity::NodeId`, but the example crate may not depend on kernel. However `nichlink_toolchain::runtime` re-exports? Let's check: `pub use call_report::*; pub use runtime::*;` and runtime module re-exports kernel? The mcp code uses `nichlink_kernel::NodeId` directly (toolchain depends on kernel). For my example crate, I can add `nichlink-kernel = { path = ... }` as a dependency. Easy.
+Good. Now write the probe example. NodeId type: need to construct. Let me find how to parse a NodeId from hex string — `NodeId: FromStr`. Type: `xirang_kernel::identity::NodeId`, but the example crate may not depend on kernel. However `xirang_toolchain::runtime` re-exports? Let's check: `pub use call_report::*; pub use runtime::*;` and runtime module re-exports kernel? The mcp code uses `xirang_kernel::NodeId` directly (toolchain depends on kernel). For my example crate, I can add `xirang-kernel = { path = ... }` as a dependency. Easy.
 
 Let me write it.
 
@@ -814,9 +814,9 @@ Confirmed: matching uses the frame's *callsite* file (`frame.source.file`), not 
 
 That's a strong finding — let me make it sharper by constructing the artifact so a frame's callsite is in a non-face file but its node is a face (which is what a real host does). My current artifact already is exactly that: node=button face, callsite=examples/trace_probe.rs. `trace` displays `declared-at=control/object/button/button.rs:15:1` and converge says the frame is outside any declared face. Good — that's real, reproducible evidence.
 
-Now: `nichlink.search` — test more thoroughly (face matching, unparsable faces, limit, stale announcement). And `inspect` on a file with no functions. And `read` bounds. And error cases for missing required args. And unknown tool. And the notification/envelope handling? That's protocol, not tools — maybe brief.
+Now: `xirang.search` — test more thoroughly (face matching, unparsable faces, limit, stale announcement). And `inspect` on a file with no functions. And `read` bounds. And error cases for missing required args. And unknown tool. And the notification/envelope handling? That's protocol, not tools — maybe brief.
 
-Let me also check `nichlink.search`'s "tree half needs the identity namespace; a root Cargo cannot name still answers the source half".
+Let me also check `xirang.search`'s "tree half needs the identity namespace; a root Cargo cannot name still answers the source half".
 
 Let me now do a batch of edge/negative cases + search variants. Also test all 17 tools with missing required args to check each error message (useful for the 对账 table "描述与行为不符").
 
@@ -833,20 +833,20 @@ Also I should test the "17 names in the task list vs tools/list" reconciliation 
 Let me check each module's public entry to list any extra "tool-shaped" function.
 
 Also check descriptions vs behavior mismatch candidates:
-1. `nichlink.read` description: "Read a bounded source window around a line." — behavior ok. But max context is 120 and MAX_READ_LINES 240; catalog says context max 120, ok.
-2. `nichlink.search` description says it matches "logical path, kind, module, or registry_name". Let me test kind match: query "Button" should match face kind.
-3. `nichlink.status` claims "indexed Rust file/function counts" — ok.
-4. `nichlink.apply` schema has no `required` beyond action, and description says `fields.module` is "create fields.module under parent" — but module must be a bare snake_case name, and it's placed at `<parent>/<module>/<module>.rs`. Also `exports` must be a comma-separated string, not an array — the description doesn't say. Also `apply` must be top-level, not in fields (description shows `apply` as a sibling — actually the schema puts `apply` top-level, consistent).
-5. `nichlink.impact` `depth` min 1 max 16 — behavior clamp. Let me test depth=0 → clamp to 1? and depth=99.
-6. `nichlink.trace` description mentions "`NICH_LINK_TRACE_FILE`, else `<root>/.nichlink/traces/nichlink.trace`" — behavior ok.
-7. `nichlink.mir` `path` required, `against`, `jsonl`. Behavior ok. Error when jsonl+against — good.
-8. `nichlink.grafts` limit max 400 while schema says 400 — ok.
-9. `nichlink.usages` — description lists fields; behavior prints them. ok.
-10. `nichlink.converge` — "With `node`, ... whether each `capability=>ProviderKind` requirement is actually answered by something in the package, named when it is and UNANSWERED when it is not". In my tests with the generated widget, `requires -` so we didn't see the verdict. Let me test a face with requires: the widget's `requires` can be edited. Let's do `apply edit` on widget to set requires "control.theme=>ThemeProvider" and then converge → expect UNANSWERED. That's a good positive test of the headline verdict.
+1. `xirang.read` description: "Read a bounded source window around a line." — behavior ok. But max context is 120 and MAX_READ_LINES 240; catalog says context max 120, ok.
+2. `xirang.search` description says it matches "logical path, kind, module, or registry_name". Let me test kind match: query "Button" should match face kind.
+3. `xirang.status` claims "indexed Rust file/function counts" — ok.
+4. `xirang.apply` schema has no `required` beyond action, and description says `fields.module` is "create fields.module under parent" — but module must be a bare snake_case name, and it's placed at `<parent>/<module>/<module>.rs`. Also `exports` must be a comma-separated string, not an array — the description doesn't say. Also `apply` must be top-level, not in fields (description shows `apply` as a sibling — actually the schema puts `apply` top-level, consistent).
+5. `xirang.impact` `depth` min 1 max 16 — behavior clamp. Let me test depth=0 → clamp to 1? and depth=99.
+6. `xirang.trace` description mentions "`XIRANG_TRACE_FILE`, else `<root>/.xirang/traces/xirang.trace`" — behavior ok.
+7. `xirang.mir` `path` required, `against`, `jsonl`. Behavior ok. Error when jsonl+against — good.
+8. `xirang.grafts` limit max 400 while schema says 400 — ok.
+9. `xirang.usages` — description lists fields; behavior prints them. ok.
+10. `xirang.converge` — "With `node`, ... whether each `capability=>ProviderKind` requirement is actually answered by something in the package, named when it is and UNANSWERED when it is not". In my tests with the generated widget, `requires -` so we didn't see the verdict. Let me test a face with requires: the widget's `requires` can be edited. Let's do `apply edit` on widget to set requires "control.theme=>ThemeProvider" and then converge → expect UNANSWERED. That's a good positive test of the headline verdict.
 
 Let me do that.
 
-Also test `nichlink.explain` with both `overlay: true` and `node` → description says mutually exclusive; check behavior.
+Also test `xirang.explain` with both `overlay: true` and `node` → description says mutually exclusive; check behavior.
 
 Let me run these.
 
@@ -856,7 +856,7 @@ Let me run these.
 
 More findings:
 
-1. **`nichlink.search` "no matches" for `control.render`** despite the face declaring `exports: ["control.render"]`. The description says search matches faces on "logical path, kind, module, or registry_name" — exports are not searched. That's consistent with the doc but a real gap for debugging ("where is the capability `control.render` declared?"). It's a "not misleading, but missing" item. Worth listing.
+1. **`xirang.search` "no matches" for `control.render`** despite the face declaring `exports: ["control.render"]`. The description says search matches faces on "logical path, kind, module, or registry_name" — exports are not searched. That's consistent with the doc but a real gap for debugging ("where is the capability `control.render` declared?"). It's a "not misleading, but missing" item. Worth listing.
 
 2. **`converge` UNANSWERED verdict unreachable** — `apply edit` with an unanswerable `requires` is *rejected by the connector check before writing*, so the face never has an unanswered requirement. Meaning: is `converge`'s UNANSWERED verdict dead code in practice? Not necessarily — a hand-written face could declare an unanswered requirement... but `usages`/`converge` refuse to read hand-written faces ("requires unreadable"). So the headline verdict of `converge` ("the verdict no single tool can give") is unreachable: a face whose requires is readable is a generated face, and a generated face can't be written with an unanswered requirement (the connector rejects it). That's a strong finding!
 
@@ -988,7 +988,7 @@ The theme edit was only a *preview* (not applied) — I didn't pass apply:true, 
 
 Let me apply the theme edit, then retry widget requires "control.theme=>Theme".
 
-Also interesting: `apply edit` preview keeps previous text in `.nichlink/trash/faces/...` — note this means `usages`'s "unreadable faces 3" filter excludes `.nichlink/`? Earlier source_index said `.nichlink/` is filtered for `.rs` files. Good.
+Also interesting: `apply edit` preview keeps previous text in `.xirang/trash/faces/...` — note this means `usages`'s "unreadable faces 3" filter excludes `.xirang/`? Earlier source_index said `.xirang/` is filtered for `.rs` files. Good.
 
 Let me run the sequence with apply:true for theme, then widget.
 
@@ -1044,9 +1044,9 @@ Hold on: verify ran after the failed apply edit, and `apply` is rejected so the 
 
 Hmm, maybe `verify` uses a different validation entry (the CLI's `check` entry) that doesn't run the connector? Or ... wait, "faces 4 (source) vs 4 (build)". The build evidence was published by this verify run.
 
-Actually hold on: maybe the delete moved theme.rs to `.nichlink/trash/...` and the source walk skips `.nichlink`, so theme is gone. The widget's requires needs a provider of kind Theme → none → connector should reject. But verify says ok.
+Actually hold on: maybe the delete moved theme.rs to `.xirang/trash/...` and the source walk skips `.xirang`, so theme is gone. The widget's requires needs a provider of kind Theme → none → connector should reject. But verify says ok.
 
-This is a **real contradiction between two surfaces**: `nichlink.verify` (the CLI's `check` entry) accepts a tree that `nichlink.usages`/`converge` (and the write path) reject via `load_registry`. That is a big stability finding — two tools give opposite verdicts on the same package at the same moment. Let me confirm by running the CLI `nichlink check` on the same root.
+This is a **real contradiction between two surfaces**: `xirang.verify` (the CLI's `check` entry) accepts a tree that `xirang.usages`/`converge` (and the write path) reject via `load_registry`. That is a big stability finding — two tools give opposite verdicts on the same package at the same moment. Let me confirm by running the CLI `xirang check` on the same root.
 
 Let me check.
 
@@ -1070,7 +1070,7 @@ This is the crux finding. Let me investigate briefly to describe it accurately.
 
 `load_registry` uses `register_snapshot_batch` (which runs the connector). CLI `check` presumably validates via build-time diagnostics (static plan + registration rule + scope), maybe not the connector. So `verify`/CLI `check` do NOT run the data-flow connector, while the write path and `usages`/`converge` do. Two surfaces give opposite verdicts.
 
-Hmm, wait: is that "opposite verdicts on the same tree"? verify says "verdict ok (the kernel accepted the tree)". The MCP table says verify "drives the same entry the CLI's check drives". So `verify` and `check` agree. But `usages` says "the package's own faces were rejected". So within the MCP bridge itself, two tools disagree about the same package at the same instant: `nichlink.verify` → ok; `nichlink.usages`/`converge`/`apply` → rejected.
+Hmm, wait: is that "opposite verdicts on the same tree"? verify says "verdict ok (the kernel accepted the tree)". The MCP table says verify "drives the same entry the CLI's check drives". So `verify` and `check` agree. But `usages` says "the package's own faces were rejected". So within the MCP bridge itself, two tools disagree about the same package at the same instant: `xirang.verify` → ok; `xirang.usages`/`converge`/`apply` → rejected.
 
 That's a strong, reproducible "会误导" finding: an agent that runs verify first (as the catalog suggests) gets "the kernel accepted the tree" and then every write/read is refused.
 
@@ -1080,7 +1080,7 @@ Actually, let me double check whether verify's kernel validation includes the co
 
 推理：
 
-`verify` uses `build_time::check_for` which is the *static* pass. Let me confirm that the static pass doesn't run the connector — the earlier verify failure output showed "phase=static plan". So check covers static plan + registration rule (and maybe admission), but not the data-flow connector. Confirmed by the CLI agreeing ("nichlink check: ok").
+`verify` uses `build_time::check_for` which is the *static* pass. Let me confirm that the static pass doesn't run the connector — the earlier verify failure output showed "phase=static plan". So check covers static plan + registration rule (and maybe admission), but not the data-flow connector. Confirmed by the CLI agreeing ("xirang check: ok").
 
 Meanwhile `load_registry` → `register_snapshot_batch` → connector → rejected.
 
@@ -1096,7 +1096,7 @@ Let me now verify this is deterministic and record the exact sequence. Also let 
 
 推理：
 
-Confirmed: the static `check` pipeline covers requirements (`aggregate_requirements`) — hmm, `aggregate_requirements` is called. So why did check pass? Because the widget's requires `control.theme=>Theme`… `aggregate_requirements(src, &nodes, false, &scope, ...)`: maybe it checks that the requirement provider kind exists among *static* faces in scope. theme.rs was moved to `.nichlink/trash/`, so it's not in the source tree → no provider of kind Theme → should error...
+Confirmed: the static `check` pipeline covers requirements (`aggregate_requirements`) — hmm, `aggregate_requirements` is called. So why did check pass? Because the widget's requires `control.theme=>Theme`… `aggregate_requirements(src, &nodes, false, &scope, ...)`: maybe it checks that the requirement provider kind exists among *static* faces in scope. theme.rs was moved to `.xirang/trash/`, so it's not in the source tree → no provider of kind Theme → should error...
 
 Unless `aggregate_requirements` only validates that the requirement's *capability token* is well-formed, and the "provider kind" check is the connector's job. Evidently check passed, so the static pass doesn't enforce attachment.
 
@@ -1106,7 +1106,7 @@ Now, I've spent a lot of effort. Remaining must-dos:
 1. The 6-question debug comparison — the most important part. I need to send the questions to the captain for codegraph answers.
 2. Write the report.
 
-Let me define the 6 questions now (fixed before running) and run nichlink side, and message the captain immediately so he can work in parallel.
+Let me define the 6 questions now (fixed before running) and run xirang side, and message the captain immediately so he can work in parallel.
 
 6 questions (2 call-chain, 2 where-is/who-calls, 2 what-changed/impact):
 
@@ -1117,15 +1117,15 @@ Q4 (某符号在哪 / 谁调用它): `face_views` 定义在哪、被哪些地方
 Q5 (哪里改了 / 影响面): 如果改 `kernel/src/registry_core/mir/text.rs` 里的 `MirGraph::from_mir_text`，影响面有哪些（谁调用它）？
 Q6 (哪里改了 / 影响面): 改 `kernel/src/registry_core/tree/connector.rs` 的 `names_face`… hmm names_face is in build_time. Let me pick: 改 `toolchain/src/build_time/src/graft_view/plan_rows.rs` 的 `graft_plan_rows` 会影响谁？
 
-Hmm — for a fair comparison, the questions must be answerable by both. codegraph indexes the whole repo (Rust). nichlink-mcp's source tools index the *package root*. I'll run nichlink with root = repo root? That's a virtual workspace (no [package]), so namespace fails; but search/inspect/callgraph/read/status only need the source root... Let's see: NICH_LINK_PACKAGE_ROOT=/home/nich/Moirai_N3/nichlink → `package_root()` resolves; for search, the tree half needs namespace → "tree half unavailable" but the source half answers. callgraph — does it need namespace? Let me check callgraph.rs: it likely uses load_sources only.
+Hmm — for a fair comparison, the questions must be answerable by both. codegraph indexes the whole repo (Rust). xirang-mcp's source tools index the *package root*. I'll run xirang with root = repo root? That's a virtual workspace (no [package]), so namespace fails; but search/inspect/callgraph/read/status only need the source root... Let's see: XIRANG_PACKAGE_ROOT=/home/nich/Moirai_N3/nichlink → `package_root()` resolves; for search, the tree half needs namespace → "tree half unavailable" but the source half answers. callgraph — does it need namespace? Let me check callgraph.rs: it likely uses load_sources only.
 
 Let me verify by running the 6 questions with root = repo root.
 
-Differences to expect: nichlink's callgraph is heuristic name-based (callers matched by name across the whole tree), so it may list unrelated call sites; codegraph is AST-based. That's the core comparison.
+Differences to expect: xirang's callgraph is heuristic name-based (callers matched by name across the whole tree), so it may list unrelated call sites; codegraph is AST-based. That's the core comparison.
 
-Let me first fix the questions and send to captain, then run nichlink side.
+Let me first fix the questions and send to captain, then run xirang side.
 
-Also: the "哪里改了" class — nichlink has `diff` (face-level, needs build evidence) and `impact` (face-level, needs a face). For a question about a *source file* change, nichlink has no answer at all (files aren't faces). That's a key finding: nichlink MCP is registry-face-oriented; codegraph is symbol-oriented. Questions 5 and 6 should be phrased so both can attempt.
+Also: the "哪里改了" class — xirang has `diff` (face-level, needs build evidence) and `impact` (face-level, needs a face). For a question about a *source file* change, xirang has no answer at all (files aren't faces). That's a key finding: xirang MCP is registry-face-oriented; codegraph is symbol-oriented. Questions 5 and 6 should be phrased so both can attempt.
 
 Let me phrase the 6 questions in a neutral "debug question" form:
 
@@ -1149,21 +1149,21 @@ Let me settle on 6 stable questions:
 - I1 (影响面) 给 `Registry::provider_for_capability` 加一个参数，谁受影响。
 - I2 (影响面) 改 `DISPATCH`（toolchain/src/mcp/src/tools.rs），谁受影响。
 
-Good. Send to captain now, then run nichlink side.
+Good. Send to captain now, then run xirang side.
 
 ## step 98（turn 1，in 1683 / out 581 tokens）
 
 推理：
 
-The nichlink side gives answers. Note DISPATCH (a const) is not found by symbol name — search "DISPATCH" returned `dispatch` (case-insensitive!) and test functions. That's a miss: `search` matched `dispatch` lowercase, and did not find the `DISPATCH` const at tools.rs:316. Let me double-check by searching "DISPATCH" — the results show `fn dispatch` in protocol.rs, not the const. So `search` only indexes functions (and faces + files), not consts/statics/types. That's an important limitation: it cannot locate a const.
+The xirang side gives answers. Note DISPATCH (a const) is not found by symbol name — search "DISPATCH" returned `dispatch` (case-insensitive!) and test functions. That's a miss: `search` matched `dispatch` lowercase, and did not find the `DISPATCH` const at tools.rs:316. Let me double-check by searching "DISPATCH" — the results show `fn dispatch` in protocol.rs, not the const. So `search` only indexes functions (and faces + files), not consts/statics/types. That's an important limitation: it cannot locate a const.
 
 Wait, is search case-insensitive? "DISPATCH" → "dispatch" yes. Let me confirm with a different query to see. Also check `inspect` on tools.rs to see if DISPATCH is listed (inspect only lists fns).
 
 W1: `names_face` definition found, but "谁调用它" needs callgraph. Let me run callgraph for names_face and from_mir_text, provider_for_capability, and also `search` for the consts.
 
-Let me also run `nichlink.callgraph` for provider_for_capability, names_face, from_mir_text.
+Let me also run `xirang.callgraph` for provider_for_capability, names_face, from_mir_text.
 
-Note: no "where is the const DISPATCH" answer → nichlink can't locate it; codegraph will. Good contrast.
+Note: no "where is the const DISPATCH" answer → xirang can't locate it; codegraph will. Good contrast.
 
 Let me run those.
 
@@ -1173,12 +1173,12 @@ Let me run those.
 
 Great. Note: `inspect toolchain/src/mcp/src/tools.rs` lists fns but not the `DISPATCH` const → confirms `search`/`inspect` index only functions (plus files/faces). Also `include` of `mod tools_tests` is a #[path] module, not an fn.
 
-Note the nichlink answers for C1: `register_snapshot_batch` callers are mostly tests (name-based matching across the whole tree, 41 callers) and callees include `connector_error`. It does NOT give a path from register_snapshot_batch → connector_error (no transitive chain) — the tool only gives 1-hop callers/callees. codegraph gives a call path.
+Note the xirang answers for C1: `register_snapshot_batch` callers are mostly tests (name-based matching across the whole tree, 41 callers) and callees include `connector_error`. It does NOT give a path from register_snapshot_batch → connector_error (no transitive chain) — the tool only gives 1-hop callers/callees. codegraph gives a call path.
 
 Now I'm waiting for the captain's codegraph answers. Meanwhile, let me finish the remaining probes and start writing the report.
 
 Remaining probes to be thorough:
-- `nichlink.read` boundary (line beyond file end, context clamp) — quick.
+- `xirang.read` boundary (line beyond file end, context clamp) — quick.
 - The `unparsable faces N` line — need a package with an unparsable registration file. Could create in sandbox: a file with two macro invocations. Quick test to confirm the line appears.
 - Protocol: initialize/tools/list done. Maybe test notification handling (not required).
 
@@ -1208,7 +1208,7 @@ Now let me test the `unparsable faces N` line and `read` bounds, then write the 
 
 Let me do a quick batch.
 
-For unparsable: create a face file with two macro invocations in the sandbox. e.g. `.nichlink`? No, a source file: src/control/object/broken/broken.rs containing two `crate::control_object! {}` blocks. But that would make the tree invalid for other tools... it's the sandbox, and it's my last test there. Actually the unparsable line appears in `search`/`registry`/`usages` outputs. Let me add it at the very end.
+For unparsable: create a face file with two macro invocations in the sandbox. e.g. `.xirang`? No, a source file: src/control/object/broken/broken.rs containing two `crate::control_object! {}` blocks. But that would make the tree invalid for other tools... it's the sandbox, and it's my last test there. Actually the unparsable line appears in `search`/`registry`/`usages` outputs. Let me add it at the very end.
 
 Let me do read bounds first + then unparsable.
 
@@ -1236,7 +1236,7 @@ Actually let me start writing the report now, leaving the §3 codegraph column t
 
 Let me first confirm the repo is clean of my probes (I wrote nothing into the repo yet), and check git status.
 
-Also note: I ran `verify` against the real example, creating target/nichlink/out (gitignored). Fine.
+Also note: I ran `verify` against the real example, creating target/xirang/out (gitignored). Fine.
 
 Let me check git status and then write the report skeleton.
 
@@ -1266,12 +1266,12 @@ Key evidence set:
 - tools/list returns exactly 17, in catalog+DISPATCH order.
 - No orphan handler; DISPATCH==catalog (pinned by tools_tests::the_dispatch_table_follows_the_catalog).
 - Descriptions vs behavior mismatches found:
-  a) `nichlink.apply`: `fields.module` must be a bare snake_case name (a logical path is refused: "invalid module name `control::object::widget`; use snake_case ASCII"); `exports`/`requires`/`provides` must be **strings** (arrays refused: "`exports` must be a string"); `handle_traits` is a bare label, passing the Rust path silently produces `handle_traits: ["crate::control::ControlHandle"]` → parent rule rejects. Schema declares `fields` as an untyped object. → 描述不全。
-  b) `nichlink.converge`: description promises "UNANSWERED when it is not"—the literal UNANSWERED branch (converge.rs:156) is only reachable when the kernel accepts the tree; in practice an unanswered requirement makes `load_registry` fail first, so the reader gets "kernel verdict: this package's own faces are rejected" instead. Never observed UNANSWERED in any run.
-  c) `nichlink.trace` description promises frames matched...; no. Let's use: trace's "declared-at" display vs converge's matching by call-at (cross-tool inconsistency). That's a behavior-vs-description issue for converge ("faces that ran").
-  d) `nichlink.search` description: matches faces on logical path, kind, module, registry_name — it does NOT search declaration content (`exports`, `requires`): query "control.render" → "no matches" although 4 faces declare it. Not a lie, but the description's list is what it is; the gap is that it's the only search.
-  e) `nichlink.status`'s description "indexed Rust file/function counts" ok.
-  f) `nichlink.impact` schema `depth` minimum 1 but depth:0 silently clamps to 1 — schema is the contract (0 is out of schema), so not a mismatch; note it as minor (no error, silent clamp).
+  a) `xirang.apply`: `fields.module` must be a bare snake_case name (a logical path is refused: "invalid module name `control::object::widget`; use snake_case ASCII"); `exports`/`requires`/`provides` must be **strings** (arrays refused: "`exports` must be a string"); `handle_traits` is a bare label, passing the Rust path silently produces `handle_traits: ["crate::control::ControlHandle"]` → parent rule rejects. Schema declares `fields` as an untyped object. → 描述不全。
+  b) `xirang.converge`: description promises "UNANSWERED when it is not"—the literal UNANSWERED branch (converge.rs:156) is only reachable when the kernel accepts the tree; in practice an unanswered requirement makes `load_registry` fail first, so the reader gets "kernel verdict: this package's own faces are rejected" instead. Never observed UNANSWERED in any run.
+  c) `xirang.trace` description promises frames matched...; no. Let's use: trace's "declared-at" display vs converge's matching by call-at (cross-tool inconsistency). That's a behavior-vs-description issue for converge ("faces that ran").
+  d) `xirang.search` description: matches faces on logical path, kind, module, registry_name — it does NOT search declaration content (`exports`, `requires`): query "control.render" → "no matches" although 4 faces declare it. Not a lie, but the description's list is what it is; the gap is that it's the only search.
+  e) `xirang.status`'s description "indexed Rust file/function counts" ok.
+  f) `xirang.impact` schema `depth` minimum 1 but depth:0 silently clamps to 1 — schema is the contract (0 is out of schema), so not a mismatch; note it as minor (no error, silent clamp).
   g) `implementation but not registered`: none. `registered but not implemented`: none.
   h) Tool count claims in module docs (lib.rs "Five tools index Rust source text") — stale-ish: five index source text (search/inspect/callgraph/read/status) — that's 5, correct.
 
@@ -1323,7 +1323,7 @@ Let me run.
 
 推理：
 
-A real bug found: the advertised round trip fails. `mir jsonl:true` prints a trailing newline (line 401 empty), and reading it back fails with `MirParseError { line: 401, message: "record must start with `{`" }`. The catalog says: "what it prints reads back here" and the truncation hint says "pass what this prints to a JSONL-suffixed file and `nichlink.mir` reads it back".
+A real bug found: the advertised round trip fails. `mir jsonl:true` prints a trailing newline (line 401 empty), and reading it back fails with `MirParseError { line: 401, message: "record must start with `{`" }`. The catalog says: "what it prints reads back here" and the truncation hint says "pass what this prints to a JSONL-suffixed file and `xirang.mir` reads it back".
 
 Wait — but maybe the printed text was *truncated* by `bounded()` at MAX_ROWS=400! The output had 401 lines: 400 rows + "… +N more"? Let me check: `bounded(&graph.to_jsonl(), "lines", "pass what this prints ...")` — if the graph has more than 400 lines, it truncates and appends a truncation line. The whole graph is 11 functions + 321 locals + 168 calls = 500 lines → truncated at 400. So the file has 400 JSON records plus 1 truncation notice line → re-reading fails at line 401.
 
@@ -1337,9 +1337,9 @@ Let me check the tail.
 
 推理：
 
-Confirmed exactly: `… truncated: 501 lines total, 400 shown. pass what this prints to a JSONL-suffixed file and `nichlink.mir` reads it back.` — the truncation notice is *itself* appended to the JSONL body, so the file is no longer valid JSONL. The doc instructs the reader to save it as a file and read it back; the read fails at that line.
+Confirmed exactly: `… truncated: 501 lines total, 400 shown. pass what this prints to a JSONL-suffixed file and `xirang.mir` reads it back.` — the truncation notice is *itself* appended to the JSONL body, so the file is no longer valid JSONL. The doc instructs the reader to save it as a file and read it back; the read fails at that line.
 
-Also the truncation notice text literally says "pass what this prints to a JSONL-suffixed file and `nichlink.mir` reads it back" — which is false in this case.
+Also the truncation notice text literally says "pass what this prints to a JSONL-suffixed file and `xirang.mir` reads it back" — which is false in this case.
 
 Let me confirm the small-graph round trip works (to be fair): create a small MIR text file with 2 functions, emit jsonl, save, read back.
 
@@ -1363,7 +1363,7 @@ Let me read /tmp/codegraph-baseline.md first.
 
 Now I have all the codegraph material. Let me do the two verification items the captain asked for:
 
-1. Does `names_face` have covering tests? The doc in declared.rs says the range behavior is pinned by `graft_plan_check.rs` tests. Let me find the test(s) that call `names_face`: from nichlink callgraph answer, callers of names_face were:
+1. Does `names_face` have covering tests? The doc in declared.rs says the range behavior is pinned by `graft_plan_check.rs` tests. Let me find the test(s) that call `names_face`: from xirang callgraph answer, callers of names_face were:
    - toolchain/src/build_time/src/graft_plan_check.rs::a_string_range_names_both_endpoints_as_data
    - toolchain/src/build_time/src/graft_plan_check.rs::undeclared_plan_errors
    - overlay_rows.rs::overlay_projection
@@ -1372,23 +1372,23 @@ Now I have all the codegraph material. Let me do the two verification items the 
    - mcp/impact.rs::impact
    - studio/app/graft.rs::declaration_for
    
-   So `a_string_range_names_both_endpoints_as_data` is a `#[test]` that calls names_face directly. Let me verify it's a #[test] and run it. Also check whether graft_plan_check.rs has tests calling names_face... wait, `a_string_range_names_both_endpoints_as_data` is IN graft_plan_check.rs and calls names_face? Let me verify. Actually nichlink's caller list says `toolchain/src/build_time/src/graft_plan_check.rs::a_string_range_names_both_endpoints_as_data` — so yes, a test function in graft_plan_check.rs calls names_face.
+   So `a_string_range_names_both_endpoints_as_data` is a `#[test]` that calls names_face directly. Let me verify it's a #[test] and run it. Also check whether graft_plan_check.rs has tests calling names_face... wait, `a_string_range_names_both_endpoints_as_data` is IN graft_plan_check.rs and calls names_face? Let me verify. Actually xirang's caller list says `toolchain/src/build_time/src/graft_plan_check.rs::a_string_range_names_both_endpoints_as_data` — so yes, a test function in graft_plan_check.rs calls names_face.
 
    Also `toolchain/src/mcp/src/impact.rs::impact` calls names_face — that's a real caller (production).
 
-   Hmm wait, codegraph said names_face has 6 callers: overlay_rows.rs, cli/explain_report.rs, mcp/impact.rs, plan_rows.rs, +2 more. The +2 more are likely graft_plan_check.rs (x2). So codegraph's caller list agrees with nichlink's, but codegraph claimed "no covering tests found" — a false negative, and importantly it *truncated* the +2 more which happen to be exactly the test-bearing file.
+   Hmm wait, codegraph said names_face has 6 callers: overlay_rows.rs, cli/explain_report.rs, mcp/impact.rs, plan_rows.rs, +2 more. The +2 more are likely graft_plan_check.rs (x2). So codegraph's caller list agrees with xirang's, but codegraph claimed "no covering tests found" — a false negative, and importantly it *truncated* the +2 more which happen to be exactly the test-bearing file.
 
-2. `from_mir_text` — codegraph said "no covering tests found" while returning text.rs with two tests. nichlink says callers include text.rs::parses_native_textual_mir and text.rs::text_that_is_not_mir_yields_an_empty_graph. So they're tests in the same file.
+2. `from_mir_text` — codegraph said "no covering tests found" while returning text.rs with two tests. xirang says callers include text.rs::parses_native_textual_mir and text.rs::text_that_is_not_mir_yields_an_empty_graph. So they're tests in the same file.
 
-3. `DISPATCH` — codegraph said no covering tests; comment says tools_tests pins it; nichlink callgraph can't answer for a const, but grep/tests exist. I'll run the tests.
+3. `DISPATCH` — codegraph said no covering tests; comment says tools_tests pins it; xirang callgraph can't answer for a const, but grep/tests exist. I'll run the tests.
 
 Let me run:
-- `cargo test -p nichlink-toolchain --offline --features build... ` hmm which feature gates build_time? The toolchain's `build` feature. And `graft_plan_check` is in build_time module. Let me find the test names and run them.
+- `cargo test -p xirang-toolchain --offline --features build... ` hmm which feature gates build_time? The toolchain's `build` feature. And `graft_plan_check` is in build_time module. Let me find the test names and run them.
 
-Run: `cargo test --workspace --offline <name>` → but that compiles everything. Let's do targeted: `cargo test -p nichlink-toolchain --offline -p ... ` Actually `toolchain` package = nichlink-toolchain; kernel tests are in the kernel package (nichlink-kernel). The tests:
-- `a_string_range_names_both_endpoints_as_data` in toolchain build_time → `cargo test -p nichlink-toolchain --offline --features build a_string_range_names_both_endpoints_as_data`
-- `parses_native_textual_mir` + `text_that_is_not_mir_yields_an_empty_graph` in kernel → `cargo test -p nichlink-kernel --offline parses_native_textual_mir`
-- `the_dispatch_table_follows_the_catalog` in toolchain mcp → `cargo test -p nichlink-toolchain --offline --features mcp the_dispatch_table_follows_the_catalog`
+Run: `cargo test --workspace --offline <name>` → but that compiles everything. Let's do targeted: `cargo test -p xirang-toolchain --offline -p ... ` Actually `toolchain` package = xirang-toolchain; kernel tests are in the kernel package (xirang-kernel). The tests:
+- `a_string_range_names_both_endpoints_as_data` in toolchain build_time → `cargo test -p xirang-toolchain --offline --features build a_string_range_names_both_endpoints_as_data`
+- `parses_native_textual_mir` + `text_that_is_not_mir_yields_an_empty_graph` in kernel → `cargo test -p xirang-kernel --offline parses_native_textual_mir`
+- `the_dispatch_table_follows_the_catalog` in toolchain mcp → `cargo test -p xirang-toolchain --offline --features mcp the_dispatch_table_follows_the_catalog`
 
 Let me run these three in one command with tail truncation.
 
@@ -1410,7 +1410,7 @@ Let me run the three tests to prove they exist and pass.
 
 The third run: `the_dispatch_table_follows_the_catalog` — it ran with `--features mcp` but mcp lib tests aren't in the default test target? Earlier the output says "0 passed ... 1 filtered out" for some target. Let me run with `--lib` and check. Actually the toolchain package's mcp module may need `--features mcp` AND the lib target. The output shows "running 0 tests" for one target and "tests/runtime_path_compat.rs". Hmm, the lib tests should have been included. The output got truncated by tail. Let me re-run just that with a clearer capture.
 
-Note: I must be careful — running full `cargo test -p nichlink-toolchain` compiles a lot but it's fine.
+Note: I must be careful — running full `cargo test -p xirang-toolchain` compiles a lot but it's fine.
 
 Let me re-run the dispatch test properly.
 
@@ -1423,25 +1423,25 @@ All three "no covering tests found" claims are false negatives, and I have the e
 - `registry_core::mir::text::tests::parses_native_textual_mir` / `..._yields_an_empty_graph` ok (pin from_mir_text)
 - `mcp::tools::tools_tests::the_dispatch_table_follows_the_catalog` ok (pins DISPATCH)
 
-Now let me also address the captain's second point: `+N more` truncation vs nichlink's same-question behavior. nichlink callgraph also truncates: `register_snapshot_batch` had "callers (41): ... +21 more" — wait, nichlink printed 20 callers then "… +21 more"? The output showed "… +21 more" at the end of the list (yes: `… +21 more`). Actually with limit 5, callgraph bounds *definitions* (matches) and the caller list is bounded too. The output showed 20 callers then "+21 more". So nichlink lists 20 of 41 and says "+21 more" — also a truncation, but it *names the count of withheld callers* ("+21 more"). codegraph lists 4 + "+4 more" — with 41 callers, "+4 more" is *wrong*/*not* the number withheld (it says more, not 37). Hmm — careful: codegraph's "+4 more" probably means "+4 more files" not "+4 more callers". The transcript says "只列 4 + '+4 more'". I shouldn't over-interpret; I'll describe it as "the transcript records 4 files then `+4 more`" and note ambiguity. Actually to be fair and accurate, I should be careful: it's the captain's transcription of codegraph output. I'll state what's recorded and flag that the semantics of `+4 more` (files vs callers) is ambiguous in the transcript, whereas nichlink's `… +21 more` is explicitly tied to the caller list count.
+Now let me also address the captain's second point: `+N more` truncation vs xirang's same-question behavior. xirang callgraph also truncates: `register_snapshot_batch` had "callers (41): ... +21 more" — wait, xirang printed 20 callers then "… +21 more"? The output showed "… +21 more" at the end of the list (yes: `… +21 more`). Actually with limit 5, callgraph bounds *definitions* (matches) and the caller list is bounded too. The output showed 20 callers then "+21 more". So xirang lists 20 of 41 and says "+21 more" — also a truncation, but it *names the count of withheld callers* ("+21 more"). codegraph lists 4 + "+4 more" — with 41 callers, "+4 more" is *wrong*/*not* the number withheld (it says more, not 37). Hmm — careful: codegraph's "+4 more" probably means "+4 more files" not "+4 more callers". The transcript says "只列 4 + '+4 more'". I shouldn't over-interpret; I'll describe it as "the transcript records 4 files then `+4 more`" and note ambiguity. Actually to be fair and accurate, I should be careful: it's the captain's transcription of codegraph output. I'll state what's recorded and flag that the semantics of `+4 more` (files vs callers) is ambiguous in the transcript, whereas xirang's `… +21 more` is explicitly tied to the caller list count.
 
 Hmm — for the report I want to be accurate but I only have the captain's transcript, not codegraph's raw output. I'll mark §3 codegraph column as "队长代跑的一次调用转录（/tmp/codegraph-baseline.md）" and be explicit that it's a summary of codegraph's own output, quoted from the transcript. Good.
 
-Also for fairness: nichlink side per question:
-- C1: nichlink.callgraph(register_snapshot_batch, limit 5) → definition + 20 callers (+21 more) + 25 callees, one of which is `connector_error`. So nichlink ALSO does not give the chain; but its callee list *does* contain `connector_error` directly, so "one hop" answers it. Wait — is `connector_error` a direct callee of `register_snapshot_batch`? The callees list included `connector_error`. So the chain is one hop: register_snapshot_batch → connector_error. Hmm, but the connector_error callers list says 2: graft_ops.rs and transaction.rs. So yes, direct.
+Also for fairness: xirang side per question:
+- C1: xirang.callgraph(register_snapshot_batch, limit 5) → definition + 20 callers (+21 more) + 25 callees, one of which is `connector_error`. So xirang ALSO does not give the chain; but its callee list *does* contain `connector_error` directly, so "one hop" answers it. Wait — is `connector_error` a direct callee of `register_snapshot_batch`? The callees list included `connector_error`. So the chain is one hop: register_snapshot_batch → connector_error. Hmm, but the connector_error callers list says 2: graft_ops.rs and transaction.rs. So yes, direct.
 
-  So for C1 nichlink answers better: it says the direct callee set includes `connector_error` → the chain is length 1. Whereas codegraph gave a symbol bag with 41 callers and 2 callers of connector_error. Both are "symbol bag"-ish but nichlink's callee list (direct, complete, name-based) is more directly usable. However nichlink's callee list is name-based and includes noise (`Err`, `Ok`, `Some`, `clone`, `from`, `into`, `new`, `push` ...) — clearly std/method noise. So neither is clean.
+  So for C1 xirang answers better: it says the direct callee set includes `connector_error` → the chain is length 1. Whereas codegraph gave a symbol bag with 41 callers and 2 callers of connector_error. Both are "symbol bag"-ish but xirang's callee list (direct, complete, name-based) is more directly usable. However xirang's callee list is name-based and includes noise (`Err`, `Ok`, `Some`, `clone`, `from`, `into`, `new`, `push` ...) — clearly std/method noise. So neither is clean.
 
-- C2: nichlink.callgraph(graft_plan_rows) → callers 4 (overlay_projection, cli/grafts.rs::plan_rows, mcp/diff.rs::diff_records, mcp/grafts.rs::grafts) and callees include `entry_rows`. So chain = graft_plan_rows → entry_rows → (parse...). nichlink gives the first hop; you'd then call callgraph on `entry_rows`. Two calls needed. codegraph gave the whole plan_rows.rs source in one call → readable in one go. So C2: codegraph better (one call, full file), though it also dumped 2 irrelevant sources.
+- C2: xirang.callgraph(graft_plan_rows) → callers 4 (overlay_projection, cli/grafts.rs::plan_rows, mcp/diff.rs::diff_records, mcp/grafts.rs::grafts) and callees include `entry_rows`. So chain = graft_plan_rows → entry_rows → (parse...). xirang gives the first hop; you'd then call callgraph on `entry_rows`. Two calls needed. codegraph gave the whole plan_rows.rs source in one call → readable in one go. So C2: codegraph better (one call, full file), though it also dumped 2 irrelevant sources.
 
-  Let me actually run callgraph on entry_rows to see if nichlink can close the chain — that's a fair "one extra call" data point. But the rule was "每题一次调用". Hmm — the captain's codegraph side was one call per question. To be fair I should report nichlink's *first* call. But I can note that a second call would close it. Actually, let me just report the first call and note that the callee list already contains `entry_rows`, and a second `callgraph entry_rows` would show `parse_graft_plan_document`... let me verify that in one extra call for accuracy of the claim (I can mark it as a follow-up call, not the first answer). Fine — I'll run it to be able to state it truthfully.
+  Let me actually run callgraph on entry_rows to see if xirang can close the chain — that's a fair "one extra call" data point. But the rule was "每题一次调用". Hmm — the captain's codegraph side was one call per question. To be fair I should report xirang's *first* call. But I can note that a second call would close it. Actually, let me just report the first call and note that the callee list already contains `entry_rows`, and a second `callgraph entry_rows` would show `parse_graft_plan_document`... let me verify that in one extra call for accuracy of the claim (I can mark it as a follow-up call, not the first answer). Fine — I'll run it to be able to state it truthfully.
 
-- W1: nichlink.search(names_face) → definition file:line. callgraph(names_face) → 7 callers with file::function. codegraph: 6 callers, 4 files + "+2 more", plus false-negative test warning. nichlink's 7 callers include 2 test functions and 5 production. Note: nichlink says 7, codegraph says 6 — a count discrepancy. Which is right? nichlink's list: a_string_range_names_both_endpoints_as_data, undeclared_plan_errors, overlay_projection, entry_rows, declared_report, impact, declaration_for = 7. codegraph says "6 callers in overlay_rows.rs, cli/explain_report.rs, mcp/impact.rs, plan_rows.rs +2 more" = 6. Hmm: codegraph's 4 named files + 2 more = 6 call sites? If the +2 more were graft_plan_check.rs (2 functions) and studio/app/graft.rs → that's 3 more files, so 7. Codegraph says 6 → it may be missing one (studio/app/graft.rs::declaration_for) or counting files. Ambiguous. I can verify the truth by grep: count call sites of `names_face`. Let me do a quick grep to establish ground truth (allowed: it's my own verification, using grep tool). Actually the task says use codegraph for the comparison; but for *verifying* a disagreement, grep is legitimate evidence. nichlink's own claim is name-based and could over-count. Let me grep `.names_face(` in the repo.
+- W1: xirang.search(names_face) → definition file:line. callgraph(names_face) → 7 callers with file::function. codegraph: 6 callers, 4 files + "+2 more", plus false-negative test warning. xirang's 7 callers include 2 test functions and 5 production. Note: xirang says 7, codegraph says 6 — a count discrepancy. Which is right? xirang's list: a_string_range_names_both_endpoints_as_data, undeclared_plan_errors, overlay_projection, entry_rows, declared_report, impact, declaration_for = 7. codegraph says "6 callers in overlay_rows.rs, cli/explain_report.rs, mcp/impact.rs, plan_rows.rs +2 more" = 6. Hmm: codegraph's 4 named files + 2 more = 6 call sites? If the +2 more were graft_plan_check.rs (2 functions) and studio/app/graft.rs → that's 3 more files, so 7. Codegraph says 6 → it may be missing one (studio/app/graft.rs::declaration_for) or counting files. Ambiguous. I can verify the truth by grep: count call sites of `names_face`. Let me do a quick grep to establish ground truth (allowed: it's my own verification, using grep tool). Actually the task says use codegraph for the comparison; but for *verifying* a disagreement, grep is legitimate evidence. xirang's own claim is name-based and could over-count. Let me grep `.names_face(` in the repo.
 
-- W2: nichlink: definition + 4 callers (2 tests + 2 production). codegraph: definition + 3 files + false-negative test warning. nichlink gives more precise callers (including the two tests). 
+- W2: xirang: definition + 4 callers (2 tests + 2 production). codegraph: definition + 3 files + false-negative test warning. xirang gives more precise callers (including the two tests). 
 
-- I1: nichlink: definition + 1 caller (connector_errors_from) → clear. codegraph: 1 caller in same file + noise (26 slot constants). nichlink better (names the caller).
-- I2: nichlink CANNOT locate `DISPATCH` (search returns `fn dispatch`; DISPATCH is a const, not indexed). codegraph located it at tools.rs:316 + the single use site. So codegraph wins clearly — and this is a real gap in nichlink's capability face.
+- I1: xirang: definition + 1 caller (connector_errors_from) → clear. codegraph: 1 caller in same file + noise (26 slot constants). xirang better (names the caller).
+- I2: xirang CANNOT locate `DISPATCH` (search returns `fn dispatch`; DISPATCH is a const, not indexed). codegraph located it at tools.rs:316 + the single use site. So codegraph wins clearly — and this is a real gap in xirang's capability face.
 
 Let me now grep for names_face call sites to settle the count.
 
@@ -1455,9 +1455,9 @@ Let me also run `callgraph entry_rows` as a follow-up.
 
 Ground truth: `names_face` has 6 call sites in production/test code (impact.rs:95, overlay_rows.rs:137, graft_plan_check.rs:143, plan_rows.rs:160, explain_report.rs:183, studio/app/graft.rs:324) plus 6 assert lines inside the one test. So 6 caller *functions* across 6 files (graft_plan_check.rs:143 belongs to `undeclared_plan_errors`, and the asserts belong to `a_string_range_names_both_endpoints_as_data` → 7 caller functions). So:
 - codegraph "6 callers" ≈ 6 production call sites (correct count of call sites), listing 4 files +2 more — the +2 being graft_plan_check.rs and studio/app/graft.rs. And it missed the test function `a_string_range_names_both_endpoints_as_data` in the same file → hence "no covering tests found".
-- nichlink "7 callers" = the 6 production + 1 test function (name-based, file::function). Both are defensible; nichlink's includes the test, which is exactly what makes codegraph's test warning wrong.
+- xirang "7 callers" = the 6 production + 1 test function (name-based, file::function). Both are defensible; xirang's includes the test, which is exactly what makes codegraph's test warning wrong.
 
-And `entry_rows` chain closes: entry_rows callees include `parse_graft_plan_document` and `names_face` → so C2's chain is 2 nichlink calls.
+And `entry_rows` chain closes: entry_rows callees include `parse_graft_plan_document` and `names_face` → so C2's chain is 2 xirang calls.
 
 Now let me write the report. I need to keep ≤300 lines. Let me draft carefully and compactly.
 
@@ -1490,7 +1490,7 @@ M1. apply: `fields.module` must be bare snake_case, not a path → raw: "invalid
 M2. apply: `fields` values must be strings (except needs_registry) → raw: "`exports` must be a string"; `requires` needs `capability=>provider` → raw: "requires entries must use capability=>provider syntax". The schema declares `fields` as a bare object; nothing in tools/list says this.
 M3. apply: `handle_traits` is a *label*, not a Rust path; passing the path silently writes `handle_traits: ["crate::control::ControlHandle"]` and the parent rule then rejects with "handle `Widget` must implement interface `ControlHandle`". (worth 会误导)
 M4. converge: the promised `UNANSWERED` spelling (converge.rs:156) never appeared; an unanswered requirement makes the kernel reject the tree first, so the reader gets `kernel verdict: this package's own faces are rejected`. (会误导/不可达)
-M5. converge trace: "faces that ran ... matched by source file" matches on the frame's *callsite* file, while `nichlink.trace` prints `declared-at=<face file>`; with frames whose node is a face but whose callsite is elsewhere, trace shows the face while converge counts 0 faces. (会误导)
+M5. converge trace: "faces that ran ... matched by source file" matches on the frame's *callsite* file, while `xirang.trace` prints `declared-at=<face file>`; with frames whose node is a face but whose callsite is elsewhere, trace shows the face while converge counts 0 faces. (会误导)
 M6. search: cannot find consts/statics/types ("DISPATCH" → `fn dispatch` in protocol.rs); cannot find declaration content ("control.render" → no matches though 4 faces declare it). Not promised, but it's the only search.
 M7. apply delete requires `confirm: true` — documented, ok.
 M8. explain: overlay+node refused — documented, ok.
@@ -1504,9 +1504,9 @@ X2. `mir jsonl:true` output is truncated at 400 lines and the truncation notice 
 Other:
 X3. grafts: when a plan's `target` identity resolves to a face, the declaration match ignores the plan's `target_path` (names_face uses the identity's module). A hand-made inconsistent plan (target=button id, target_path=root/elsewhere) is reported `declared at entry line 48 ...` — I'll label this as "hand-constructed inconsistent plan; low severity".
 X4. usages: all real repo faces are hand-written → "fields unreadable"; the field read-back is only reachable after `apply add` (verified in the sandbox).
-X5. build evidence tools (explain/diff/search verdicts) all depend on `target/nichlink/out`, which exists only after `verify`/`check`; fresh checkout → "build stale"/"no build evidence". Not a bug, but the first-run experience is degraded and `verify`'s side effect is the only way to fix it through the bridge.
+X5. build evidence tools (explain/diff/search verdicts) all depend on `target/xirang/out`, which exists only after `verify`/`check`; fresh checkout → "build stale"/"no build evidence". Not a bug, but the first-run experience is degraded and `verify`'s side effect is the only way to fix it through the bridge.
 
-Now §3 table. Columns: 题 / nichlink 原文要点 / codegraph 原文要点 / 谁更稳 + 为什么.
+Now §3 table. Columns: 题 / xirang 原文要点 / codegraph 原文要点 / 谁更稳 + 为什么.
 
 §4 结论:
 - 完善吗：对"注册面"这一层完善（17/17 有实现、目录与分派一致、错误都可行动）；对"符号"这一层不完善（只有 fn/file/face 三个索引维度；const/类型/字段/内容搜索为零）。跨工具一致性有两处硬伤（X1、X2）。
@@ -1531,13 +1531,13 @@ Now I have everything. Writing the report.
 
 Now let me verify: line count ≤300, git status only shows my file, and check a couple of factual claims I made:
 
-1. "nichlink 自己 25 个 callee" for register_snapshot_batch — let me count: the callees were "Err, Ok, Some, clone, connector_error, from, into, into_iter, is_empty, is_some, len, new, plan_batch, push, registry, sort_by_key, submit_snapshot_at, with_children" = 18. I wrote "25 个 callee" in C1 summary — let me fix to 18.
+1. "xirang 自己 25 个 callee" for register_snapshot_batch — let me count: the callees were "Err, Ok, Some, clone, connector_error, from, into, into_iter, is_empty, is_some, len, new, plan_batch, push, registry, sort_by_key, submit_snapshot_at, with_children" = 18. I wrote "25 个 callee" in C1 summary — let me fix to 18.
 
 2. "callgraph entry_rows 后 callees 里有 parse_graft_plan_document" — yes confirmed.
 
 3. "grep 实测 6 个生产调用点 + 1 个测试函数" — confirmed.
 
-4. `nichlink.check` "verdict ok / faces 3 (source) vs 3 (build)" for real example and "faces 4 vs 4" for sandbox. Correct.
+4. `xirang.check` "verdict ok / faces 3 (source) vs 3 (build)" for real example and "faces 4 vs 4" for sandbox. Correct.
 
 5. "16 个工具的空参调用各自点名自己缺哪个参数，只有 status/registry/diff/grafts/trace/verify 无参可答" — count: 17 - 6 = 11 tools errored on empty args, not 16. Let me recount from spec15: errors were search, inspect, callgraph, read, apply, mir, unified, impact, usages, converge = 10. Non-error: status, registry, explain, diff, trace, grafts, verify = 7. So 10 errored. Let me fix that sentence.
 
@@ -1555,11 +1555,11 @@ Let me fix the two numeric errors and check line count.
 
 Now verify a couple more claims before completing:
 
-1. "explain/diff/search 的构建结论都依赖 target/nichlink/out" — search's tree half uses face_views (source-derived) but annotates with build verdict; yes.
+1. "explain/diff/search 的构建结论都依赖 target/xirang/out" — search's tree half uses face_views (source-derived) but annotates with build verdict; yes.
 2. Real example faces count 3 — yes.
 3. Check the report renders and markdown table is intact. Let me read a couple of sections to sanity check.
 
-Also the report claims `nichlink.search query=control.render → no matches` — verified.
+Also the report claims `xirang.search query=control.render → no matches` — verified.
 And `search query=DISPATCH → fn dispatch -> protocol.rs:246` — verified.
 
 One more claim to double check: "只读面在真实宿主上 17 个工具全部给出可读、可行动答案" — 17 includes apply (write) and mir/unified which errored on the real root because no .mir there (the error is actionable though). I phrase it as "可读、可行动答案" which is fair since errors were actionable. But to be safe, let me soften: "只读面在真实宿主上全部给出可读、可行动答案（含可行动的失败：mir/unified 因仓库无 .mir 成品而给出产出办法）". Let me check the exact sentence and adjust.
@@ -1579,7 +1579,7 @@ Also I should double check the truncation claim: "… truncated: 501 lines total
 
 Also confirm the `mir jsonl` small round trip works — verified.
 
-Let me check whether the `verify` run created target/nichlink/out in the real example (gitignored, harmless). Yes.
+Let me check whether the `verify` run created target/xirang/out in the real example (gitignored, harmless). Yes.
 
 Let me do a final read of the report top to verify formatting, then complete the task.
 
@@ -1649,5 +1649,5 @@ t1 完成。
    - **X1**：`verify`/CLI `check` 说 `verdict ok`，同一棵树同一刻 `usages`/`converge`/`apply` 说 faces rejected（静态 pass 与运行时 connector 判定面不同）；
    - **X2**：`mir jsonl:true` 在 >400 行时把截断说明写进 JSONL 正文，读回即 `MirParseError { line: 401 }`，而描述和截断提示都写着"存成文件再读回来"；
    - **X3**：计划匹配忽略 `target_path`。
-4. **6 题对照**：第③节双栏，写明了装置差异（两个客户端 / 一次调用 / `maxFiles=3` / 措辞同义非逐字）。结论 C1 nichlink 略稳、C2 codegraph 更稳、W1/W2/I1 nichlink 更稳、I2 codegraph 完胜。codegraph 的三处 `⚠️ no covering tests found` **实测全是假阴性**（附三条测试的 ok 输出），`names_face` 到底有没有测试钉住——已判定：**有**。
+4. **6 题对照**：第③节双栏，写明了装置差异（两个客户端 / 一次调用 / `maxFiles=3` / 措辞同义非逐字）。结论 C1 xirang 略稳、C2 codegraph 更稳、W1/W2/I1 xirang 更稳、I2 codegraph 完胜。codegraph 的三处 `⚠️ no covering tests found` **实测全是假阴性**（附三条测试的 ok 输出），`names_face` 到底有没有测试钉住——已判定：**有**。
 5. **④结论 + ⑤缺口清单 G1–G9**（现象/影响/值不值得做），只给证据、按 t2 的分工**不排优先级**。

@@ -253,11 +253,11 @@ fn comparisons_are_not_generic_nesting() {
 /// `//!` becomes `#[doc = "…"]`: five tokens with **no separator anywhere** between the lines of a
 /// block, so a 213-line module header measured 1025 tokens and the guard refused it. That is not a
 /// hypothetical: taken from the local registry cache, `tokio/src/fs/mod.rs` has exactly that header and
-/// `nichlink check .` refused it, along with four more of that crate's files — a guard that only accepts
+/// `xirang check .` refused it, along with four more of that crate's files — a guard that only accepts
 /// this repository's own sources refuses the trees it exists to be pointed at (audit `M7`, §M7.56).
 /// `//!` 会变成 `#[doc = "…"]`：五个 token，而一个文档块各行之间**没有任何分隔符**，因此一段 213 行的
 /// 模块头量出 1025 个 token，守卫拒绝了它。这不是假设：取自本机 registry 缓存的 `tokio/src/fs/mod.rs`
-/// 正是那样一段头，`nichlink check .` 拒绝了它，同一个 crate 还有四个文件同样被拒——一个只接受本仓库
+/// 正是那样一段头，`xirang check .` 拒绝了它，同一个 crate 还有四个文件同样被拒——一个只接受本仓库
 /// 自己源码的守卫，会拒绝它本来就是要被指向的那些树（审计 `M7`，§M7.56）。
 ///
 /// The count is chosen to be **red on the old guard**: 3000 lines ≈ 15 000 tokens, fifteen times the run

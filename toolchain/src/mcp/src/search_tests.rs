@@ -1,12 +1,12 @@
-//! Tests for `nichlink.search`'s tree half: a face is found by logical path,
+//! Tests for `xirang.search`'s tree half: a face is found by logical path,
 //! `kind`, module or `registry_name`, and each hit says what the build thinks of it.
-//! `nichlink.search` 树那一半的测试：面可以按逻辑路径、`kind`、模块或 `registry_name` 找到，而每个命中都说
+//! `xirang.search` 树那一半的测试：面可以按逻辑路径、`kind`、模块或 `registry_name` 找到，而每个命中都说
 //! 出构建对它的看法。
 //!
-//! The classification rule itself is pinned through `nichlink.diff`'s tests as
+//! The classification rule itself is pinned through `xirang.diff`'s tests as
 //! well; what this file pins is that search reads that one rule, so a face cannot
 //! be `ok` in one tool and `added` in the other.
-//! 分类规则本身也由 `nichlink.diff` 的测试钉住；本文件钉的是 search 读的正是那一条规则，因此一个面
+//! 分类规则本身也由 `xirang.diff` 的测试钉住；本文件钉的是 search 读的正是那一条规则，因此一个面
 //! 不可能在一个工具里是 `ok`、在另一个里是 `added`。
 
 use std::path::{Path, PathBuf};
@@ -56,7 +56,7 @@ fn face(root: &Path, relative: &str, _kind: &str, source: &str) {
 /// Publish the build evidence for this package.
 /// 发布本包的构建证据。
 fn publish(root: &Path, name: &str) {
-    crate::build_method::check_for(root, &root.join("target/nichlink/out"), name)
+    crate::build_method::check_for(root, &root.join("target/xirang/out"), name)
         .expect("a healthy tree checks clean");
 }
 
@@ -72,7 +72,7 @@ fn a_face_is_found_and_an_unbuilt_tree_says_the_verdict_is_unknown() {
     assert!(reply.contains("module=gauge"), "{reply}");
     assert!(reply.contains("source=gauge/gauge.rs"), "{reply}");
     assert!(
-        reply.contains("[build unknown (run `nichlink check`)]"),
+        reply.contains("[build unknown (run `xirang check`)]"),
         "an unbuilt tree must not invent a verdict: {reply}"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -117,7 +117,7 @@ fn a_kind_change_under_an_unmoved_file_is_re_identified() {
     assert!(reply.contains("[re-identified ("), "{reply}");
     assert!(reply.contains(" -> "), "{reply}");
     assert!(
-        reply.contains("build stale (run `nichlink check`)"),
+        reply.contains("build stale (run `xirang check`)"),
         "the verdicts are about the build that was published, and the reply says so: {reply}"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -384,7 +384,7 @@ fn a_published_record_answers_a_name_without_deriving_the_sources() {
     use crate::mcp::published::derivations;
 
     let (root, _name) = package("record-first");
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     std::fs::create_dir_all(&out).expect("output dir");
     std::fs::write(
         out.join("pruning_manifest.tsv"),

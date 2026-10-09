@@ -4,7 +4,7 @@
 
 ## 0. 一句话
 
-同一模型（kimi2.7）、同一 harness（Kimi Code 子代理）、同一任务书（逐字相同，除工具段），**唯一变量是 MCP 工具集**——我们臂走 `nichlink-mcp --call`，对照臂走 codegraph 1.6.1 CLI。量两条轴：**四轴 token 成本**与**交付物结构质量**（补丁感、骨架质量、算法自然度）。
+同一模型（kimi2.7）、同一 harness（Kimi Code 子代理）、同一任务书（逐字相同，除工具段），**唯一变量是 MCP 工具集**——我们臂走 `xirang-mcp --call`，对照臂走 codegraph 1.6.1 CLI。量两条轴：**四轴 token 成本**与**交付物结构质量**（补丁感、骨架质量、算法自然度）。
 
 选平价模型的理由（维护者原话）：很多人用不起能力强的模型——工具的价值恰恰是让平价模型也能高效准确地工作，所以**用平价模型测才是测工具**。
 
@@ -22,11 +22,11 @@
 
 ## 2. 两臂与通道
 
-**我们臂**：`target/debug/nichlink-mcp --call <tool> --root <树> --key value`（退出码 0 作答 / 1 拒绝 / 2 畸形）。
+**我们臂**：`target/debug/xirang-mcp --call <tool> --root <树> --key value`（退出码 0 作答 / 1 拒绝 / 2 畸形）。
 **对照臂**：`target/round7/tools-upstream/v1.6.1/bin/codegraph <cmd>`（init/query/explore/context/callers/callees/impact/sync…）。
 两臂都允许：bash、grep、读树内文件、`cargo test`（`CARGO_TARGET_DIR` 树外）。这是刻意的——codegraph 没有写能力，它的臂**本来就要**靠 bash 写代码；禁掉 bash 就不是对比工具，是 disqualify。
 
-**任务书纪律**：两臂逐字相同，只有"工具段"不同（我们臂写 nichlink-mcp 的调用方式，对照臂写 codegraph 的）。任务书里**不点名任何工具的使用策略**（不教路线——路线由工具的流程表/`--list` 自己供给，这正是被测对象）。
+**任务书纪律**：两臂逐字相同，只有"工具段"不同（我们臂写 xirang-mcp 的调用方式，对照臂写 codegraph 的）。任务书里**不点名任何工具的使用策略**（不教路线——路线由工具的流程表/`--list` 自己供给，这正是被测对象）。
 
 ## 3. 测量
 
@@ -69,7 +69,7 @@
 | 题 | 场景 | 树 | 任务 | 鉴别点 |
 | --- | --- | --- | --- | --- |
 | T1 | S1 立骨架 | 空目录 | "新建一个 control 库：button 与 slider 两个对象，能编译、有测试" | 首次可编译骨架的 token；结构质量；cg 无脚手架 ⇒ bash 手搭的代价 |
-| T2 | S3 单对象 | ledger 夹具（`tools/nichlink-mcp-eval` 的注入缺陷树，固定 rev 解出） | "测试 `it_rejects_overdraw` 失败，找根因、最小修、给反证" | 根因定位路径；修复落点；反证 |
+| T2 | S3 单对象 | ledger 夹具（`tools/xirang-mcp-eval` 的注入缺陷树，固定 rev 解出） | "测试 `it_rejects_overdraw` 失败，找根因、最小修、给反证" | 根因定位路径；修复落点；反证 |
 | T3 | 家族/孤儿视图 | scenario 工作区（`scenario-project` 出厂态，纯 Rust 无框架依赖） | "这个工作区里有哪些函数定义了、却没有任何静态调用者？" | `callgraph --orphans` 一次 + 边界 note vs 逐符号 callers；**判分键沿用 scenario-plan 第 3 关的 F1 修订口径**（答 `audit_unused` 且声明测试边界 = 对；不提边界 = 部分对） |
 
 > 修正案 1（2026-10-03）：T3 由"自造三兄弟家族题"改为 scenario 第 3 关（orphan）——判分键已经在历轮里修订过两轮（F1/F2），比新造一棵树的未验证判据可靠；家族一致性题保留到扩展批。
@@ -98,7 +98,7 @@
 2. 逐题逐臂解树到 `target/bench-k27/runs/<题>/<臂>/tree/`，每题独立 `target/bench-k27/runs/<题>/<臂>/cargo-target/`。
 3. 逐题派发子代理（一题两臂可并行——树独立、target dir 独立），任务书见 `target/bench-k27/briefs/`。
 4. 收 wire.jsonl 求四轴 + 仪器计数；跑判分脚本（机械键）；质量指标与盲评随后。
-5. 汇总表（照 `nichlink-compare-table.py` 的形状）：逐题 × 臂 ×（四轴 token、成本当量、调用数、判分结果、补丁感指标）。
+5. 汇总表（照 `xirang-compare-table.py` 的形状）：逐题 × 臂 ×（四轴 token、成本当量、调用数、判分结果、补丁感指标）。
 
 ## 7. 先导批结果与修正案（2026-10-03）
 

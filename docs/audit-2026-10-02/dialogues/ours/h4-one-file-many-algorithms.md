@@ -20,7 +20,7 @@ face   default
 root   /home/nich/Moirai_N3/nichlink/target/round9/trees/h4-one-file-many-algorithms
 tree   4 rust file(s), 7 function(s)
 elapsed 600 ms
-log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h4-one-file-many-algorithms/target/nichlink/out/check-default.log
+log    /home/nich/Moirai_N3/nichlink/target/round9/trees/h4-one-file-many-algorithms/target/xirang/out/check-default.log
 exit   0
 result test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 result test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -39,7 +39,7 @@ census: 0 named numeric constant(s); a static fact about this tree, not a verdic
   no construction of `ZeroArm::Refuse` is spelled in this tree, so the arm matching it in `postable` at src/model/entry.rs:44 can never be entered (the enum is private, so a constructor outside this tree cannot spell the variant either); the contract above it says 34: Whether this entry may be posted at all. / 36: The rule the service leans on: an entry is postable when it carries a receipt, and a / 37: zero entry never is. Callers rely on the refusal, so this is a contract.
   not covered by the branch-level column: a condition whose value depends on data — a field, a parameter, a comparison, a `match` over a value — is not judged at all, so an arm no run has taken yet stays invisible here; `false` is the only guard literal decided, so `1 == 2`, `!true`, a `const` bool and `cfg!(…)` are not read; macro expansion, dynamic dispatch, function pointers and FFI are invisible, while a `macro_rules!` body this tree writes **is** text — an `if false` inside one is listed (and when that body sits outside any function, its row names no function, because there is none to name), and an arm that only exists after expansion is invisible; a construction this tree does not spell (a derive that builds a value, `unsafe`, a consumer outside this root) would falsify a row; a `pub` enum is never judged, an arm reached through a wildcard or a binding is not read, and an enum name this file imports from another crate is conservatively skipped, so a same-named foreign enum's arms are a miss here rather than a false row. A static read of the source text, not a coverage measurement; `--list check` has the full text.
   not covered: this census reads exactly what the columns above name; string constants, structural duplication, runtime behaviour and claims written in prose are outside it, and the static walk is not a coverage measurement. `--list check` has the full text
-evidence nichlink.check {"census":true,"face":"default","timeout_ms":300000} → exit 0
+evidence xirang.check {"census":true,"face":"default","timeout_ms":300000} → exit 0
 
 ```
 
@@ -84,7 +84,7 @@ file src/model/entry.rs — 5 function(s), 63 line(s)
   src/model/entry.rs:60-62 `normalized_account` — 2 call(s) out, 0 caller(s); contract: The account this entry is filed under, normalized.
 not covered here: which branches are dead and which are covered (ask `check {face}` for the whole-tree census), the contract in full (ask `read {path, line}`), and whether the functions are reachable from tests by the static walk (that column is in the same census)
 next   `read {path, line}` for a body, `callgraph {function}` for one function's callers and callees
-evidence nichlink.digest {"file":"src/model/entry.rs"} → exit 0
+evidence xirang.digest {"file":"src/model/entry.rs"} → exit 0
 
 ```
 

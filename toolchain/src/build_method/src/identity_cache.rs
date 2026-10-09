@@ -39,7 +39,7 @@ pub(crate) fn prime_node_id_cache(manifest: &Path, src: &Path, nodes: &[Node]) {
                 }
             },
         );
-    let units = target.join("nichlink/cache/units");
+    let units = target.join("xirang/cache/units");
     let namespace = super::registry_identity::package_namespace();
     let mut values = super::node_identity::NodeIdCache::default();
     let mut files = Vec::new();
@@ -106,12 +106,12 @@ pub(crate) fn cache_directory(manifest: &Path) -> PathBuf {
     env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .map_or_else(
-            || manifest.join("target/nichlink/cache"),
+            || manifest.join("target/xirang/cache"),
             |path| {
                 if path.is_absolute() {
-                    path.join("nichlink/cache")
+                    path.join("xirang/cache")
                 } else {
-                    manifest.join(path).join("nichlink/cache")
+                    manifest.join(path).join("xirang/cache")
                 }
             },
         )
@@ -128,7 +128,7 @@ mod tests {
     /// 一次性目录树根，每次调用都不同。
     fn scratch(label: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "nichlink-identity-cache-{label}-{}-{}",
+            "xirang-identity-cache-{label}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -191,7 +191,7 @@ mod tests {
     ///
     /// Run it alone, because it depends on this fixture being the first thing in
     /// the process to prime the cache:
-    /// `cargo test -p nichlink-toolchain --offline --lib -- --exact
+    /// `cargo test -p xirang-toolchain --offline --lib -- --exact
     /// identity_cache::tests::a_second_package_does_not_read_the_first_packages_identity
     /// --test-threads=1`.
     /// In a full-suite run another test may prime first, which turns this probe

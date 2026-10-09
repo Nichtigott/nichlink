@@ -1,5 +1,5 @@
-//! `nichlink explain`: why a face is present, absent, or replaced.
-//! `nichlink explain`：一个注册面为何存在、缺席或被替换。
+//! `xirang explain`: why a face is present, absent, or replaced.
+//! `xirang explain`：一个注册面为何存在、缺席或被替换。
 //!
 //! This command answers operator questions about a host the CLI cannot link:
 //! what a node is, why the build (not) ships it, and which declared graft cuts
@@ -16,8 +16,8 @@
 use std::io::Write;
 
 use crate::build_method::{FaceView, face_views};
-use nichlink_kernel::identity::NodeId;
 use serde_json::{Value, json};
+use xirang_kernel::identity::NodeId;
 
 use super::{build_out_dir, resolve_package};
 
@@ -107,7 +107,7 @@ pub(crate) fn explain(
         Err(reason) => {
             if json_output {
                 let report = json!({
-                    "schema": "nichlink.explain/1",
+                    "schema": "xirang.explain/1",
                     "query": query,
                     "resolved": false,
                     "reason": reason,
@@ -133,7 +133,7 @@ pub(crate) fn explain(
 
     if json_output {
         let report = json!({
-            "schema": "nichlink.explain/1",
+            "schema": "xirang.explain/1",
             "query": query,
             "resolved": true,
             "kept": kept,
@@ -222,7 +222,7 @@ pub(super) fn write_unresolved(
 ) -> Result<(), String> {
     let report = if overlay {
         json!({
-            "schema": "nichlink.explain-overlay/1",
+            "schema": "xirang.explain-overlay/1",
             "kind": "static-projection",
             "entry": Value::Null,
             "entry_error": Value::Null,
@@ -235,7 +235,7 @@ pub(super) fn write_unresolved(
         })
     } else {
         json!({
-            "schema": "nichlink.explain/1",
+            "schema": "xirang.explain/1",
             "query": target,
             "resolved": false,
             "reason": error,

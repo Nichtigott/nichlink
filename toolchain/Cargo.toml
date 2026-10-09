@@ -1,12 +1,12 @@
 [package]
-name = "nichlink-toolchain"
+name = "xirang-toolchain"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-repository = "https://github.com/Nichtigott/nichlink"
-homepage = "https://github.com/Nichtigott/nichlink"
-description = "The seven thin execution surfaces of NichLink in one crate"
+repository = "https://github.com/Nichtigott/xirang"
+homepage = "https://github.com/Nichtigott/xirang"
+description = "The seven thin execution surfaces of XiRang in one crate"
 keywords = ["registration", "cli", "studio", "bridge", "toolchain"]
 categories = ["development-tools", "command-line-utilities"]
 readme = "README.md"
@@ -15,7 +15,7 @@ autotests = false
 autoexamples = false
 
 [lib]
-name = "nichlink_toolchain"
+name = "xirang_toolchain"
 path = "src/lib.rs"
 
 [features]
@@ -25,12 +25,12 @@ default = ["build", "run"]
 
 # ── Host-facing (two halves: `[build-dependencies]` and `[dependencies]`)
 # ── 宿主面向（两半，分别对应 build-dependencies 与 dependencies）
-build = ["nichlink-kernel/syntax", "dep:syn", "dep:proc-macro2", "dep:serde_json"]  # module build_method
-run = ["dep:nichlink-macro"]                                                        # module runtime
+build = ["xirang-kernel/syntax", "dep:syn", "dep:proc-macro2", "dep:serde_json"]  # module build_method
+run = ["dep:xirang-macro"]                                                        # module runtime
 
 # ── Execution surfaces (the names of their own public API gates, unchanged)
 # ── 执行面（今天各自的公开 API 门控，名字不变）
-authoring = ["run", "nichlink-kernel/syntax", "dep:syn"]
+authoring = ["run", "xirang-kernel/syntax", "dep:syn"]
 evidence = ["run", "dep:inventory", "dep:petgraph", "dep:tracing"]  # module call_evidence
 plugins = ["run", "dep:arc-swap", "dep:ed25519-dalek"]              # module plugin_host
 wasm = ["plugins", "dep:wasmi"]
@@ -38,7 +38,7 @@ process-tools = ["plugins", "dep:tempfile"]
 node-graph = ["dep:rataflow"]
 studio = ["build", "run", "authoring", "evidence", "dep:crossterm", "dep:notify", "dep:ratatui", "dep:serde_json"]
 mcp = ["build", "run", "authoring", "evidence", "dep:serde_json"]
-cli = ["build", "run", "studio", "mcp", "dep:serde_json"]  # umbrella: nichlink-toolchain's closure
+cli = ["build", "run", "studio", "mcp", "dep:serde_json"]  # umbrella: xirang-toolchain's closure
 
 # ── Workspace-only (never in the published surface)
 # ── 仅工作区（不进发布面）
@@ -46,37 +46,37 @@ prototype-fixtures = []
 dev-supervisor = []
 
 [[bin]]
-name = "nichlink"
-path = "src/bin/nichlink.rs"
+name = "xirang"
+path = "src/bin/xirang.rs"
 required-features = ["cli"]
 
 [[bin]]
-name = "cargo-nichlink"
-path = "src/bin/cargo-nichlink.rs"
+name = "cargo-xirang"
+path = "src/bin/cargo-xirang.rs"
 required-features = ["cli"]
 
 [[bin]]
-name = "nichlink-mcp"
-path = "src/bin/nichlink-mcp.rs"
+name = "xirang-mcp"
+path = "src/bin/xirang-mcp.rs"
 required-features = ["mcp"]
 
 [[bin]]
-name = "nichlink-studio"
-path = "src/bin/nichlink-studio.rs"
+name = "xirang-studio"
+path = "src/bin/xirang-studio.rs"
 required-features = ["studio"]
 
 [[bin]]
-name = "nichlink-dev"
-path = "src/bin/nichlink-dev.rs"
+name = "xirang-dev"
+path = "src/bin/xirang-dev.rs"
 required-features = ["dev-supervisor", "studio"]
 
 # Dependencies merged from the seven execution surfaces.
 [dependencies]
-nichlink-kernel = { workspace = true, features = ["syntax"] }
+xirang-kernel = { workspace = true, features = ["syntax"] }
 proc-macro2 = { optional = true, version = "1", features = ["span-locations"] }
 serde_json = { version = "1", optional = true }
 syn = { version = "2", features = ["full", "parsing", "visit"], optional = true}
-nichlink-macro = { workspace = true, optional = true }
+xirang-macro = { workspace = true, optional = true }
 petgraph = { version = "0.8", optional = true }
 tracing = { version = "0.1", optional = true }
 inventory = { version = "0.3.24", optional = true }
@@ -158,11 +158,11 @@ path = "tests/runtime_face_arm_defaults.rs"
 name = "runtime_face_fields"
 path = "tests/runtime_face_fields.rs"
 
-# The declaration macros read `crate::NICHLINK_NAMESPACE` (audit `M7`, P3.3), so this target proves
+# The declaration macros read `crate::XIRANG_NAMESPACE` (audit `M7`, P3.3), so this target proves
 # they read the constant rather than the package name. It carries **no** `required-features`: the
 # macros and `NodeId` are reachable under the default features *and* under none of them, and naming a
 # default feature here would keep nothing out (the `features` gate refuses exactly that).
-# 声明宏读 `crate::NICHLINK_NAMESPACE`（审计 `M7`，P3.3），因此这个 target 证明它们读的是常量而不是包名。
+# 声明宏读 `crate::XIRANG_NAMESPACE`（审计 `M7`，P3.3），因此这个 target 证明它们读的是常量而不是包名。
 # 它**不**声明 `required-features`：宏与 `NodeId` 在默认特性下与一个特性都不开时都可达，而在这里点名一个
 # 默认特性什么也挡不住（`features` 门禁拒绝的正是这个）。
 [[test]]

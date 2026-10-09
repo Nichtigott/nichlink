@@ -2,12 +2,12 @@
 //! 构建对某个面、或对它划定作用域的整棵树给出的证据。
 //!
 //! The read tools answer from source text; the build answers from
-//! `target/nichlink/out`. The two can disagree — a file written a moment ago is
+//! `target/xirang/out`. The two can disagree — a file written a moment ago is
 //! not yet in the tree the host compiled — and until this module existed only the
 //! CLI's `explain` could tell them apart. It reads the build's own files through
 //! `build_method`'s readers, so an agent can ask "is this face in the shipped
 //! scope, and does pruning strip it" without a second derivation of its own.
-//! 读工具用源码文本作答，构建用 `target/nichlink/out` 作答。两者可以不一致——刚写下的文件还不在
+//! 读工具用源码文本作答，构建用 `target/xirang/out` 作答。两者可以不一致——刚写下的文件还不在
 //! 宿主编译出的树里——而在这个模块出现之前，只有 CLI 的 `explain` 能把它们区分开。它经
 //! `build_method` 的读取器读构建自己的文件，因此代理能直接问"这个面在发布作用域里吗、剪枝会不会
 //! 剥掉它"，而不需要自己再做一份推导。
@@ -34,7 +34,7 @@ use crate::mcp::resolve::resolve_node;
 /// The directory the build publishes its evidence into.
 /// 构建发布其证据的目录。
 pub(crate) fn out_dir(root: &Path) -> PathBuf {
-    root.join("target/nichlink/out")
+    root.join("target/xirang/out")
 }
 
 /// The build's evidence for this package, read once for every caller that needs it.
@@ -74,7 +74,7 @@ impl BuildEvidence {
         if self.current {
             "current"
         } else {
-            "stale (run `nichlink check`)"
+            "stale (run `xirang check`)"
         }
     }
 }
@@ -189,7 +189,7 @@ fn node_report(namespace: &str, face: &FaceView, evidence: &BuildEvidence, graft
 /// 作用域是否选中了这个面，以及原因。
 pub(crate) fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> String {
     let Some(scope) = scope else {
-        return "scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host nichlink** (no `build.rs` calling `build_method::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no nichlink build here at all. For a tree that **does** host it, the file is `<package>/target/nichlink/out/source_scope.tsv` and the **CLI** `nichlink check --root <tree>` writes it (`apply` starts one in the background and the one-shot client waits for it; `verify` builds on demand). Either way `registry` / `why --at` / `read {path, line}` answer without it\n".to_owned();
+        return "scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host xirang** (no `build.rs` calling `build_method::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no xirang build here at all. For a tree that **does** host it, the file is `<package>/target/xirang/out/source_scope.tsv` and the **CLI** `xirang check --root <tree>` writes it (`apply` starts one in the background and the one-shot client waits for it; `verify` builds on demand). Either way `registry` / `why --at` / `read {path, line}` answer without it\n".to_owned();
     };
     // T-28: the scope is built from the paths the **code** spells out (`cut(<expr>)` and friends),
     // never from what a file `use`s. The round measured an arm working this out by itself and
@@ -228,7 +228,7 @@ pub(crate) fn scope_line(scope: Option<&BuildScopeView>, face: &FaceView) -> Str
 /// 那个符号。
 pub(crate) fn pruning_line(pruning: Option<&[PruningRow]>, face: &FaceView) -> String {
     let Some(rows) = pruning else {
-        return "pruning unknown (no pruning_manifest.tsv; run `nichlink check`)\n".to_owned();
+        return "pruning unknown (no pruning_manifest.tsv; run `xirang check`)\n".to_owned();
     };
     let tracked: Vec<&str> = rows
         .iter()
@@ -264,7 +264,7 @@ fn tree_report(
             scope.selected_ids.len(),
             scope.selected_sources.len(),
         )),
-        None => output.push_str("scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host nichlink** (no `build.rs` calling `build_method::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no nichlink build here at all. For a tree that **does** host it, the file is `<package>/target/nichlink/out/source_scope.tsv` and the **CLI** `nichlink check --root <tree>` writes it (`apply` starts one in the background and the one-shot client waits for it; `verify` builds on demand). Either way `registry` / `why --at` / `read {path, line}` answer without it\n"),
+        None => output.push_str("scope unknown — and for most trees that is the whole truth, not a missing file: **a tree that does not host xirang** (no `build.rs` calling `build_method::run()`, no `host!()` in its crate root) has no build-time scope to read, because there is no xirang build here at all. For a tree that **does** host it, the file is `<package>/target/xirang/out/source_scope.tsv` and the **CLI** `xirang check --root <tree>` writes it (`apply` starts one in the background and the one-shot client waits for it; `verify` builds on demand). Either way `registry` / `why --at` / `read {path, line}` answer without it\n"),
     }
     // Rows carry the scope verdict each, so the projection answers "what ships"
     // per face rather than only in aggregate. The header names what a row is — a
@@ -322,7 +322,7 @@ fn tree_report(
                 ));
             }
         }
-        None => output.push_str("pruned unknown (no pruning_manifest.tsv; run `nichlink check`)\n"),
+        None => output.push_str("pruned unknown (no pruning_manifest.tsv; run `xirang check`)\n"),
     }
     output
 }

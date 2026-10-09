@@ -6,8 +6,8 @@
 **复核取数时刻**：2026-10-02 23:28–23:40（cg26 会话已静默：两次相隔 20 s 的读数逐字相同）。
 
 **冻结指纹**（便于重放）：
-- cg26 会话 `~/.dsh/sessions/…/225f5295-20fb-4d73-8bb7-375b9ee71a5b`（标签 `agent-teams:nichlink-cg26:cg26`）
-- 我们那一臂 `…/aa54ec58-44bf-4f88-a2ed-d0dd11614b93`（标签 `agent-teams:nichlink-round9:arm-mcp`）
+- cg26 会话 `~/.dsh/sessions/…/225f5295-20fb-4d73-8bb7-375b9ee71a5b`（标签 `agent-teams:xirang-cg26:cg26`）
+- 我们那一臂 `…/aa54ec58-44bf-4f88-a2ed-d0dd11614b93`（标签 `agent-teams:xirang-round9:arm-mcp`）
 - 26 份日志的逐文件 sha256 前 16 位（本文件 §3.3 用到）：`s1 ee65cd885dad7ca5 · s2 cddaceec9ef9796d · s3 f719ecdbcffcb41d · s4 c7c39a39bc119f0c · s5 98c88bde91fb052d · s6 fb57e9283bdd1ffb · s7 b45be3386da82b30 · s8 4b7dbc52f5763e4c · g1 d3f0c331228a7392 · g2 ceee499ab81989bf · g4 d250b5fd82b5b15e · h1-supply-chain ce0cc90238d762d9 · h2-claim-unkept d3952b521a5c03c4 · h3-cross-file-chain 9c4ef3e405812313 · h4-one-file-many-algorithms a257f82ce087eb94 · r1 41510a4128c2d240 · r2 e90a0df5a3511c74 · r3 62ae16c7740d6bd0 · r4 52f38e6d87e1ab86 · h1 0d0fcde5c0a48f53 · g3 7ff781a1868f5375 · fa 734b3d45225e4c1a · fb 136ddff25f006668 · fc a174bfc8a3340151 · fd c8417d40d10da653 · fe e143451f2b7a7147`
 
 ---
@@ -77,7 +77,7 @@ h1 题目态 --all-features: red=['the_audit_counts_the_non_zero_entries'] panic
 改后（我按答案里的最小修改）：r1–r4 = 9 passed / 0 failed rc=0；fd/fe/h1 = 默认面 0 failed + --all-features 0 failed
 ```
 ⇒ **这 7 道的"题目态 + 最小修 + 双面绿"是我亲眼所见**，不是采信 cg26 的日志。（`g3/fa/fb/fc` 的树依赖本检出的
-`nichlink-toolchain`，独立重跑要整条 toolchain 构建，我没有重跑——见 §5。）
+`xirang-toolchain`，独立重跑要整条 toolchain 构建，我没有重跑——见 §5。）
 
 ### 1.4 一处要写清的装置坑（cg26 已自报并修正 ✓）
 
@@ -107,7 +107,7 @@ h1 题目态 --all-features: red=['the_audit_counts_the_non_zero_entries'] panic
 | `fc` | 「已经采信了，再横向加一个」：横向扩展 + **台账必须还在** + 既有条目处置与证据 + 门绿 | 加 `toggle` 面 + `lib.rs` + 期望更新；台账**未动**；**没有**手写新条目 | **命中（理由有一处错）** | 台账文件 mtime 仍是拷贝时刻 `23:24:56`（它的改动都在 `23:26:25` 之后）⇒ **一字未动**我用 mtime 独立证过；sha256 我复算 `697a5380…` ✓、`button.rs` `e842be74…` ✓；但"指纹不可重算"是错的（§4.1） |
 
 **"有没有把非缺陷报成缺陷"**：11 道里**没有** ✗✓。三处容易被误报的地方它都守住了：`h1` 的 D（行为不变、明确标"不红"）、
-`h1` 的 E/F（死代码与覆盖盲区，明确"保留/记录，不改"）、`fc` 的 `.nichlink`（**build 产物**，不是它写的台账）。
+`h1` 的 E/F（死代码与覆盖盲区，明确"保留/记录，不改"）、`fc` 的 `.xirang`（**build 产物**，不是它写的台账）。
 
 **"有没有漏报"**：每棵树的缺陷集都被完整覆盖 —— `r1`–`r4` 各 1；`fd` 2；`fe` 2（含默认面看不见的那处）；
 `h1` 3 红 + D/E/F 附加项；`g3`/`fa`/`fb`/`fc` 是"改"题，题面要求的产物（新面/内部层/台账）都在 ✓。
@@ -219,7 +219,7 @@ path='src/control/object/button/button.rs'  →  22b54a4cc8245cdc6ae5f7fa10b7c1d
 ## 5. 我没能判定的（如实）
 
 1. **逐题的 token（步/输出/推理/上下文）**：两臂都多题共步 ⇒ 不可归因 ✗。唯一可逐题归因的是**仪器调用数**。
-2. **`g3`/`fa`/`fb`/`fc` 与四道 hardbug 类的门**：我没有独立重跑（它们的树 path-依赖本检出的 `nichlink-toolchain`，
+2. **`g3`/`fa`/`fb`/`fc` 与四道 hardbug 类的门**：我没有独立重跑（它们的树 path-依赖本检出的 `xirang-toolchain`，
    独立构建成本高）。我独立做的是：变更集 diff、产物不变性（`g3` 的 `tree`/`health_check` 前后逐字节）、台账 mtime；
    门的 rc 与测试清单来自它们自己的日志（`rc=0`、25 passed 等）。
 3. **单样本无方差**：0.94×/0.60× 这类比值没有置信区间；也无法判断"若那 11 道不重跑"会怎样。

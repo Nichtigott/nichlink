@@ -297,10 +297,10 @@ pub fn parse_field_list(value: &str) -> Vec<String> {
 }
 
 /// The historical name of [`parse_field_list`], kept because it is on the published
-/// surface (`NAM-34`; Studio calls it through `nichlink_run_method`'s re-export).
+/// surface (`NAM-34`; Studio calls it through `xirang_run_method`'s re-export).
 /// Prefer `parse_field_list`.
 /// [`parse_field_list`] 的历史名字，因为它在已发布面上所以保留（`NAM-34`；Studio 经
-/// `nichlink_run_method` 的重导出在调它）。请优先用 `parse_field_list`。
+/// `xirang_run_method` 的重导出在调它）。请优先用 `parse_field_list`。
 pub fn split_csv_owned(value: &str) -> Vec<String> {
     parse_field_list(value)
 }

@@ -149,14 +149,14 @@ pub(super) fn package_root() -> PathBuf {
 ///
 /// Resolving and adopting are one step: the caller gets the root, and the session
 /// starts with that root, its manifest, and the identity namespace the manifest
-/// names. Splitting them left the namespace at `nichlink.default` for a launched
+/// names. Splitting them left the namespace at `xirang.default` for a launched
 /// Studio even though the host's own faces compile under the package name
-/// (`host!()` defines `crate::NICHLINK_NAMESPACE` from it, audit `M7`, P3.3) — so Studio rebuilt the registration tree in a
+/// (`host!()` defines `crate::XIRANG_NAMESPACE` from it, audit `M7`, P3.3) — so Studio rebuilt the registration tree in a
 /// different identity domain from the one the host compiled, and every recorded
 /// `NodeId` (a trace, a graft record) named a node this session could not find.
 /// 解析与采纳是同一步：调用方拿到根，会话同时带着该根、它的清单，以及清单写明的身份命名空间启动。
-/// 把两者分开会让启动后的 Studio 停在 `nichlink.default`，而宿主自己的面是用包名编译的
-/// （`host!()` 用它定义 `crate::NICHLINK_NAMESPACE`，审计 `M7`，P3.3）——于是 Studio 在一个与宿主编译
+/// 把两者分开会让启动后的 Studio 停在 `xirang.default`，而宿主自己的面是用包名编译的
+/// （`host!()` 用它定义 `crate::XIRANG_NAMESPACE`，审计 `M7`，P3.3）——于是 Studio 在一个与宿主编译
 /// 产物不同的身份域里重建注册树，任何
 /// 已记录的 `NodeId`（trace、graft 记录）都指不到本会话能找的节点。
 pub(super) fn resolve_project(explicit: Option<&Path>) -> Result<PathBuf, String> {
@@ -213,7 +213,7 @@ pub(super) fn resolve_project_from(
             path,
             current,
             "the path argument",
-            "nichlink-toolchain <path>",
+            "xirang-toolchain <path>",
         );
     }
     if let Some(path) = configured {
@@ -221,14 +221,14 @@ pub(super) fn resolve_project_from(
             path,
             current,
             crate::run_method::lexicon::PACKAGE_ROOT_ENV,
-            "NICH_LINK_PACKAGE_ROOT",
+            "XIRANG_PACKAGE_ROOT",
         );
     }
     if current_holds_package && let Some(current) = current {
         return Ok(current.to_path_buf());
     }
     Err(
-        "no project to open: pass a project path, set NICH_LINK_PACKAGE_ROOT, or start Studio \
+        "no project to open: pass a project path, set XIRANG_PACKAGE_ROOT, or start Studio \
          from a directory that holds a Cargo.toml"
             .to_owned(),
     )
@@ -283,7 +283,7 @@ pub(crate) fn source_path_for(file: &str) -> PathBuf {
     let relative = std::path::Path::new(file.trim_end_matches('/'));
     let path = if relative.starts_with("src")
         || relative.starts_with("studio")
-        || relative.starts_with(".nichlink")
+        || relative.starts_with(".xirang")
     {
         package_root.join(relative)
     } else {

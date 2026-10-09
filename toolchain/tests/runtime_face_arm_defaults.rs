@@ -16,13 +16,13 @@
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量——声明宏读它（审计 `M7`，P3.3）——因此测试
 /// crate 要提供宿主从 `host!()` 得到的那一行同样的值。它放在本文件的顶层，因为那些调用位于 `mod` 块里，
 /// 而展开里的 `crate::` 解析到 crate 根。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 /// A custom preset whose recorded name is distinguishable from the default.
 /// 一个自定义 preset，其记录名可与默认值区分。
 struct ProbePreset;
 
-impl nichlink_toolchain::run_method::PresetContract for ProbePreset {
+impl xirang_toolchain::run_method::PresetContract for ProbePreset {
     type Output = ();
     const REQUIRED_PARTS: &'static [&'static str] = &["probe"];
 }
@@ -31,7 +31,7 @@ impl nichlink_toolchain::run_method::PresetContract for ProbePreset {
 /// 一个自定义 parts，其记录名可与默认值区分。
 struct ProbeParts;
 
-impl nichlink_toolchain::run_method::PartsContract for ProbeParts {
+impl xirang_toolchain::run_method::PartsContract for ProbeParts {
     type Output = ();
     const PROVIDED_PARTS: &'static [&'static str] = &["probe"];
 }
@@ -46,7 +46,7 @@ impl nichlink_toolchain::run_method::PartsContract for ProbeParts {
 /// 把这两个字面 token 回派出去，接住它们的 arm 对 token 做了 `stringify!`，而不是命名
 /// 默认值。
 mod handle_without_preset_or_parts {
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: HandleDefaults,
     }
@@ -58,7 +58,7 @@ mod handle_without_preset_or_parts {
 /// 上面形态的无 `handle` 版本。两个 arm 必须落到同一组默认名字上，因此测试直接比较
 /// 二者，而不是各自单独相信。
 mod without_handle_defaults {
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: NoHandleDefaults,
     }
@@ -70,7 +70,7 @@ mod without_handle_defaults {
 mod handle_with_preset_only {
     use crate::ProbePreset;
 
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: HandlePresetOnly,
         preset: ProbePreset,
@@ -82,7 +82,7 @@ mod handle_with_preset_only {
 mod handle_with_parts_only {
     use crate::ProbeParts;
 
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: HandlePartsOnly,
         parts: ProbeParts,
@@ -94,7 +94,7 @@ mod handle_with_parts_only {
 mod handle_with_preset_and_parts {
     use crate::{ProbeParts, ProbePreset};
 
-    nichlink_toolchain::__control_object! {
+    xirang_toolchain::__control_object! {
         collector: development,
         kind: HandleBoth,
         preset: ProbePreset,

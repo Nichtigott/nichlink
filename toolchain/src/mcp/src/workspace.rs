@@ -3,18 +3,18 @@
 //!
 //! Every identity in this bridge is hashed over `(namespace, source path, declared
 //! name)`, and the namespace is the *package's own name* — that is the design, not a
-//! coincidence: the declaration macros read `crate::NICHLINK_NAMESPACE`, which `host!()` defines from the package name, so
+//! coincidence: the declaration macros read `crate::XIRANG_NAMESPACE`, which `host!()` defines from the package name, so
 //! "package = namespace" is exactly what a built host compiled. A workspace root is
 //! not a package, so it has no namespace of its own, and every tree tool used to
 //! refuse there with Cargo's own words. The machine was there; the entrance was not.
 //! 本桥里的每个身份都是对 `(命名空间, 源码路径, 声明名)` 取散列，而命名空间就是**包自己的名字**
-//! ——这是设计而不是巧合：声明宏读的是 `crate::NICHLINK_NAMESPACE`，而 `host!()` 用包名定义它，因此"包 = 命名空间"恰恰
+//! ——这是设计而不是巧合：声明宏读的是 `crate::XIRANG_NAMESPACE`，而 `host!()` 用包名定义它，因此"包 = 命名空间"恰恰
 //! 就是已构建宿主编译出的那一个。工作区根不是一个包，因此它没有自己的命名空间，而每个树级工具过去
 //! 都在那里用 Cargo 自己的话拒绝。机器在，入口不在。
 //!
 //! This module is that entrance. When the root is a virtual manifest, `cargo metadata`
 //! enumerates the members, and each one is read **from its own published records
-//! first** (`<member>/target/nichlink/out`, through `build_method`'s readers — see
+//! first** (`<member>/target/xirang/out`, through `build_method`'s readers — see
 //! `published.rs`). Deriving a member's faces is the *fallback*, taken only when it
 //! published nothing, because deriving every member is what made a workspace answer
 //! cost the sum of every member's source walk. The merged view groups by package,
@@ -26,17 +26,17 @@
 //! empty tree, and a nested package Cargo cannot resolve must say why rather than
 //! vanish.
 //! 本模块就是那个入口。根是虚拟清单时，`cargo metadata` 枚举成员，而每个成员**先按它自己已发布的
-//! 记录**读取（`<member>/target/nichlink/out`，经 `build_method` 的读取器——见 `published.rs`）。
+//! 记录**读取（`<member>/target/xirang/out`，经 `build_method` 的读取器——见 `published.rs`）。
 //! 推导一个成员的面是**回落**路径，只在它什么都没发布时才走，因为逐成员推导正是让一份工作区答案
 //! 等于每个成员源码遍历之和的原因。合并视图按包分组，而且**每个成员都带着它的状态出现**：
 //! `published`（它自己的记录，带新鲜度）、`not built`（没有记录，因此下面的树是现推的，并且会说出来）、
 //! `no faces`（记录——或推导出的树——不声明任何面，说出来就是答案）、或 `unresolvable`（带上原因）。
 //! 沉默与整条报错都不是答案：框架成员不许被装扮成一棵空树，Cargo 解析不了的嵌套包必须说出原因而不是消失。
 //!
-//! The override still names one tree. `NICH_LINK_NAMESPACE` wins before Cargo is asked,
+//! The override still names one tree. `XIRANG_NAMESPACE` wins before Cargo is asked,
 //! so with it set a virtual root is read as the package that name denotes — the one case
 //! where a caller can give a workspace root an identity by hand.
-//! 覆盖仍然只命名一棵树。`NICH_LINK_NAMESPACE` 在询问 Cargo 之前胜出，因此设置它之后，虚拟根会被
+//! 覆盖仍然只命名一棵树。`XIRANG_NAMESPACE` 在询问 Cargo 之前胜出，因此设置它之后，虚拟根会被
 //! 读作那个名字所指的包——这是调用方唯一能手工给工作区根一个身份的情形。
 //!
 //! online: a virtual root merges members whose records may be absent, stale or newer than the build, and the merged answer has to say which each member was.
@@ -44,15 +44,15 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::lexicon;
 use serde_json::Value;
+use xirang_kernel::lexicon;
 
 use crate::build_method::FaceView;
 use crate::mcp::build_evidence::out_dir;
 use crate::mcp::published::{self, FACES_UNKNOWN, Publication, PublishedTree};
 use crate::mcp::registry::namespace_from;
 use crate::mcp::resolve::derived_faces;
-use nichlink_kernel::identity::NodeId;
+use xirang_kernel::identity::NodeId;
 
 /// What the configured root names.
 /// 配置的根命名的是什么。
@@ -85,8 +85,8 @@ pub(crate) struct Member {
 /// What one member's own evidence is.
 /// 一个成员自己的证据是什么。
 pub(crate) enum MemberState {
-    /// The member's own `target/nichlink/out`, read through `build_method`'s readers.
-    /// 该成员自己的 `target/nichlink/out`，经 `build_method` 的读取器读取。
+    /// The member's own `target/xirang/out`, read through `build_method`'s readers.
+    /// 该成员自己的 `target/xirang/out`，经 `build_method` 的读取器读取。
     Published(PublishedTree),
     /// No readable published records, plus the reason — and the tree derived now, so
     /// the answer carries the same face half a single-package answer would.
@@ -326,12 +326,12 @@ impl Member {
 ///
 /// A directory with no manifest at all is still an error rather than a scope: there is
 /// nothing there to be wrong about, and the refusal names the way out
-/// (`NICH_LINK_NAMESPACE`). A directory that *has* a manifest Cargo cannot resolve is a
+/// (`XIRANG_NAMESPACE`). A directory that *has* a manifest Cargo cannot resolve is a
 /// different answer — it is a real root whose tree cannot be named — so it comes back as
 /// [`Scope::Unresolvable`] and the tools report the reason in the body instead of
 /// failing the call.
 /// 完全没有清单的目录仍然是一个错误而不是一种范围：那里没有任何东西可以被弄错，而拒绝会点名出路
-/// （`NICH_LINK_NAMESPACE`）。**有**清单而 Cargo 解析不了的目录是另一个答案——它是一个真实存在、
+/// （`XIRANG_NAMESPACE`）。**有**清单而 Cargo 解析不了的目录是另一个答案——它是一个真实存在、
 /// 却无法被命名的根——因此它以 [`Scope::Unresolvable`] 回来，工具在正文里报出原因，而不是让调用失败。
 /// The workspace a member root belongs to, when this root is one of its members.
 /// 当这个根是某个工作区的成员时，给出那个工作区。
@@ -401,7 +401,7 @@ pub(crate) fn stage(root: &Path) -> Stage {
     };
     let declares = declares_workspace
         || sources.iter().any(|file| {
-            nichlink_kernel::syntax::parse_faces(&file.source).is_ok_and(|faces| !faces.is_empty())
+            xirang_kernel::syntax::parse_faces(&file.source).is_ok_and(|faces| !faces.is_empty())
         });
     if declares {
         Stage::Faceful
@@ -427,20 +427,20 @@ pub(crate) fn entry_point(stage: Stage) -> Option<&'static str> {
     }
 }
 
-/// Whether this tree hosts nichlink at all — a `build.rs` plus a `nichlink-toolchain` dependency.
-/// 这棵树到底有没有宿主 nichlink —— 一个 `build.rs` 加一条 `nichlink-toolchain` 依赖。
+/// Whether this tree hosts xirang at all — a `build.rs` plus a `xirang-toolchain` dependency.
+/// 这棵树到底有没有宿主 xirang —— 一个 `build.rs` 加一条 `xirang-toolchain` 依赖。
 ///
 /// This is the question that decides what "a face" can even mean. The round measured the whole
-/// evaluation corpus: **the trees under test do not host nichlink** (no `build.rs`, no `host!()`;
+/// evaluation corpus: **the trees under test do not host xirang** (no `build.rs`, no `host!()`;
 /// only `examples/control-button` does), so on them there is no build-time scope, no derived
 /// registration tree, and `0 faces` is not a defect to explain but the answer. A tool that prints
 /// "0 faces" without saying that leaves the reader to infer it — and the same reader then asks a
 /// face-shaped question about a symbol.
-/// 这个问题决定了"面"能意味着什么。那一轮量遍了评测语料：**被测的树不宿主 nichlink**（没有
+/// 这个问题决定了"面"能意味着什么。那一轮量遍了评测语料：**被测的树不宿主 xirang**（没有
 /// `build.rs`、没有 `host!()`；只有 `examples/control-button` 有），因此那些树上既没有构建期作用域、
 /// 也没有派生注册树，而 `0 faces` 不是要解释的缺陷、就是答案本身。只印 "0 faces" 而不说这一点的工具
 /// 把推断留给读者 —— 而那位读者随后会用一个"面"形状的问题去问一个符号。
-pub(crate) fn hosts_nichlink(root: &Path) -> bool {
+pub(crate) fn hosts_xirang(root: &Path) -> bool {
     let mut dirs = vec![root.to_path_buf()];
     // Three levels covers `<root>`, a member, and a member's crate — deeper than any host layout
     // this repository ships, and it stops at the first manifest that names the dependency.
@@ -451,7 +451,7 @@ pub(crate) fn hosts_nichlink(root: &Path) -> bool {
         for dir in dirs {
             if dir.join("build.rs").is_file()
                 && std::fs::read_to_string(dir.join("Cargo.toml"))
-                    .is_ok_and(|manifest| manifest.contains("nichlink-toolchain"))
+                    .is_ok_and(|manifest| manifest.contains("xirang-toolchain"))
             {
                 return true;
             }

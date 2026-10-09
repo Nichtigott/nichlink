@@ -48,8 +48,7 @@ fn the_size_ceiling_holds_except_for_the_pinned_debt() {
 fn synthetic(files: &[(&str, &str)]) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root =
-        std::env::temp_dir().join(format!("nichlink-size-{}-{sequence}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("xirang-size-{}-{sequence}", std::process::id()));
     fs::create_dir_all(root.join("probe/src")).expect("fixture src");
     fs::write(
         root.join("Cargo.toml"),

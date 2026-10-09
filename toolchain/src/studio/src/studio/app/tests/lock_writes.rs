@@ -9,15 +9,15 @@ use super::*;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// A throwaway project whose `.nichlink/plugins/` is the write target.
-/// 一个一次性工程，其 `.nichlink/plugins/` 就是写入目标。
+/// A throwaway project whose `.xirang/plugins/` is the write target.
+/// 一个一次性工程，其 `.xirang/plugins/` 就是写入目标。
 fn temp_plugins(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-lock-{label}-{suffix}"));
-    let plugins = root.join(".nichlink/plugins");
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-lock-{label}-{suffix}"));
+    let plugins = root.join(".xirang/plugins");
     std::fs::create_dir_all(&plugins).expect("plugin directory");
     select_project(root.clone(), root.join("Cargo.toml"), "plugin-app");
     (root, plugins)
@@ -68,14 +68,14 @@ fn a_duplicate_user_identity_is_never_written_unreadably() {
     let lock = plugins.join("user.lock");
     std::fs::write(
         &lock,
-        "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n",
+        "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n",
     )
     .expect("seed lock");
 
     let event = submit(
         "user",
         [
-            "nichlink.test",
+            "xirang.test",
             "demo-plugin",
             "0.1.0",
             "demo_plugin",
@@ -105,14 +105,14 @@ fn toggling_the_mode_is_never_written_as_a_duplicate_identity() {
     let lock = plugins.join("user.lock");
     std::fs::write(
         &lock,
-        "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n",
+        "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n",
     )
     .expect("seed lock");
 
     let event = submit(
         "user",
         [
-            "nichlink.test",
+            "xirang.test",
             "demo-plugin",
             "0.1.0",
             "demo_plugin",
@@ -134,14 +134,14 @@ fn a_lock_without_a_trailing_newline_is_never_glued_to_the_next_record() {
     let lock = plugins.join("user.lock");
     std::fs::write(
         &lock,
-        "user|nichlink.test|first-plugin|0.1.0|first_plugin|sha256:00|extension",
+        "user|xirang.test|first-plugin|0.1.0|first_plugin|sha256:00|extension",
     )
     .expect("seed lock");
 
     let event = submit(
         "user",
         [
-            "nichlink.test",
+            "xirang.test",
             "second-plugin",
             "0.2.0",
             "second_plugin",
@@ -182,14 +182,14 @@ fn an_official_append_that_would_duplicate_an_identity_is_refused_not_written() 
     let lock = plugins.join("official.lock");
     std::fs::write(
         &lock,
-        "official|nichlink.test|official-plugin|1.0.0|official_plugin|sha256:00|extension|||\n",
+        "official|xirang.test|official-plugin|1.0.0|official_plugin|sha256:00|extension|||\n",
     )
     .expect("seed lock");
 
     let event = submit(
         "official",
         [
-            "nichlink.test",
+            "xirang.test",
             "official-plugin",
             "1.0.0",
             "official_plugin",
@@ -224,7 +224,7 @@ fn the_provenance_rows_write_the_ten_column_form() {
     std::fs::write(
         &lock,
         "# source|framework|package|version|crate|checksum|mode\n\
-         official|nichlink.default|plugin-app|1.0.0|plugin_app|sha256:00|extension\n",
+         official|xirang.default|plugin-app|1.0.0|plugin_app|sha256:00|extension\n",
     )
     .expect("seed lock");
     let mut plugin = PluginState::new();

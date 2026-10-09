@@ -48,8 +48,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use nichlink_kernel::NodeId;
 use serde_json::{Value, json};
+use xirang_kernel::NodeId;
 
 use crate::mcp::source_index::portable_path;
 use crate::mcp::workspace::{self, Member, Scope};
@@ -117,13 +117,13 @@ pub(crate) enum Subject {
 /// 恰好带着 `path` 的请求并不能说明它意指的就是一条路径。
 pub(crate) fn subject(tool: &str) -> Subject {
     match tool {
-        "nichlink.read" | "nichlink.inspect" | "nichlink.mir" | "nichlink.unified" => Subject::Path,
-        "nichlink.callgraph" => Subject::WorkspaceOrOwner,
+        "xirang.read" | "xirang.inspect" | "xirang.mir" | "xirang.unified" => Subject::Path,
+        "xirang.callgraph" => Subject::WorkspaceOrOwner,
         // `crates` writes generated packages and `revert` takes them back, so the ownership
         // question is the same one `apply` asks: is this root the tree being written.
         // `crates` 写下生成包、`revert` 把它们收回去，因此归属问题与 `apply` 问的是同一个：这个根是不是
         // 被写的那棵树。
-        "nichlink.apply" | "nichlink.plugin" | "nichlink.crates" => Subject::Write,
+        "xirang.apply" | "xirang.plugin" | "xirang.crates" => Subject::Write,
         // The scaffold names its own destination and writes a directory that does not exist
         // yet, so the root answers it directly: the ownership question is whether the
         // destination is inside this root, which is a fact about paths rather than about a
@@ -131,15 +131,15 @@ pub(crate) fn subject(tool: &str) -> Subject {
         // 脚手架自己点名目的地，而且写的是一个尚不存在的目录，因此由根直接作答：归属问题是目的地是否
         // 落在这个根之内，而这是关于路径的事实而不是关于某个成员的树的事实；不在根内时，该工具自己的
         // 主体会点名两条路径。
-        "nichlink.new_project" => Subject::SelfAnswering,
-        "nichlink.explain" | "nichlink.impact" | "nichlink.usages" | "nichlink.converge" => {
+        "xirang.new_project" => Subject::SelfAnswering,
+        "xirang.explain" | "xirang.impact" | "xirang.usages" | "xirang.converge" => {
             Subject::EveryMember(NODE_KEYS)
         }
         // `trace` and `verify` take no subject: the artifact and the package are the
         // subject, so every member's own answer is the only honest one.
         // `trace` 与 `verify` 不接受主体：artifact 与包本身就是主体，因此每个成员自己的答案才是唯一诚实
         // 的答案。
-        "nichlink.trace" | "nichlink.verify" => Subject::EveryMember(NO_KEYS),
+        "xirang.trace" | "xirang.verify" => Subject::EveryMember(NO_KEYS),
         // `search`, `registry`, `grafts` and `diff` merge the workspace themselves; `status`
         // reads the filesystem and needs no identity at all.
         // `search`、`registry`、`grafts` 与 `diff` 自己合并工作区；`status` 读文件系统，根本不需要身份。

@@ -3,12 +3,12 @@
 //!
 //! The `collector` field is a development control plane, and only one of its
 //! three values submits anything: `debug` (and only in a debug build) hands the
-//! declaration to `nichlink-toolchain`'s inventory section; `development` and
+//! declaration to `xirang-toolchain`'s inventory section; `development` and
 //! `linked` expand to nothing, which is what every shipped application uses. The
 //! declaration is compiled into the crate under all three; the generated
 //! `StaticPlan` is what a release reads.
 //! `collector` 字段是开发控制面，三个取值里只有一个会提交任何东西：`debug`（且只在 debug
-//! 构建里）把声明交给 `nichlink-toolchain` 的 inventory 段；`development` 与 `linked`
+//! 构建里）把声明交给 `xirang-toolchain` 的 inventory 段；`development` 与 `linked`
 //! 展开为空，而每个出厂应用用的都是这两个。三个取值下声明都被编译进本 crate；正式应用读的是生成的
 //! `StaticPlan`。
 //!
@@ -17,7 +17,7 @@
 //! 三个取值之外的写法会按名被拒，而不是掉进一个作者从未写过的宏内部的裸宏错误：
 //!
 //! ```rust,compile_fail
-//! nichlink_toolchain::run_method::external_object! {
+//! xirang_toolchain::run_method::external_object! {
 //!     collector: nonsense,
 //!     kind: ProbeCollector,
 //! }
@@ -44,9 +44,9 @@
 //! // 声明注册面却不调用 `host!()` 的 crate 自己拥有身份命名空间：声明宏读这个常量，而不是在每个声明处
 //! // 读 `env!("CARGO_PKG_NAME")`——因为分区后的 crate 会用另一个 `#[path]` 挂载同一个文件，在那里会读到
 //! // **它自己的**包名（审计 `M7`，P3.3）。
-//! pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+//! pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 //!
-//! nichlink_toolchain::run_method::external_object! {
+//! xirang_toolchain::run_method::external_object! {
 //!     kind: LinkedProbe,
 //! }
 //!
@@ -146,15 +146,15 @@ macro_rules! __registration_face {
         /// The face's compile-time identity, for typed graft cuts and parent links.
         /// 该注册面的编译期身份，供类型化 graft 切口与父级链接使用。
         ///
-        /// It hashes `crate::NICHLINK_NAMESPACE` (the crate root constant, audit `M7`, P3.3),
+        /// It hashes `crate::XIRANG_NAMESPACE` (the crate root constant, audit `M7`, P3.3),
         /// the declaration's relative source path
         /// and its kind — never the registry name, so renaming the registry name
         /// does not move an identity.
-        /// 它哈希 `crate::NICHLINK_NAMESPACE`（crate 根常量，审计 `M7`，P3.3）、声明的相对源码路径
+        /// 它哈希 `crate::XIRANG_NAMESPACE`（crate 根常量，审计 `M7`，P3.3）、声明的相对源码路径
         /// 与 kind——绝不含注册面名，因此改注册面名
         /// 不会移动身份。
         pub const NODE_ID: $crate::run_method::NodeId = $crate::run_method::NodeId::from_namespaced_path(
-            crate::NICHLINK_NAMESPACE,
+            crate::XIRANG_NAMESPACE,
             $source,
             stringify!($kind),
         );
@@ -176,7 +176,7 @@ macro_rules! __registration_face {
         /// The same declaration in the owned form registration consumes.
         /// 同一份声明的拥有型快照，注册过程消费它。
         pub const REGISTRATION: $crate::run_method::RegistrationInfo = $crate::run_method::RegistrationInfo {
-            namespace: crate::NICHLINK_NAMESPACE,
+            namespace: crate::XIRANG_NAMESPACE,
             id: NODE_ID,
             parent: $parent,
             kind: stringify!($kind),

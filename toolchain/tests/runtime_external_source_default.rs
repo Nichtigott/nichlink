@@ -42,14 +42,14 @@
 /// from `host!()`.
 /// 一个声明注册面却不调用 `host!()` 的 crate 自己拥有这个常量：声明宏读它（审计 `M7`，P3.3），因此测试
 /// crate 必须提供宿主从 `host!()` 得到的那一行同样的值。
-pub const NICHLINK_NAMESPACE: &str = env!("CARGO_PKG_NAME");
+pub const XIRANG_NAMESPACE: &str = env!("CARGO_PKG_NAME");
 
 use std::path::Path;
 
-use nichlink_toolchain::run_method::registry_core::declaration::portable_path;
-use nichlink_toolchain::run_method::registry_core::{FrameworkId, Registry};
+use xirang_toolchain::run_method::registry_core::declaration::portable_path;
+use xirang_toolchain::run_method::registry_core::{FrameworkId, Registry};
 
-nichlink_toolchain::run_method::external_object! {
+xirang_toolchain::run_method::external_object! {
     kind: DefaultSourced,
 }
 

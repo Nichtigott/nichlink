@@ -3,11 +3,11 @@
 //!
 //! Measured need: a defect in a file compiled only under a non-default feature cannot fail on the
 //! default face, and the evaluation had exactly that round — `studio` is not in
-//! `nichlink-toolchain`'s `default`, so `cargo test --workspace` was green while the red was one
+//! `xirang-toolchain`'s `default`, so `cargo test --workspace` was green while the red was one
 //! feature away. Neither this bridge nor the control tool could say which face a red run would
 //! appear on, and both agents had to widen the feature set by hand.
 //! 量出来的需求：只在非默认特性下编译的文件里的缺陷，在默认面上不可能失败，而评测里就有这么一轮——
-//! `studio` 不在 `nichlink-toolchain` 的 `default` 里，于是 `cargo test --workspace` 全绿、红只差一个
+//! `studio` 不在 `xirang-toolchain` 的 `default` 里，于是 `cargo test --workspace` 全绿、红只差一个
 //! 特性。桥与对照工具都答不了"红会出现在哪个面"，两个代理都只能自己把特性面加宽。
 //!
 //! This answers the actionable half from Cargo's own view of the tree — **which faces exist and

@@ -15,12 +15,12 @@ use super::{NOT_CHECKED, Policy, REUSE_WINDOW_SECONDS, UNKNOWN, line, policy_fro
 fn scratch(label: &str) -> (PathBuf, PathBuf) {
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let unique = format!(
-        "nichlink-mcp-freshness-{label}-{}-{}",
+        "xirang-mcp-freshness-{label}-{}-{}",
         std::process::id(),
         SEQUENCE.fetch_add(1, Ordering::Relaxed)
     );
     let root = std::env::temp_dir().join(unique);
-    let out = root.join("target/nichlink/out");
+    let out = root.join("target/xirang/out");
     std::fs::create_dir_all(&out).expect("scratch output directory");
     (root, out)
 }
@@ -57,7 +57,7 @@ fn a_verdict_this_answer_paid_for_is_not_spelled_as_a_reuse() {
     assert!(!paid, "an unbuilt tree is not current");
     let same_answer = line(&root, &out);
     assert_eq!(
-        same_answer, "build stale (run `nichlink check`)",
+        same_answer, "build stale (run `xirang check`)",
         "a verdict this answer paid for is reported as what it found, not as a reuse: {same_answer}"
     );
     // A *new* answer may reuse it, and then it must say so and name the moment.
@@ -106,7 +106,7 @@ fn an_output_with_no_fingerprint_is_stale_and_the_window_labels_the_reuse() {
     super::set_policy(Policy::Verify);
     let paid = line(&root, &out);
     assert!(
-        paid.starts_with("build stale (run `nichlink check`)"),
+        paid.starts_with("build stale (run `xirang check`)"),
         "a check that runs must report what it found: {paid}"
     );
     super::set_policy(Policy::Reuse);

@@ -1,12 +1,12 @@
-//! `nichlink new`: scaffold a host project in `./<name>`.
-//! `nichlink new`：在 `./<name>` 中搭建宿主项目。
+//! `xirang new`: scaffold a host project in `./<name>`.
+//! `xirang new`：在 `./<name>` 中搭建宿主项目。
 //!
 //! Split out of `lib.rs` because scaffolding is a self-contained execution
 //! surface: it reads the current directory and the running executable to decide
-//! where the `nichlink-kernel`/`nichlink-toolchain` dependency comes from, and
+//! where the `xirang-kernel`/`xirang-toolchain` dependency comes from, and
 //! touches no other command's state.
 //! 从 `lib.rs` 拆出，因为脚手架是一块自包含的执行面：它读当前目录与正在运行的可执行
-//! 文件来决定 `nichlink-kernel`/`nichlink-toolchain` 依赖来自哪里，不触碰其他命令的
+//! 文件来决定 `xirang-kernel`/`xirang-toolchain` 依赖来自哪里，不触碰其他命令的
 //! 状态。
 
 use std::io::Write;
@@ -29,27 +29,27 @@ pub(crate) fn new(
             "--lib" => lib = true,
             "--path" => {
                 let value = args.next().ok_or("--path requires a directory")?;
-                // The explicit path is a claim about where a NichLink checkout is, and
+                // The explicit path is a claim about where a XiRang checkout is, and
                 // nothing checked it: `--path /tmp` wrote `path = "/tmp/run_method"` and
                 // exited 0. The claim is resolved where the source is chosen, below —
                 // not here, because a request that names two sources has to be refused
                 // for *that* reason rather than for whichever path it mentioned.
-                // 显式路径是关于"NichLink 检出在哪"的主张，而过去没有任何检查：`--path /tmp` 写下
+                // 显式路径是关于"XiRang 检出在哪"的主张，而过去没有任何检查：`--path /tmp` 写下
                 // `path = "/tmp/run_method"` 并退出 0。这条主张在下面**选定来源处**解析，而不是在这里
                 // ——因为一次点了两个来源的请求必须按"这处矛盾"被拒，而不是按它顺手提到的某个路径。
                 path = Some(PathBuf::from(value));
             }
             "--git" => git = Some(args.next().ok_or("--git requires a URL")?),
             // An option-shaped token is not a package name. This subcommand has no
-            // `--help` branch, so `nichlink new --help` used to take `--help` as the name
+            // `--help` branch, so `xirang new --help` used to take `--help` as the name
             // and scaffold `./--help` — it was the only subcommand that did not refuse the
             // input, and the mistake wrote into whatever directory the shell was in.
             // 以选项形状出现的 token 不是包名。本子命令没有 `--help` 分支，因此
-            // `nichlink new --help` 过去把 `--help` 当名字并在 `./--help` 里搭起脚手架——它是唯一
+            // `xirang new --help` 过去把 `--help` 当名字并在 `./--help` 里搭起脚手架——它是唯一
             // 不拒绝这种输入的子命令，而这个错误会写进 shell 当时所在的目录。
             _ if arg.starts_with('-') => {
                 return Err(format!(
-                    "unexpected option '{arg}'; usage: nichlink new <name> [--lib] \
+                    "unexpected option '{arg}'; usage: xirang new <name> [--lib] \
                      [--path <workspace> | --git <url>]"
                 ));
             }
@@ -107,32 +107,32 @@ fn checkout_root(value: &Path) -> Result<PathBuf, String> {
         .map_err(|error| format!("--path {}: {error}", value.display()))?;
     if !is_checkout(&directory) {
         return Err(format!(
-            "--path {} is not a NichLink checkout: it has no kernel/ and toolchain/",
+            "--path {} is not a XiRang checkout: it has no kernel/ and toolchain/",
             value.display()
         ));
     }
     Ok(directory)
 }
 
-/// Whether a directory is a NichLink checkout this scaffold can point at.
-/// 某个目录是否是脚手架可以指向的 NichLink 检出。
+/// Whether a directory is a XiRang checkout this scaffold can point at.
+/// 某个目录是否是脚手架可以指向的 XiRang 检出。
 ///
 /// The check lives here rather than in `build_method` because the scaffold writes a
 /// *dependency* into someone else's manifest: the predicate has to be enforced by the
 /// caller that is about to write it, and keeping it local means the packaged CLI does
-/// not need a symbol newer than the published `nichlink-toolchain`.
+/// not need a symbol newer than the published `xirang-toolchain`.
 /// 这个判断放在这里而不是 `build_method`，因为脚手架是把一条**依赖**写进别人的清单：判断必须
 /// 由即将写下它的调用方执行，而放在本地意味着打包后的 CLI 不需要一个比已发布
-/// `nichlink-toolchain` 更新的符号。
+/// `xirang-toolchain` 更新的符号。
 ///
 /// The two directories are the two halves a generated host depends on. They replaced
 /// `core/`, `build_method/` and `run_method/` in batches 1 and 2, and this predicate
 /// stayed on the old names — which is why `--path` refused this very checkout for as
-/// long as nothing compiled a generated project. `tools/nichlink-external-rehearsal`
+/// long as nothing compiled a generated project. `tools/xirang-external-rehearsal`
 /// now does, so the names here cannot drift again unnoticed.
 /// 这两个目录是生成的宿主所依赖的两半。它们在批 1 与批 2 里取代了 `core/`、`build_method/`
 /// 与 `run_method/`，而这个判断留在了旧名字上——只要没有任何东西去编译一个生成出来的项目，
-/// `--path` 就会一直拒绝本检出自己。如今 `tools/nichlink-external-rehearsal` 会去编译，
+/// `--path` 就会一直拒绝本检出自己。如今 `tools/xirang-external-rehearsal` 会去编译，
 /// 因此这里的名字不会再无声漂移。
 fn is_checkout(workspace: &Path) -> bool {
     workspace.join("kernel").is_dir() && workspace.join("toolchain").is_dir()
@@ -148,8 +148,7 @@ mod tests {
     /// 被拒绝。
     #[test]
     fn only_a_real_checkout_is_accepted() {
-        let root =
-            std::env::temp_dir().join(format!("nichlink-new-checkout-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("xirang-new-checkout-{}", std::process::id()));
         std::fs::create_dir_all(&root).expect("fixture directory");
         assert!(!is_checkout(&root), "an empty directory is not a checkout");
         // The stale half is refused too: `kernel/` alone is what batch 1 left the old

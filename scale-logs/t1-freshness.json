@@ -5,7 +5,7 @@
     "w50": "target/scale/w50 = 20 members x 2,503 .rs files = 50,060 files, records published per member (`verify`, pipeline only)",
     "t3": "target/scale/t3 = 1 member x 2,504 files"
   },
-  "protocol": "one fresh process per run: `target/debug/nichlink-mcp --call search --query <q> --root target/scale/<tree>`, wall clock by bash TIMEFORMAT=%R; three runs per arm; arms INTERLEAVED inside one session (arm A, arm B, arm A, arm B, ...) so load and page cache hit both arms",
+  "protocol": "one fresh process per run: `target/debug/xirang-mcp --call search --query <q> --root target/scale/<tree>`, wall clock by bash TIMEFORMAT=%R; three runs per arm; arms INTERLEAVED inside one session (arm A, arm B, arm A, arm B, ...) so load and page cache hit both arms",
   "arms": {
     "baseline": "c29ffa2 (+ docs commit 7c1eecf): `build_output_is_current` called directly by three readers; the content hash is paid twice per member (40 for 20 members)",
     "cut6_three_walks": "P0.1 without the per-answer stamp memo: the stamp guard is walked by all three readers (60 walks for 20 members)",
@@ -88,7 +88,7 @@
     "reading": "the per-member verification is independent work and this is the evidence that parallelising it is the lever; what the tool actually uses is the bounded budget below, not -P8"
   },
   "worker_budget": {
-    "rule": "half the machine's cores, at most 8, never fewer than one core left alone; `NICH_LINK_JOBS` overrides it",
+    "rule": "half the machine's cores, at most 8, never fewer than one core left alone; `XIRANG_JOBS` overrides it",
     "why": "the maintainer's requirement, verbatim: machine core counts differ, and a tool call must not take the user's whole machine",
     "pin": "build_time::source_walk::parallel_tests::the_worker_budget_leaves_the_machine_alone_and_honours_an_explicit_request"
   },
@@ -108,6 +108,6 @@
   "open": [
     "T1 acceptance p95 <= 1 s is NOT met: 3.16-3.26 s at 50,000 files with this bounded budget (8 workers of 20 cores)",
     "what remains: the twenty whole-tree content hashes (~1.4-1.7 s on the worker pool, which is why the budget bounds the gain: 20 members / 8 workers), one still-sequential per-member manifest pass (~0.9 s), and process startup + workspace scope (~0.5 s)",
-    "the route to <= 1 s is a budget decision (raise NICH_LINK_JOBS / the rule), not a semantic change: P0.3 (verify only the rows an answer names) is still open and would cost the negative answers their whole-tree guarantee"
+    "the route to <= 1 s is a budget decision (raise XIRANG_JOBS / the rule), not a semantic change: P0.3 (verify only the rows an answer names) is still open and would cost the negative answers their whole-tree guarantee"
   ]
 }

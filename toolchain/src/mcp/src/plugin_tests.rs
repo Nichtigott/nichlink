@@ -12,8 +12,8 @@
 
 use std::path::PathBuf;
 
-use nichlink_kernel::plugin::catalog::PluginCatalog;
 use serde_json::json;
+use xirang_kernel::plugin::catalog::PluginCatalog;
 
 use super::plugin;
 
@@ -33,10 +33,10 @@ impl Drop for Package {
 }
 
 impl Package {
-    /// `.nichlink/plugins`, the directory this write creates.
-    /// `.nichlink/plugins`，本次写入会创建的目录。
+    /// `.xirang/plugins`, the directory this write creates.
+    /// `.xirang/plugins`，本次写入会创建的目录。
     fn plugins(&self) -> PathBuf {
-        self.root.join(".nichlink/plugins")
+        self.root.join(".xirang/plugins")
     }
 
     /// The lock file a source writes.
@@ -83,7 +83,7 @@ fn package(label: &str) -> Package {
 fn user_request(checksum: &str, apply: bool, confirm: bool) -> serde_json::Value {
     json!({
         "source": "user",
-        "framework": "nichlink.test",
+        "framework": "xirang.test",
         "package": "demo-plugin",
         "version": "0.1.0",
         "crate": "demo_plugin",
@@ -108,7 +108,7 @@ fn a_preview_writes_nothing_and_shows_the_exact_bytes() {
     // 变异。若请求写明 `apply: false`，被翻掉的默认就能从旁边溜过去。
     let request = json!({
         "source": "user",
-        "framework": "nichlink.test",
+        "framework": "xirang.test",
         "package": "demo-plugin",
         "version": "0.1.0",
         "crate": "demo_plugin",
@@ -130,9 +130,9 @@ fn a_preview_writes_nothing_and_shows_the_exact_bytes() {
         !fixture.lock("user").exists() && !fixture.entry("user").exists(),
         "the preview wrote a file:\n{reply}"
     );
-    let record = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension";
+    let record = "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension";
     for expected in [
-        "preview: nichlink.plugin would write one user record",
+        "preview: xirang.plugin would write one user record",
         "nothing was written",
         &format!("+ {}", plugins.display()),
         &format!("~ {}", fixture.lock("user").display()),
@@ -177,7 +177,7 @@ fn a_plugin_write_without_confirm_is_refused() {
 #[test]
 fn an_apply_stores_a_lock_the_kernel_reads_back() {
     let fixture = package("apply");
-    let record = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension";
+    let record = "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension";
     let reply =
         plugin(&fixture.root, &user_request("sha256:00", true, true)).expect("the write answers");
 
@@ -212,7 +212,7 @@ fn an_official_record_the_lock_does_not_account_for_is_refused() {
         &fixture.root,
         &json!({
             "source": "official",
-            "framework": "nichlink.test",
+            "framework": "xirang.test",
             "package": "official-plugin",
             "version": "1.0.0",
             "crate": "official_plugin",
@@ -239,8 +239,7 @@ fn an_official_record_the_lock_does_not_account_for_is_refused() {
 #[test]
 fn an_official_write_promotes_the_trusted_record_with_its_provenance() {
     let fixture = package("official-promotion");
-    let seeded =
-        "official|nichlink.test|official-plugin|1.0.0|official_plugin|sha256:00|extension\n";
+    let seeded = "official|xirang.test|official-plugin|1.0.0|official_plugin|sha256:00|extension\n";
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(fixture.lock("official"), seeded).expect("seed lock");
 
@@ -248,7 +247,7 @@ fn an_official_write_promotes_the_trusted_record_with_its_provenance() {
         &fixture.root,
         &json!({
             "source": "official",
-            "framework": "nichlink.test",
+            "framework": "xirang.test",
             "package": "official-plugin",
             "version": "1.0.0",
             "crate": "official_plugin",
@@ -288,7 +287,7 @@ fn an_official_write_promotes_the_trusted_record_with_its_provenance() {
 fn an_official_record_the_lock_accounts_for_is_still_judged_by_the_parser() {
     let fixture = package("official-parser");
     let seeded =
-        "official|nichlink.test|official-plugin|1.0.0|official_plugin|sha256:00|extension|||\n";
+        "official|xirang.test|official-plugin|1.0.0|official_plugin|sha256:00|extension|||\n";
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(fixture.lock("official"), seeded).expect("seed lock");
 
@@ -296,7 +295,7 @@ fn an_official_record_the_lock_accounts_for_is_still_judged_by_the_parser() {
         &fixture.root,
         &json!({
             "source": "official",
-            "framework": "nichlink.test",
+            "framework": "xirang.test",
             "package": "official-plugin",
             "version": "1.0.0",
             "crate": "official_plugin",
@@ -336,7 +335,7 @@ fn an_official_record_the_lock_accounts_for_is_still_judged_by_the_parser() {
 #[test]
 fn a_second_digest_for_one_package_version_is_a_second_identity() {
     let fixture = package("user-two-digests");
-    let seeded = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n";
+    let seeded = "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n";
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(fixture.lock("user"), seeded).expect("seed lock");
 
@@ -359,7 +358,7 @@ fn a_second_digest_for_one_package_version_is_a_second_identity() {
 #[test]
 fn a_user_record_that_would_drop_provenance_is_not_written() {
     let fixture = package("user-downgrade");
-    let seeded = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension|sig-v1||\n";
+    let seeded = "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension|sig-v1||\n";
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(fixture.lock("user"), seeded).expect("seed lock");
 
@@ -378,7 +377,7 @@ fn a_user_record_that_would_drop_provenance_is_not_written() {
 #[test]
 fn a_record_the_lock_already_carries_is_not_rewritten() {
     let fixture = package("already");
-    let seeded = "user|nichlink.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n";
+    let seeded = "user|xirang.test|demo-plugin|0.1.0|demo_plugin|sha256:00|extension\n";
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(fixture.lock("user"), seeded).expect("seed lock");
 
@@ -408,13 +407,13 @@ fn a_lock_without_a_trailing_newline_gains_one() {
     std::fs::create_dir_all(fixture.plugins()).expect("plugin directory");
     std::fs::write(
         fixture.lock("user"),
-        "user|nichlink.test|first-plugin|0.1.0|first_plugin|sha256:00|extension",
+        "user|xirang.test|first-plugin|0.1.0|first_plugin|sha256:00|extension",
     )
     .expect("seed lock");
 
     let request = json!({
         "source": "user",
-        "framework": "nichlink.test",
+        "framework": "xirang.test",
         "package": "second-plugin",
         "version": "0.2.0",
         "crate": "second_plugin",
@@ -425,7 +424,7 @@ fn a_lock_without_a_trailing_newline_gains_one() {
     });
     let preview = plugin(
         &fixture.root,
-        &json!({ "source": "user", "framework": "nichlink.test", "package": "second-plugin",
+        &json!({ "source": "user", "framework": "xirang.test", "package": "second-plugin",
                  "version": "0.2.0", "crate": "second_plugin", "checksum": "sha256:01",
                  "mode": "extension" }),
     )
@@ -442,7 +441,7 @@ fn a_lock_without_a_trailing_newline_gains_one() {
         PluginCatalog::parse_plugin_catalog(&lock).expect("the pair of records parses as one lock");
     assert_eq!(catalog.records().len(), 2, "{lock:?}");
     assert!(
-        lock.contains("extension\nuser|nichlink.test|second-plugin"),
+        lock.contains("extension\nuser|xirang.test|second-plugin"),
         "the completion separates the two records:\n{lock:?}"
     );
 }
@@ -470,7 +469,7 @@ fn a_virtual_workspace_root_refuses_a_plugin_write_with_candidates() {
     let reply = crate::mcp::tools::tool_call(
         &fixture.root,
         json!(1),
-        &json!({"name": "nichlink.plugin", "arguments": user_request("sha256:00", true, true)}),
+        &json!({"name": "xirang.plugin", "arguments": user_request("sha256:00", true, true)}),
     );
     let text = reply["result"]["content"][0]["text"]
         .as_str()
@@ -482,13 +481,13 @@ fn a_virtual_workspace_root_refuses_a_plugin_write_with_candidates() {
     // ——因此 `isError` 保持 false，调用方读到的是那些候选。
     assert_eq!(reply["result"]["isError"], false, "{reply}");
     assert!(
-        text.contains("REFUSED: nichlink.plugin needs one package"),
+        text.contains("REFUSED: xirang.plugin needs one package"),
         "{text}"
     );
     assert!(text.contains("candidates"), "{text}");
     assert!(text.contains("host"), "{text}");
     assert!(
-        !fixture.root.join(".nichlink").exists() && !fixture.root.join("host/.nichlink").exists(),
+        !fixture.root.join(".xirang").exists() && !fixture.root.join("host/.xirang").exists(),
         "the refusal wrote something:\n{text}"
     );
 }

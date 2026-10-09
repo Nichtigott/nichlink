@@ -156,7 +156,7 @@
   "computed_from": "per-row fields of findings[] (computed in the same run that wrote this file)"
  },
  "meta": {
-  "audit": "nichlink structure/quality/logic audit 2026-09-28 — consolidated findings (t17)",
+  "audit": "xirang structure/quality/logic audit 2026-09-28 — consolidated findings (t17)",
   "inputs": [
    "audit-lane-bridges.md",
    "audit-lane-gates.md",
@@ -1178,7 +1178,7 @@
    "file": "build_method/src/node_id.rs",
    "line": 36,
    "title": "进程级身份缓存的键不含命名空间，跨包污染 `NodeId`",
-   "evidence": "1. `CACHED_NODE_IDS` 是 `static OnceLock<BTreeMap<String, (NodeId, String)>>`，**键只有相对源码路径**（`build_method/src/node_id.rs:25`、`:36`），值是某个命名空间下算出的 `NodeId`。 2. 写入侧**校验**了命名空间：`build_method/src/identity_cache.rs:58` 要求 `id == package_node_id(&relative, &kind)`（该函数用当前运行的命名空间）。但读取侧 `build_method/src/node_id.rs:37` 直接 `return Some(*id)`，**不再复核命名空间**；而 `OnceLock::set` 先到先得（`build_method/src/identity_cache.rs:64`），因此本进程里第二次以后的 `prime` 全部被丢弃——缓存内容永久是「本进程第一个 prime 命中的那个包」的。 3. 于是同一进程里服务两个包时会出现**混合命名空间的一棵树**：注册树里文件派生的 id 来自缓存（A 的命名空间），而 `cached_parent_id`/`package_root_node_id`（`build_method/src/cache.rs:186-201`）用当前运行的命名空间（B）重算父级 → 子面声明的父级在树里找不到 → `static-plan: parent node is missing`。 - 触发条件（全部满足即可，不需要恶意输入）： 1. 一个**长寿命进程**跑多次管线：MCP bridge（`nichlink.verify`）、Studio、任何一次跑多包的测试二进制——`build_method/src/identity.rs:24-45` 的注释自己点名了「桥或 Studio 会话会在一个进程里服务多个包」； 2. 两个包有**相同的相对源码路径**（`control/control.rs` 这种在脚手架宿主之间必然重合）； 3. 进程的**第一次** `prime_node_id_cache` 能读到 unit 文件。也就是说，在此之前曾有任何一次运行把 `target/nichlink/cache/units/*.tsv` 写出来——正常开发流程里的 `cargo build` / `cargo nichlink check` 就会写（`build_method/src/cache.rs:99-162`）。若 `CARGO_TARGET_DIR` 被设置，unit 目录在包之间**共享**（`build_method/src/identity_cache.rs:14-26` 与 `:88-100`），则只需「A 先跑、B 后跑」两步即可。",
+   "evidence": "1. `CACHED_NODE_IDS` 是 `static OnceLock<BTreeMap<String, (NodeId, String)>>`，**键只有相对源码路径**（`build_method/src/node_id.rs:25`、`:36`），值是某个命名空间下算出的 `NodeId`。 2. 写入侧**校验**了命名空间：`build_method/src/identity_cache.rs:58` 要求 `id == package_node_id(&relative, &kind)`（该函数用当前运行的命名空间）。但读取侧 `build_method/src/node_id.rs:37` 直接 `return Some(*id)`，**不再复核命名空间**；而 `OnceLock::set` 先到先得（`build_method/src/identity_cache.rs:64`），因此本进程里第二次以后的 `prime` 全部被丢弃——缓存内容永久是「本进程第一个 prime 命中的那个包」的。 3. 于是同一进程里服务两个包时会出现**混合命名空间的一棵树**：注册树里文件派生的 id 来自缓存（A 的命名空间），而 `cached_parent_id`/`package_root_node_id`（`build_method/src/cache.rs:186-201`）用当前运行的命名空间（B）重算父级 → 子面声明的父级在树里找不到 → `static-plan: parent node is missing`。 - 触发条件（全部满足即可，不需要恶意输入）： 1. 一个**长寿命进程**跑多次管线：MCP bridge（`xirang.verify`）、Studio、任何一次跑多包的测试二进制——`build_method/src/identity.rs:24-45` 的注释自己点名了「桥或 Studio 会话会在一个进程里服务多个包」； 2. 两个包有**相同的相对源码路径**（`control/control.rs` 这种在脚手架宿主之间必然重合）； 3. 进程的**第一次** `prime_node_id_cache` 能读到 unit 文件。也就是说，在此之前曾有任何一次运行把 `target/xirang/cache/units/*.tsv` 写出来——正常开发流程里的 `cargo build` / `cargo xirang check` 就会写（`build_method/src/cache.rs:99-162`）。若 `CARGO_TARGET_DIR` 被设置，unit 目录在包之间**共享**（`build_method/src/identity_cache.rs:14-26` 与 `:88-100`），则只需「A 先跑、B 后跑」两步即可。",
    "fix_hint": "见出处 audit-logic-hunt.md:26 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t16,队长",
@@ -1350,7 +1350,7 @@
    "file": "studio/src/studio/app/mutations.rs",
    "line": 257,
    "title": "Studio 插件写盘路径能产出解析器拒绝的锁，界面报「已选中」",
-   "evidence": "`submit_plugin` 手写锁文件格式并直接 append：记录串在 `studio/src/studio/app/mutations.rs:258` 拼成 7 字段 `{source}|{framework}|{package}|{version}|{crate_name}|{checksum}|{mode}`，`studio/src/studio/app/mutations.rs:332-333` 用 `append_line` 追加。写入前只有两道闸：整行字符串相等（`studio/src/studio/app/mutations.rs:260`）与「official 必须已在受信锁里」（`studio/src/studio/app/mutations.rs:299`）。两者都拦不住**同一身份、不同 checksum/mode** 的新行： - 整行比较要求七个字段的序列化字节完全相同，checksum 或 mode 任一不同即放行； - `contains_record` 只对 `source == \"official\"` 调用（`studio/src/studio/app/mutations.rs:299` 的 `if source == \"official\" && ...`），`user` 来源完全绕过。 - 而 `PluginCatalog::parse` 把「身份五元组 `(source, framework, package, version, crate_name)` 重复」判为**硬错误**：`core/src/registry_core/plugin/catalog/catalog.rs:192-207`（checksum/mode 不在身份元组里），内核自己的用例 `core/src/registry_core/plugin/catalog/catalog.rs:325-332` 正是用 `sha256:a` / `sha256:b` 这一对证明它会失败（`duplicates package identity`）。 - 触发路径是界面上两个可编辑字段（`plugin_field::CHECKSUM`、`plugin_field::MODE`）：同一个 user 插件改 checksum、或只按一次 Enter 把 mode 从 `extension` 切到 `replacement`，再按两次 `s`，`studio/src/studio/app/mutations.rs:333` 成功、`studio/src/studio/app/mutations.rs:347` 报 “Plugin selected”。 `.nichlink/plugins/{official,user}.lock` 是**宿主工件**。宿主的准入读它：`plugin-host/src/admission.rs:57-82` 把两份锁拼起来解析，失败即 `HostError::Policy(\"invalid plugin lock under …\")`——插件面此后完全不可用，Studio 自己的下一次 `submit_plugin` 也会在 `studio/src/studio/app/mutations.rs:265-271` 报 “invalid lock”，而界面没有任何手段修回来（只能手改文件）。写入方在**写的那一刻**没有把解析器会拒绝的输入挡掉，且报告为成功。",
+   "evidence": "`submit_plugin` 手写锁文件格式并直接 append：记录串在 `studio/src/studio/app/mutations.rs:258` 拼成 7 字段 `{source}|{framework}|{package}|{version}|{crate_name}|{checksum}|{mode}`，`studio/src/studio/app/mutations.rs:332-333` 用 `append_line` 追加。写入前只有两道闸：整行字符串相等（`studio/src/studio/app/mutations.rs:260`）与「official 必须已在受信锁里」（`studio/src/studio/app/mutations.rs:299`）。两者都拦不住**同一身份、不同 checksum/mode** 的新行： - 整行比较要求七个字段的序列化字节完全相同，checksum 或 mode 任一不同即放行； - `contains_record` 只对 `source == \"official\"` 调用（`studio/src/studio/app/mutations.rs:299` 的 `if source == \"official\" && ...`），`user` 来源完全绕过。 - 而 `PluginCatalog::parse` 把「身份五元组 `(source, framework, package, version, crate_name)` 重复」判为**硬错误**：`core/src/registry_core/plugin/catalog/catalog.rs:192-207`（checksum/mode 不在身份元组里），内核自己的用例 `core/src/registry_core/plugin/catalog/catalog.rs:325-332` 正是用 `sha256:a` / `sha256:b` 这一对证明它会失败（`duplicates package identity`）。 - 触发路径是界面上两个可编辑字段（`plugin_field::CHECKSUM`、`plugin_field::MODE`）：同一个 user 插件改 checksum、或只按一次 Enter 把 mode 从 `extension` 切到 `replacement`，再按两次 `s`，`studio/src/studio/app/mutations.rs:333` 成功、`studio/src/studio/app/mutations.rs:347` 报 “Plugin selected”。 `.xirang/plugins/{official,user}.lock` 是**宿主工件**。宿主的准入读它：`plugin-host/src/admission.rs:57-82` 把两份锁拼起来解析，失败即 `HostError::Policy(\"invalid plugin lock under …\")`——插件面此后完全不可用，Studio 自己的下一次 `submit_plugin` 也会在 `studio/src/studio/app/mutations.rs:265-271` 报 “invalid lock”，而界面没有任何手段修回来（只能手改文件）。写入方在**写的那一刻**没有把解析器会拒绝的输入挡掉，且报告为成功。",
    "fix_hint": "把「追加一条记录」交回内核唯一的解析/校验入口——例如新增 `PluginCatalog::push_record`/`append_record`，内部先跑 `parse` 的同一套身份检查（复用 `accounts_for` 的身份五元组），或写入前先 `PluginCatalog::parse(format!(\"{existing}{record}\\n\"))` 并要求 `Ok`；`submit_plugin` 只组合候选串、不再自己决定什么是合法锁。",
    "verify_status": "confirmed",
    "verifier": "t11,t16,队长",
@@ -1441,8 +1441,8 @@
    "file": "core/src/registry_core/plugin/catalog/catalog.rs",
    "line": 126,
    "title": "插件锁 schema 门禁：按行序生效、对空锁不生效、表头拼错即静默关闭",
-   "evidence": "schema 校验写在“处理一条记录”的分支里： ```text if let Some(value) = line.strip_prefix(\"# nichlink-schema=\") { schema = Some(value.trim()); continue; } if line.starts_with('#') { continue; } if let Some(version) = schema && !schema_matches(version) { return Err(...); } ``` 因此：①只有注释与表头、没有任何记录的锁 → 循环体永不走到校验 → `Ok`（空目录），与函数文档“refusing unknown schemas”（`:120`）不符；②表头写在记录**之后**时，前面的记录在 `schema == None` 下解析 → 旧/新 schema 的记录被当作本版本可读；③同一文件里第二行 `# nichlink-schema=` 会静默覆盖第一行（此处没有重复键拒绝，而同一模块的 `PluginRecord` 与 `graft.plan` 都拒绝重复）。 schema 是身份/命名空间的版本闸门，它的全部意义是“读不懂就拒绝”（`core/src/registry_core/plugin/catalog/catalog.rs:103-114` 注释）。按行序生效意味着一个乱序或被裁剪过的锁文件能绕过它，且方向是**放行**（读到本不兼容的语义），不是拒绝。",
-   "fix_hint": "门禁判定改为「结构化读取」：只认 `# nichlink-schema vN` 的规范拼法并拒绝其它写法；t16 实测四形态：少 `=` → `Ok(1)` 静默关闭、空锁 → 不检查、表头在记录之后 → 不检查。",
+   "evidence": "schema 校验写在“处理一条记录”的分支里： ```text if let Some(value) = line.strip_prefix(\"# xirang-schema=\") { schema = Some(value.trim()); continue; } if line.starts_with('#') { continue; } if let Some(version) = schema && !schema_matches(version) { return Err(...); } ``` 因此：①只有注释与表头、没有任何记录的锁 → 循环体永不走到校验 → `Ok`（空目录），与函数文档“refusing unknown schemas”（`:120`）不符；②表头写在记录**之后**时，前面的记录在 `schema == None` 下解析 → 旧/新 schema 的记录被当作本版本可读；③同一文件里第二行 `# xirang-schema=` 会静默覆盖第一行（此处没有重复键拒绝，而同一模块的 `PluginRecord` 与 `graft.plan` 都拒绝重复）。 schema 是身份/命名空间的版本闸门，它的全部意义是“读不懂就拒绝”（`core/src/registry_core/plugin/catalog/catalog.rs:103-114` 注释）。按行序生效意味着一个乱序或被裁剪过的锁文件能绕过它，且方向是**放行**（读到本不兼容的语义），不是拒绝。",
+   "fix_hint": "门禁判定改为「结构化读取」：只认 `# xirang-schema vN` 的规范拼法并拒绝其它写法；t16 实测四形态：少 `=` → `Ok(1)` 静默关闭、空锁 → 不检查、表头在记录之后 → 不检查。",
    "verify_status": "confirmed",
    "verifier": "t16,t9",
    "batch": "B4-MAJOR 逻辑与实现缺陷",
@@ -1525,7 +1525,7 @@
    "file": "run_method/src/authoring/manifest/face/face.rs",
    "line": 140,
    "title": "`flow_provider` 编辑入口缺内核已有的嵌套守卫 → 极短输入即可 abort",
-   "evidence": "同一个校验存在两份：内核那份先量嵌套再 `syn::parse_str`，执行面这份直接 `syn::parse_str`。`syn` 是递归下降且没有自己的深度守卫，栈溢出**不是可捕获的 panic**，因此这一支的失败不是\"少一条诊断\"，而是进程 abort。而且顺序上执行面的这一支先跑：`edit()` 在 `render_source()` 之前执行，而带守卫的 `render_flow_provider` 只在渲染时被调用（`run_method/src/authoring/manifest/face/render.rs:110`），所以守卫没有机会说话。 **判据（实测）** 我用工作区自己的 `syn` rlib（debug 构建，即编辑器/MCP 调试会话实际链接的那份）构造了最小复现，测的是 `run_method/src/authoring/manifest/face/face.rs:141` 这一行的调用本身（探针代码与二进制在 `/tmp/nichlink-probe-surfaces/`，只读工作区、未改工作区任何文件）： - 输入形如 `A<A<…>>`（嵌套泛型路径）。8 MiB 栈：深度 200（601 字节）→ 正常返回；深度 300（901 字节）→ `fatal runtime error: stack overflow, aborting`，退出码 134。 - 256 KiB 栈：深度 100（301 字节）即 abort。 - 结论：阈值是\"几百字节\"量级，与内核注释里记的 542 字节同阶；一份手写或代理生成的畸形 `flow_provider` 就能让进程死掉，而不是拿到一条 `Err`。 - 反面（说明这不是\"整条链都没守\"）：同一条值在渲染侧是安全的，`run_method/src/authoring/manifest/face/render.rs:110` 调的是内核那个带守卫的入口；`flow` 字段也安全，它走内核的 `parse_flow_value`（`core/src/registry_core/authoring/parse/flow.rs:83`），全程不调 `syn`。",
+   "evidence": "同一个校验存在两份：内核那份先量嵌套再 `syn::parse_str`，执行面这份直接 `syn::parse_str`。`syn` 是递归下降且没有自己的深度守卫，栈溢出**不是可捕获的 panic**，因此这一支的失败不是\"少一条诊断\"，而是进程 abort。而且顺序上执行面的这一支先跑：`edit()` 在 `render_source()` 之前执行，而带守卫的 `render_flow_provider` 只在渲染时被调用（`run_method/src/authoring/manifest/face/render.rs:110`），所以守卫没有机会说话。 **判据（实测）** 我用工作区自己的 `syn` rlib（debug 构建，即编辑器/MCP 调试会话实际链接的那份）构造了最小复现，测的是 `run_method/src/authoring/manifest/face/face.rs:141` 这一行的调用本身（探针代码与二进制在 `/tmp/xirang-probe-surfaces/`，只读工作区、未改工作区任何文件）： - 输入形如 `A<A<…>>`（嵌套泛型路径）。8 MiB 栈：深度 200（601 字节）→ 正常返回；深度 300（901 字节）→ `fatal runtime error: stack overflow, aborting`，退出码 134。 - 256 KiB 栈：深度 100（301 字节）即 abort。 - 结论：阈值是\"几百字节\"量级，与内核注释里记的 542 字节同阶；一份手写或代理生成的畸形 `flow_provider` 就能让进程死掉，而不是拿到一条 `Err`。 - 反面（说明这不是\"整条链都没守\"）：同一条值在渲染侧是安全的，`run_method/src/authoring/manifest/face/render.rs:110` 调的是内核那个带守卫的入口；`flow` 字段也安全，它走内核的 `parse_flow_value`（`core/src/registry_core/authoring/parse/flow.rs:83`），全程不调 `syn`。",
    "fix_hint": "两段修法：①把内核 `guard_nesting` 接到 `run_method/src/authoring/manifest/face/face.rs:140` 的 `syn::parse_str::<syn::Path>` 之前，并把公开 API 里「按调用方预算递归」改成受本模块上界约束；②明确「栈是调用方的责任」——t16 实测：100 层 / 301 B 的**嵌套泛型**输入下 `guard_nesting` 返回 `Ok(())`，无守卫的 syn 在 256 KiB 栈上**仍然 abort**（同长度 100 层 `::` 链可正常解析），因此必须在固定栈线程上跑解析，或给 syn 调用点包一层显式栈预算。只接守卫不闭合。",
    "verify_status": "partial",
    "verifier": "t10,t16,t9",
@@ -1959,7 +1959,7 @@
    "file": "build_method/src/face_view.rs",
    "line": 211,
    "title": "`face_views` 静默丢弃解析失败的注册面文件，并把子面改挂根（打印运行期从未有过的路径）",
-   "evidence": "一个面文件只要**不是恰好一个可解析的注册面**（例如被追加了第二个宏调用、宏体写坏），`parse_face` 返回 `Err`（`core/src/registry_core/syntax/face.rs:175-183`），`parsed_face` 把它变成 `None`，`face_views` 就把这个文件**当成没有面**跳过——不计数、不诊断。它的子面因此解析不到父级，在 `logical_path` 里回退成 `root/<slot>`。于是「这个包声明了什么」这个问题，构建与桥给出**不同规模的答案，且桥的那份带有一条运行期从未存在过的逻辑路径**。 - 触发条件：包内任意一个注册面文件解析失败（最常见：两处宏调用、字段写坏、缺 `kind`）。 - 最小复现（实测）： ```sh P=/tmp/nichprobe/pkg           # LH-03 的同一个 fixture printf '\\npub struct Twin;\\ncrate::root_object! {\\n  kind: Twin,\\n  needs_registry: false,\\n  registry_name: \"twin\",\\n  parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\\n}\\n' >> $P/src/control/control.rs # 构建侧（报错） cd $P && /home/nich/Moirai_N3/nichlink/target/debug/cargo-nichlink nichlink check # 视图侧（不报错、少一个面、子面改挂根） python3 /tmp/nichprobe/probe.py nichlink.registry '{}' $P ``` 实测： ```text # check: phase=face-syntax source=control/control.rs:43（探针包内相对路径，探针包在 /tmp/nichprobe/pkg；工作树里两个同名候选文件分别只有 32/39 行，此锚点不对应其中任何一个） `-- expected one registration face in this file #        (另加两条 static plan: parent declaration cannot be resolved) # nichlink.registry: namespace probe-host faces 2 root/button      Button  examples/control-button/src/control/object/button/button.rs  371236fe8d53731db5ab0b9db8dfd46c  parent-unresolved root/slider      Slider  examples/control-button/src/control/object/slider/slider.rs  8ebd5ccbb6b632c4752546941068f3b3  parent-unresolved ``` 即：`Control` 面整个消失、`root/control/button` 退化成 `root/button`，回复里没有任何一句说「有文件解析不了」。",
+   "evidence": "一个面文件只要**不是恰好一个可解析的注册面**（例如被追加了第二个宏调用、宏体写坏），`parse_face` 返回 `Err`（`core/src/registry_core/syntax/face.rs:175-183`），`parsed_face` 把它变成 `None`，`face_views` 就把这个文件**当成没有面**跳过——不计数、不诊断。它的子面因此解析不到父级，在 `logical_path` 里回退成 `root/<slot>`。于是「这个包声明了什么」这个问题，构建与桥给出**不同规模的答案，且桥的那份带有一条运行期从未存在过的逻辑路径**。 - 触发条件：包内任意一个注册面文件解析失败（最常见：两处宏调用、字段写坏、缺 `kind`）。 - 最小复现（实测）： ```sh P=/tmp/nichprobe/pkg           # LH-03 的同一个 fixture printf '\\npub struct Twin;\\ncrate::root_object! {\\n  kind: Twin,\\n  needs_registry: false,\\n  registry_name: \"twin\",\\n  parent: crate::root_node_id(env!(\"CARGO_PKG_NAME\")),\\n}\\n' >> $P/src/control/control.rs # 构建侧（报错） cd $P && /home/nich/Moirai_N3/nichlink/target/debug/cargo-xirang xirang check # 视图侧（不报错、少一个面、子面改挂根） python3 /tmp/nichprobe/probe.py xirang.registry '{}' $P ``` 实测： ```text # check: phase=face-syntax source=control/control.rs:43（探针包内相对路径，探针包在 /tmp/nichprobe/pkg；工作树里两个同名候选文件分别只有 32/39 行，此锚点不对应其中任何一个） `-- expected one registration face in this file #        (另加两条 static plan: parent declaration cannot be resolved) # xirang.registry: namespace probe-host faces 2 root/button      Button  examples/control-button/src/control/object/button/button.rs  371236fe8d53731db5ab0b9db8dfd46c  parent-unresolved root/slider      Slider  examples/control-button/src/control/object/slider/slider.rs  8ebd5ccbb6b632c4752546941068f3b3  parent-unresolved ``` 即：`Control` 面整个消失、`root/control/button` 退化成 `root/button`，回复里没有任何一句说「有文件解析不了」。",
    "fix_hint": "见出处 audit-logic-hunt.md:91 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t16",
@@ -2024,8 +2024,8 @@
    "category": "假实现",
    "file": "mcp/src/diff.rs",
    "line": 150,
-   "title": "`diff records:true` 只在「身份在树里」那一支查「是否被声明」→ 与 `nichlink.grafts` 结论互相矛盾",
-   "evidence": "同一条 graft 记录，两个 MCP 工具给出**互相矛盾的结论**：`nichlink.diff records:true` 把它算进 `re-identified` 或 `stale` 并报 `undeclared 0`；`nichlink.grafts` 对同一份记录报 `[NOT declared by the host entry]` 与 `unkept plans 1: the release prunes these slots, so the records can never take effect`。前者是「身份漂移，修一下就好」，后者是「这条记录永远不会生效（发布剪枝）」——两句话的行动含义相反，而 `undeclared 0` 是错的。 - 触发条件：一条记录的身份不在树里（典型的「槽位没动、身份换了」）且宿主入口没有用**字符串**切口点名该路径时，即命中。类型化切口（`cut(crate::…::NODE_ID)`）在身份缺席时无法解析模块（`build_method/src/graft_view/plan_rows.rs:152-155` 只在身份命中时取 `module`），因此这种记录几乎必然落在这个分支——正是本项目 scaffold 生成的宿主入口的写法（`examples/control-button/src/lib.rs` 的 typed `cut(...)`）。 - 最小复现（实测，只有一条 `moved_identity` 记录，其余删掉）： ```sh P=/tmp/nichprobe/pkg rm -rf $P/.nichlink/external-grafts mkdir -p $P/.nichlink/external-grafts/moved_identity printf 'version=1\\ntarget=00000000000000000000000000000000\\ntarget_path=root/control/button\\ngraft=button_fast\\nfull=false\\n' \\ > $P/.nichlink/external-grafts/moved_identity/graft.plan python3 /tmp/nichprobe/probe.py nichlink.diff     '{\"records\":true}' $P python3 /tmp/nichprobe/probe.py nichlink.grafts   '{}'               $P ``` 实测： ```text # nichlink.diff records:true records 1 (external graft plans) ok 0  undeclared 0  stale 0  re-identified 1  unreadable 0 re-identified: ~ moved_identity 00000000000000000000000000000000 -> 371236fe8d53731db5ab0b9db8dfd46c  (root/control/button) # nichlink.grafts plans 1 moved_identity: target=root/control/button graft=button_fast full=false [NOT declared by the host entry] unkept …",
+   "title": "`diff records:true` 只在「身份在树里」那一支查「是否被声明」→ 与 `xirang.grafts` 结论互相矛盾",
+   "evidence": "同一条 graft 记录，两个 MCP 工具给出**互相矛盾的结论**：`xirang.diff records:true` 把它算进 `re-identified` 或 `stale` 并报 `undeclared 0`；`xirang.grafts` 对同一份记录报 `[NOT declared by the host entry]` 与 `unkept plans 1: the release prunes these slots, so the records can never take effect`。前者是「身份漂移，修一下就好」，后者是「这条记录永远不会生效（发布剪枝）」——两句话的行动含义相反，而 `undeclared 0` 是错的。 - 触发条件：一条记录的身份不在树里（典型的「槽位没动、身份换了」）且宿主入口没有用**字符串**切口点名该路径时，即命中。类型化切口（`cut(crate::…::NODE_ID)`）在身份缺席时无法解析模块（`build_method/src/graft_view/plan_rows.rs:152-155` 只在身份命中时取 `module`），因此这种记录几乎必然落在这个分支——正是本项目 scaffold 生成的宿主入口的写法（`examples/control-button/src/lib.rs` 的 typed `cut(...)`）。 - 最小复现（实测，只有一条 `moved_identity` 记录，其余删掉）： ```sh P=/tmp/nichprobe/pkg rm -rf $P/.xirang/external-grafts mkdir -p $P/.xirang/external-grafts/moved_identity printf 'version=1\\ntarget=00000000000000000000000000000000\\ntarget_path=root/control/button\\ngraft=button_fast\\nfull=false\\n' \\ > $P/.xirang/external-grafts/moved_identity/graft.plan python3 /tmp/nichprobe/probe.py xirang.diff     '{\"records\":true}' $P python3 /tmp/nichprobe/probe.py xirang.grafts   '{}'               $P ``` 实测： ```text # xirang.diff records:true records 1 (external graft plans) ok 0  undeclared 0  stale 0  re-identified 1  unreadable 0 re-identified: ~ moved_identity 00000000000000000000000000000000 -> 371236fe8d53731db5ab0b9db8dfd46c  (root/control/button) # xirang.grafts plans 1 moved_identity: target=root/control/button graft=button_fast full=false [NOT declared by the host entry] unkept …",
    "fix_hint": "见出处 audit-logic-hunt.md:127 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t12,t16",
@@ -2095,8 +2095,8 @@
    "category": "命名",
    "file": "mcp/src/verify.rs",
    "line": 43,
-   "title": "`NICH_LINK_NAMESPACE` 下 `verify` 用 Cargo 名发布、`diff`/`search` 用覆盖名读 → 每个面都被自信地报成 re-identified",
-   "evidence": "`verify` 把 `nichlink_build_method::package_name(&manifest)`（Cargo 的包名）交给 `check_for`， 于是本次运行发布的 `pruning_manifest.tsv` 行 id 是让 Cargo 名算的 （`build_method/src/manifests.rs:181` → `registry_identity::package_node_id`，运行内生效的是 `check_for` 设下的线程局部名）。而 `diff`/`search` 的源码侧走 `crate::registry::namespace(root)`， 它**先读 `NICH_LINK_NAMESPACE`**。两者不一致时，`TreeDelta::by_source` 仍按源码路径命中 （路径与命名空间无关），于是 `status()` 对**每一个**面走 `Reidentified(previous)` 分支： `diff` 报 `added 0 gone 0 reidentified N`，`search` 给每条命中标 `re-identified`，而 `build_output_is_current` 说 `build current`（指纹只散列路径与内容，与命名空间无关）——一个「刚校验过」 的树被报告成每个身份都变了。 `[代码]`：`mcp/src/verify.rs:43` vs `mcp/src/registry.rs:59-61`；`collect_pruning_symbols` 用进程/线程命名空间 （`build_method/src/manifests.rs:181-184`）、`face_views` 用传入的 `package` 参数 （`build_method/src/face_view.rs:126-174,211-247`）。代码里已登记的分歧 `S12` 只说了「桥与 CLI 不一致」， 没说「桥自己内部 `verify` 与 `diff` 互相打脸」。",
+   "title": "`XIRANG_NAMESPACE` 下 `verify` 用 Cargo 名发布、`diff`/`search` 用覆盖名读 → 每个面都被自信地报成 re-identified",
+   "evidence": "`verify` 把 `xirang_build_method::package_name(&manifest)`（Cargo 的包名）交给 `check_for`， 于是本次运行发布的 `pruning_manifest.tsv` 行 id 是让 Cargo 名算的 （`build_method/src/manifests.rs:181` → `registry_identity::package_node_id`，运行内生效的是 `check_for` 设下的线程局部名）。而 `diff`/`search` 的源码侧走 `crate::registry::namespace(root)`， 它**先读 `XIRANG_NAMESPACE`**。两者不一致时，`TreeDelta::by_source` 仍按源码路径命中 （路径与命名空间无关），于是 `status()` 对**每一个**面走 `Reidentified(previous)` 分支： `diff` 报 `added 0 gone 0 reidentified N`，`search` 给每条命中标 `re-identified`，而 `build_output_is_current` 说 `build current`（指纹只散列路径与内容，与命名空间无关）——一个「刚校验过」 的树被报告成每个身份都变了。 `[代码]`：`mcp/src/verify.rs:43` vs `mcp/src/registry.rs:59-61`；`collect_pruning_symbols` 用进程/线程命名空间 （`build_method/src/manifests.rs:181-184`）、`face_views` 用传入的 `package` 参数 （`build_method/src/face_view.rs:126-174,211-247`）。代码里已登记的分歧 `S12` 只说了「桥与 CLI 不一致」， 没说「桥自己内部 `verify` 与 `diff` 互相打脸」。",
    "fix_hint": "`verify` 用与 `diff` 同一个命名空间（`crate::registry::namespace(root)`）作为 `check_for` 的 `package` 参数；或在两者不一致时明确拒绝并说明该设哪一个（与 `mcp/src/registry.rs:74-79` 对未命名包的处理同风格）。",
    "verify_status": "confirmed",
    "verifier": "t12,t16",
@@ -2169,7 +2169,7 @@
    "file": "run_method/src/macros/face_registration.rs",
    "line": 9,
    "title": "`linked` collector 分支什么都不提交，模块文档却说它决定进哪个链接段",
-   "evidence": "三个分支里只有 `debug` 会真的向链接段提交；`linked`（外部面省略 `collector:` 时的默认）展开为空，`development` 也展开为空。于是\"collector 决定注册进哪个链接段\"这句话对三分之二的取值不成立，而外部面的默认取值正是那个什么都不做的 `linked`。作者看到 `collector: linked` 这个名字、再读模块文档，会得出\"已经进了链接段\"的错误结论。 - `debug_method/src/collector.rs:8`～`debug_method/src/collector.rs:21` 的 `registrations!` 在非 debug 构建下返回空迭代器，与\"`debug` 才收集\"这条一致；但没有任何地方说明 `linked` 并不提交。 - 文档与实现的矛盾在同一份文件里：`run_method/src/macros/face_registration.rs:9` 的承诺 vs `run_method/src/macros/face_registration.rs:168` 的空展开，中间没有\"仅 `debug` 会提交\"的限定。 - 该分支的注释只写了\"收集归 nichlink-debug 所有\"（`run_method/src/macros/face_registration.rs:169`），既没解释为什么 `linked` 什么都不做，也没有把注意力引到\"这个名字表达的是'由别处收集'\"。",
+   "evidence": "三个分支里只有 `debug` 会真的向链接段提交；`linked`（外部面省略 `collector:` 时的默认）展开为空，`development` 也展开为空。于是\"collector 决定注册进哪个链接段\"这句话对三分之二的取值不成立，而外部面的默认取值正是那个什么都不做的 `linked`。作者看到 `collector: linked` 这个名字、再读模块文档，会得出\"已经进了链接段\"的错误结论。 - `debug_method/src/collector.rs:8`～`debug_method/src/collector.rs:21` 的 `registrations!` 在非 debug 构建下返回空迭代器，与\"`debug` 才收集\"这条一致；但没有任何地方说明 `linked` 并不提交。 - 文档与实现的矛盾在同一份文件里：`run_method/src/macros/face_registration.rs:9` 的承诺 vs `run_method/src/macros/face_registration.rs:168` 的空展开，中间没有\"仅 `debug` 会提交\"的限定。 - 该分支的注释只写了\"收集归 xirang-debug 所有\"（`run_method/src/macros/face_registration.rs:169`），既没解释为什么 `linked` 什么都不做，也没有把注意力引到\"这个名字表达的是'由别处收集'\"。",
    "fix_hint": "二选一：(a) 若 `linked` 只是\"不收集\"的别名，改名（例如 `off` / `none`）并在模块文档里列出每个取值的真实效果；(b) 若 `linked` 本应提交到某个链接段，就在这一支里实现它。无论哪种，`collector: $collector:ident` 的取值集合都应当是编译期可枚举、可拒绝非法名的（现在是任意 ident，写错名字会掉进\"没有匹配 arm\"的裸 marco 错误）。",
    "verify_status": "confirmed",
    "verifier": "t10,t16",
@@ -2390,7 +2390,7 @@
    "file": "run_method/src/authoring/parse/parse.rs",
    "line": 31,
    "title": "authoring 的 source 回落链硬编码本仓库夹具目录名，宿主同名目录会被截断",
-   "evidence": "`source_path_from_file` 优先相对 `source_root()` 求路径；求不出来时，它会在**绝对路径**里寻找名为这四个之一的路径分量，并把该分量之后的全部内容当成相对路径返回。 - 这四个名字是仓库自己的夹具/演示模块名（`grep -rn '\"engine\"' run_method/src` 只命中这里；`trimmed_core` 同样只在这里）。库代码里的这个启发式对任何其它宿主都是错的：`/data/control/myrepo/src/foo/foo.rs` 会被读成 `myrepo/src/foo/foo.rs`（正确应是 `foo/foo.rs`），而这个值就是 `FaceManifest.values[\"source\"]`，直接决定身份输入与清单里的 `source` 列（`core/src/registry_core/identity/path_text.rs:123` 的 `manifest_relative_source` 是为这件事准备的、不依赖硬编码的规则）。 - 触发条件是\"文件不在 `source_root()` 之下\"，而这正是 Studio 打开一个非标准布局工程、或 `NICH_LINK_PACKAGE_ROOT` 指向别处时的情形，不是测试专属路径。",
+   "evidence": "`source_path_from_file` 优先相对 `source_root()` 求路径；求不出来时，它会在**绝对路径**里寻找名为这四个之一的路径分量，并把该分量之后的全部内容当成相对路径返回。 - 这四个名字是仓库自己的夹具/演示模块名（`grep -rn '\"engine\"' run_method/src` 只命中这里；`trimmed_core` 同样只在这里）。库代码里的这个启发式对任何其它宿主都是错的：`/data/control/myrepo/src/foo/foo.rs` 会被读成 `myrepo/src/foo/foo.rs`（正确应是 `foo/foo.rs`），而这个值就是 `FaceManifest.values[\"source\"]`，直接决定身份输入与清单里的 `source` 列（`core/src/registry_core/identity/path_text.rs:123` 的 `manifest_relative_source` 是为这件事准备的、不依赖硬编码的规则）。 - 触发条件是\"文件不在 `source_root()` 之下\"，而这正是 Studio 打开一个非标准布局工程、或 `XIRANG_PACKAGE_ROOT` 指向别处时的情形，不是测试专属路径。",
    "fix_hint": "删掉这份名字清单：路径不在 `source_root()` 下时应当报错（或按 `manifest_relative_source` 的规则折叠 `src/` 前缀），而不是猜一个分量。若确有历史夹具需要兼容，把它作为参数/配置传入，不要写进库的通用路径。",
    "verify_status": "confirmed",
    "verifier": "t10,t16",
@@ -2456,7 +2456,7 @@
    "file": "mcp/src/mir.rs",
    "line": 73,
    "title": "MIR `jsonl:true` 可给任意可读文件盖上本包快照表头（来源可证 → 来源可造）",
-   "evidence": "`nichlink.mir` 只要给的路径不以 `.jsonl` 结尾，就用「不是调用的行就不是调用」的宽松文本解析器读；对一个完全不是 MIR 转储的文件，它返回一张**空**图并判 `isError:false`。此时 `jsonl:true` 会把这台空图**盖上本包的命名空间与 root** 输出成一份合法 artifact。快照表头正是这套工具链里「这份 artifact 描述哪棵树」的**唯一凭据**（同文件的 `delta_report`、`unified`、`mcp/src/trace.rs` 的身份校验都靠它），而它可以由任意文件凭空产生。 - 触发条件：`path` 指向包内任意可读的非 `.jsonl` 文件（工具自述里 `path` 是必填，扩展名决定解析器，这一点没有别的校验）。 - 最小复现（实测）： ```sh P=/tmp/nichprobe/pkg printf 'This is not a MIR dump.\\nJust prose.\\n' > $P/notes.txt python3 /tmp/nichprobe/probe.py nichlink.mir '{\"path\":\"notes.txt\"}'              $P python3 /tmp/nichprobe/probe.py nichlink.mir '{\"path\":\"notes.txt\",\"jsonl\":true}' $P ``` 实测输出（原样）： ```text file /tmp/nichprobe/pkg/notes.txt functions 0 calls 0 locals 0 calls: locals: {\"kind\":\"snapshot\",\"namespace\":\"probe-host\",\"root\":\"cc05a41d58a3a71153bfcd58b7a05e9d\"} ``` 把它写回 `fabricated.jsonl` 再读，回复是 `functions 0 calls 0 locals 0` + `snapshot namespace=probe-host root=cc05a41d…`——一份「本包、零调用」的可信快照。 模块文档自己说「让写出的 artifact 成为快照的是本工具盖进去的表头」，并要求「外来快照按名字拒绝」。表头若能与内容无关地生成，「按名字拒绝」这道门守的是**标签**而不是**事实**：一份在 A 包生成、内容来自 B 包的快照，照样会被当成本包快照接受（并把 delta 的另一侧判成「不同树」或「同一树」）。这与 `confirmed_snapshot` 注释里「re-stamping would turn a foreign artifact into one that claims to be this package's」的意图正好相反——这里不需要 re-stamp，直接造一份新的。",
+   "evidence": "`xirang.mir` 只要给的路径不以 `.jsonl` 结尾，就用「不是调用的行就不是调用」的宽松文本解析器读；对一个完全不是 MIR 转储的文件，它返回一张**空**图并判 `isError:false`。此时 `jsonl:true` 会把这台空图**盖上本包的命名空间与 root** 输出成一份合法 artifact。快照表头正是这套工具链里「这份 artifact 描述哪棵树」的**唯一凭据**（同文件的 `delta_report`、`unified`、`mcp/src/trace.rs` 的身份校验都靠它），而它可以由任意文件凭空产生。 - 触发条件：`path` 指向包内任意可读的非 `.jsonl` 文件（工具自述里 `path` 是必填，扩展名决定解析器，这一点没有别的校验）。 - 最小复现（实测）： ```sh P=/tmp/nichprobe/pkg printf 'This is not a MIR dump.\\nJust prose.\\n' > $P/notes.txt python3 /tmp/nichprobe/probe.py xirang.mir '{\"path\":\"notes.txt\"}'              $P python3 /tmp/nichprobe/probe.py xirang.mir '{\"path\":\"notes.txt\",\"jsonl\":true}' $P ``` 实测输出（原样）： ```text file /tmp/nichprobe/pkg/notes.txt functions 0 calls 0 locals 0 calls: locals: {\"kind\":\"snapshot\",\"namespace\":\"probe-host\",\"root\":\"cc05a41d58a3a71153bfcd58b7a05e9d\"} ``` 把它写回 `fabricated.jsonl` 再读，回复是 `functions 0 calls 0 locals 0` + `snapshot namespace=probe-host root=cc05a41d…`——一份「本包、零调用」的可信快照。 模块文档自己说「让写出的 artifact 成为快照的是本工具盖进去的表头」，并要求「外来快照按名字拒绝」。表头若能与内容无关地生成，「按名字拒绝」这道门守的是**标签**而不是**事实**：一份在 A 包生成、内容来自 B 包的快照，照样会被当成本包快照接受（并把 delta 的另一侧判成「不同树」或「同一树」）。这与 `confirmed_snapshot` 注释里「re-stamping would turn a foreign artifact into one that claims to be this package's」的意图正好相反——这里不需要 re-stamp，直接造一份新的。",
    "fix_hint": "见出处 audit-logic-hunt.md:164 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t16",
@@ -2515,7 +2515,7 @@
    "file": "mcp/src/preview.rs",
    "line": 37,
    "title": "预览副本跟随目录符号链接走出包根且无环/深度守卫",
-   "evidence": "`nichlink.apply`（默认预览）把整个包复制到 `std::env::temp_dir()` 下一个临时目录。复制只按**目录项名字**过滤 `target`/`.nichlink`，对符号链接既不看解析结果、也不设深度上限： - 包内一个指向外部目录的链接 → 外部整棵树被复制进 temp（实测：错误信息点名了包外的文件）； - 一个自指链接（`ln -s . src/self`）→ 递归到路径长度上限，把同一批文件复制几十份，并且**照样成功**，回复里出现 124 个面、逻辑路径 `root/control` 重复出现多次（实测）。 - 触发条件：`nichlink.apply` 且 `apply != true`（即默认预览），包内存在目录符号链接。链接是常见工程事实（monorepo、`node_modules` 式共享目录、Windows junction）。 - 最小复现（实测）： ```sh P=/tmp/nichprobe/pkg mkdir -p /tmp/nichprobe/outside && echo secret > /tmp/nichprobe/outside/secret.txt ln -sfn /tmp/nichprobe/outside $P/src/outside_link python3 /tmp/nichprobe/probe.py nichlink.apply \\ '{\"action\":\"add\",\"parent\":\"root\",\"fields\":{\"module\":\"probe_add\",\"kind\":\"ProbeAdd\"}}' $P # 实测: cannot copy /tmp/nichprobe/pkg/src/outside_link/secret.txt: Permission denied (os error 13) #       ——包内一个链接，把包外的文件拖进了复制路径 ln -sfn . $P/src/self python3 /tmp/nichprobe/probe.py nichlink.apply \\ '{\"action\":\"add\",\"parent\":\"root\",\"fields\":{\"module\":\"probe_add\",\"kind\":\"ProbeAdd\"}}' $P # 实测: action preview ... faces 124 #         root/control  Control  self/self/self/self/control/control.rs #         root/control  Control  self/self/self/self/self/self/self/self/control/control.rs #         root/control  Control  self/self/self/self/.../control/control.rs ``` （第一次探针把 `outside/secret.txt` 设成 `chmod 000` 以把「已走出包根」变成可读的错误信息；复现时用可读文件会静默复制成功。",
+   "evidence": "`xirang.apply`（默认预览）把整个包复制到 `std::env::temp_dir()` 下一个临时目录。复制只按**目录项名字**过滤 `target`/`.xirang`，对符号链接既不看解析结果、也不设深度上限： - 包内一个指向外部目录的链接 → 外部整棵树被复制进 temp（实测：错误信息点名了包外的文件）； - 一个自指链接（`ln -s . src/self`）→ 递归到路径长度上限，把同一批文件复制几十份，并且**照样成功**，回复里出现 124 个面、逻辑路径 `root/control` 重复出现多次（实测）。 - 触发条件：`xirang.apply` 且 `apply != true`（即默认预览），包内存在目录符号链接。链接是常见工程事实（monorepo、`node_modules` 式共享目录、Windows junction）。 - 最小复现（实测）： ```sh P=/tmp/nichprobe/pkg mkdir -p /tmp/nichprobe/outside && echo secret > /tmp/nichprobe/outside/secret.txt ln -sfn /tmp/nichprobe/outside $P/src/outside_link python3 /tmp/nichprobe/probe.py xirang.apply \\ '{\"action\":\"add\",\"parent\":\"root\",\"fields\":{\"module\":\"probe_add\",\"kind\":\"ProbeAdd\"}}' $P # 实测: cannot copy /tmp/nichprobe/pkg/src/outside_link/secret.txt: Permission denied (os error 13) #       ——包内一个链接，把包外的文件拖进了复制路径 ln -sfn . $P/src/self python3 /tmp/nichprobe/probe.py xirang.apply \\ '{\"action\":\"add\",\"parent\":\"root\",\"fields\":{\"module\":\"probe_add\",\"kind\":\"ProbeAdd\"}}' $P # 实测: action preview ... faces 124 #         root/control  Control  self/self/self/self/control/control.rs #         root/control  Control  self/self/self/self/self/self/self/self/control/control.rs #         root/control  Control  self/self/self/self/.../control/control.rs ``` （第一次探针把 `outside/secret.txt` 设成 `chmod 000` 以把「已走出包根」变成可读的错误信息；复现时用可读文件会静默复制成功。",
    "fix_hint": "在复制入口对 `symlink_metadata` 判定为链接的目录选择「跳过并计入报告」，并加深度/环守卫；注意 t16 更正：外链**可读**时 `diff` 看不见该文件（两侧经链接读到同一字节），因此「换个 error 文案」不够，必须改变遍历本身。",
    "verify_status": "confirmed",
    "verifier": "t16",
@@ -2582,7 +2582,7 @@
    "file": "mcp/src/apply.rs",
    "line": 84,
    "title": "预览副本的临时路径可预测：同名既有目录会被删除重建（并留泄漏）",
-   "evidence": "`copy_package` 在复制中途失败（LH-06 的权限例子、磁盘满、路径过长）时直接带着错误返回，`apply` 的 `Err` 分支（`mcp/src/apply.rs:128-135`）根本到不了——那份**半成品包副本**留在 `std::env::temp_dir()` 里。实测留下 `/tmp/nichlink-mcp-preview-343377-0`，里面 7 个文件（含 `Cargo.toml`、`src/**`）。 - 触发条件：任何一次预览复制失败；MCP 客户端可以凭 LH-06 的链接稳定触发，反复调用即持续堆积。 - 最小复现（实测）： ```sh # 用 LH-06 的 outside_link（其目标文件不可读）触发复制失败 ls -d /tmp/nichlink-mcp-preview-*      # 实测: /tmp/nichlink-mcp-preview-343377-0 find /tmp/nichlink-mcp-preview-343377-0 -type f | wc -l   # 7 ``` `mcp/src/apply.rs:8-11` 与 `mcp/src/preview.rs:14-20` 的文档把「一次性副本」写成这个设计的安全根据；一次性意味着**无论成功失败都该消失**。同文件里已经为「失败的预览不必留下副本」写了清理（`:128-135`），说明作者知道该清，只是漏了 `copy_package` 自身失败这一支。 - 修复方向：把复制纳入同一个 `Result`-to-cleanup 结构——例如 `copy_package` 失败时自己 `remove_dir_all(destination)` 再返回 Err（destination 已构造出来，指针就在手边），或让 `apply` 用 `let work = copy_package(root).inspect_err(|_| ...)` 形式统一收尾；顺便把 `std::env::temp_dir()` 的副本前缀写进文档。",
+   "evidence": "`copy_package` 在复制中途失败（LH-06 的权限例子、磁盘满、路径过长）时直接带着错误返回，`apply` 的 `Err` 分支（`mcp/src/apply.rs:128-135`）根本到不了——那份**半成品包副本**留在 `std::env::temp_dir()` 里。实测留下 `/tmp/xirang-mcp-preview-343377-0`，里面 7 个文件（含 `Cargo.toml`、`src/**`）。 - 触发条件：任何一次预览复制失败；MCP 客户端可以凭 LH-06 的链接稳定触发，反复调用即持续堆积。 - 最小复现（实测）： ```sh # 用 LH-06 的 outside_link（其目标文件不可读）触发复制失败 ls -d /tmp/xirang-mcp-preview-*      # 实测: /tmp/xirang-mcp-preview-343377-0 find /tmp/xirang-mcp-preview-343377-0 -type f | wc -l   # 7 ``` `mcp/src/apply.rs:8-11` 与 `mcp/src/preview.rs:14-20` 的文档把「一次性副本」写成这个设计的安全根据；一次性意味着**无论成功失败都该消失**。同文件里已经为「失败的预览不必留下副本」写了清理（`:128-135`），说明作者知道该清，只是漏了 `copy_package` 自身失败这一支。 - 修复方向：把复制纳入同一个 `Result`-to-cleanup 结构——例如 `copy_package` 失败时自己 `remove_dir_all(destination)` 再返回 Err（destination 已构造出来，指针就在手边），或让 `apply` 用 `let work = copy_package(root).inspect_err(|_| ...)` 形式统一收尾；顺便把 `std::env::temp_dir()` 的副本前缀写进文档。",
    "fix_hint": "临时目录用 `tempfile` 式的不可预测名 + `Drop` 清理；t16 更正：残留缺口比总账写的更宽——`copy_package` 自身失败也会留残留（连 `remove_copy` 都到不了），清理必须覆盖复制失败这一支。",
    "verify_status": "partial",
    "verifier": "t12,t16",
@@ -2785,7 +2785,7 @@
    "file": "mcp/src/preview.rs",
    "line": 102,
    "title": "预览 diff 把每个非 UTF-8 文件报成「新增」，无上限，且每次预览复制 `.git`",
-   "evidence": "`diff_package` 先 `let after = std::fs::read_to_string(work.join(&relative)).unwrap_or_default();` （`:108`，读不出的文件变成空串），再对**项目侧**读文本：`Ok(before) if before == after => continue`、 `Ok(before) => \"~ …\"`、`Err(_) => \"+ {relative}\"`（`:109-121`）。一个**两边完全相同**的非 UTF-8 文件 两侧 `read_to_string` 都失败，于是落进 `Err(_)` 支，被报成 `+ <path>`——一次没碰过它的编辑会把它列进 「哪些文件会变」。`copy_directory` 只跳过 `target` 与 `.nichlink`（`:45-47`），因此整份 `.git` 也在副本里、也在被列举的集合里。 `[实测]` 在本检出上做只读统计：排除 `target/`、`.nichlink/` 后有 **36** 个非 UTF-8 文件， 其中 **29** 个在 `.git/` 下（另有 `.git/index`、`.codegraph/codegraph.db`、`.dsh-meow/memory.db` 等）； 即在本仓上跑一次 `nichlink.apply` 预览，回复里会出现 36 条虚假的 `+ …`。 同一脚本量出排除 `target` 的树是 46 MB（`.git` 9.9 MB），而每次预览都要复制一遍。 `mcp/src/apply_tests.rs` 的夹具全是文本文件，所以现有测试看不到这件事。 另外该 diff **没有任何上限**（`apply` 的 schema 里也没有 `limit`），与本桥其它每个答案都带界的做法相反 （`mcp/src/callgraph.rs:10-15` 的模块文档正是以「代理读不下的答案不算答案」立论）。",
+   "evidence": "`diff_package` 先 `let after = std::fs::read_to_string(work.join(&relative)).unwrap_or_default();` （`:108`，读不出的文件变成空串），再对**项目侧**读文本：`Ok(before) if before == after => continue`、 `Ok(before) => \"~ …\"`、`Err(_) => \"+ {relative}\"`（`:109-121`）。一个**两边完全相同**的非 UTF-8 文件 两侧 `read_to_string` 都失败，于是落进 `Err(_)` 支，被报成 `+ <path>`——一次没碰过它的编辑会把它列进 「哪些文件会变」。`copy_directory` 只跳过 `target` 与 `.xirang`（`:45-47`），因此整份 `.git` 也在副本里、也在被列举的集合里。 `[实测]` 在本检出上做只读统计：排除 `target/`、`.xirang/` 后有 **36** 个非 UTF-8 文件， 其中 **29** 个在 `.git/` 下（另有 `.git/index`、`.codegraph/codegraph.db`、`.dsh-meow/memory.db` 等）； 即在本仓上跑一次 `xirang.apply` 预览，回复里会出现 36 条虚假的 `+ …`。 同一脚本量出排除 `target` 的树是 46 MB（`.git` 9.9 MB），而每次预览都要复制一遍。 `mcp/src/apply_tests.rs` 的夹具全是文本文件，所以现有测试看不到这件事。 另外该 diff **没有任何上限**（`apply` 的 schema 里也没有 `limit`），与本桥其它每个答案都带界的做法相反 （`mcp/src/callgraph.rs:10-15` 的模块文档正是以「代理读不下的答案不算答案」立论）。",
    "fix_hint": "① 项目侧也读不出来时，若两侧原始字节相等就直接 `continue`，不要把「读不出」当成「新增」； 或用 `fs::read` 比字节、只有确认变化才渲染。② `copy_directory`/`collect_files` 跳过 `.git`（以及其它 VCS/工具目录）。 ③ 给 diff 加行数上限并声明出来。",
    "verify_status": "confirmed",
    "verifier": "t12,t16",
@@ -3344,7 +3344,7 @@
    "file": "run_method/src/runtime/trace/artifact/parse.rs",
    "line": 294,
    "title": "trace artifact 的字符串驻留是进程级无回收 `Box::leak`，长寿命桥可被逐次喂大",
-   "evidence": "解析 trace artifact 时，每个**新见到的**字符串都被 `Box::leak` 成 `'static` 并记进一个进程级 `static` 集合，**永不释放**。进程内的每份 artifact 都共享同一张表；`read_trace_artifact` 是公开入口，MCP 的 `nichlink.trace` / `nichlink.unified` / trace 驱动的 `nichlink.converge` 都按请求读一遍宿主指定的路径。 - 触发条件：长寿命进程 + 每次喂进「词表不同」的 artifact。CLI 一次性进程无害；MCP/Studio（本项目的设计用法）不是。 - 最小复现（实测；RSS 用 `/proc/self/status` 的 `VmRSS`）： ```sh cd /tmp/nichprobe/libleak && cargo run --offline --release ``` 实测（A 组：每轮 10 万个**新**函数名；B 组：每轮同一批名字）： ```text baseline rss_kb=2264 A round 0: rss_kb=13644 (+11380) A round 1: rss_kb=38136 (+35872) A round 2: rss_kb=44704 (+42440) A round 3: rss_kb=51264 (+49000) B round 0: rss_kb=57924 (+6660) B round 1: rss_kb=57924 (+6660) B round 2: rss_kb=57924 (+6660) B round 3: rss_kb=57924 (+6660) ``` A 组每轮单调上升约 6.5 MB/10 万字符串（artifact 本体已被 `drop`），B 组平——差值就是驻留表，而且从不回落。 `run_method/src/runtime/trace/artifact/parse.rs:289-293` 的注释把这条设计的边界写成「this leaks once per distinct string instead, **bounded by the artifact's vocabulary**」。对**单次调用**为真；对**进程**为假：真正的上界是「本进程解析过的所有 artifact 词表的并集」，没有任何淘汰、没有按 artifact 释放、没有上限。注释承诺的界与实现不符，而这条路径是外部输入（artifact 路径由调用方给）。 - 修复方向：驻留表按 artifact 生命周期回收——把 `&'static str` 换成 `Rc<str>`/`Arc<str>` 放进 artifact 自己的 arena（`TraceArtifact` 持有一个 `Bump`/`Vec<String>`，帧与局部值持索引或 `Arc`），或在 `intern` 前加「表大小上限 + 命中率衰减」的显式策略并把它写进文档；至少要把注释改成「进程级、不回收、上界是历次并集」，并把这条风险写进 `docs/threat-model.md`。",
+   "evidence": "解析 trace artifact 时，每个**新见到的**字符串都被 `Box::leak` 成 `'static` 并记进一个进程级 `static` 集合，**永不释放**。进程内的每份 artifact 都共享同一张表；`read_trace_artifact` 是公开入口，MCP 的 `xirang.trace` / `xirang.unified` / trace 驱动的 `xirang.converge` 都按请求读一遍宿主指定的路径。 - 触发条件：长寿命进程 + 每次喂进「词表不同」的 artifact。CLI 一次性进程无害；MCP/Studio（本项目的设计用法）不是。 - 最小复现（实测；RSS 用 `/proc/self/status` 的 `VmRSS`）： ```sh cd /tmp/nichprobe/libleak && cargo run --offline --release ``` 实测（A 组：每轮 10 万个**新**函数名；B 组：每轮同一批名字）： ```text baseline rss_kb=2264 A round 0: rss_kb=13644 (+11380) A round 1: rss_kb=38136 (+35872) A round 2: rss_kb=44704 (+42440) A round 3: rss_kb=51264 (+49000) B round 0: rss_kb=57924 (+6660) B round 1: rss_kb=57924 (+6660) B round 2: rss_kb=57924 (+6660) B round 3: rss_kb=57924 (+6660) ``` A 组每轮单调上升约 6.5 MB/10 万字符串（artifact 本体已被 `drop`），B 组平——差值就是驻留表，而且从不回落。 `run_method/src/runtime/trace/artifact/parse.rs:289-293` 的注释把这条设计的边界写成「this leaks once per distinct string instead, **bounded by the artifact's vocabulary**」。对**单次调用**为真；对**进程**为假：真正的上界是「本进程解析过的所有 artifact 词表的并集」，没有任何淘汰、没有按 artifact 释放、没有上限。注释承诺的界与实现不符，而这条路径是外部输入（artifact 路径由调用方给）。 - 修复方向：驻留表按 artifact 生命周期回收——把 `&'static str` 换成 `Rc<str>`/`Arc<str>` 放进 artifact 自己的 arena（`TraceArtifact` 持有一个 `Bump`/`Vec<String>`，帧与局部值持索引或 `Arc`），或在 `intern` 前加「表大小上限 + 命中率衰减」的显式策略并把它写进文档；至少要把注释改成「进程级、不回收、上界是历次并集」，并把这条风险写进 `docs/threat-model.md`。",
    "fix_hint": "见出处 audit-logic-hunt.md:197 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t16",
@@ -3700,7 +3700,7 @@
    "file": "run_method/src/authoring/manifest/face/face.rs",
    "line": 144,
    "title": "`edit()` 里的恒等分支",
-   "evidence": "`let key = if field == \"admission\" { \"admission\" } else { field };` 与 `field` 完全等价，没有任何注释解释为什么要有这一步。**判据** `field` 就是 `&str`，两个分支值相同；这个分支只增加读者停顿（读到这里会去找 admission 与其它字段的差异，而差异不存在——真正的差异在上面的校验分支里）。**最小修复方向** 删掉，直接用 `field`；如果它曾是\"白名单键归一化\"的遗留，把那件事写成一条测试。**复核手段** 删掉后跑 `cargo test -p nichlink-run-method --offline`（authoring 面现有测试覆盖两条入口的字段应用）。 ---",
+   "evidence": "`let key = if field == \"admission\" { \"admission\" } else { field };` 与 `field` 完全等价，没有任何注释解释为什么要有这一步。**判据** `field` 就是 `&str`，两个分支值相同；这个分支只增加读者停顿（读到这里会去找 admission 与其它字段的差异，而差异不存在——真正的差异在上面的校验分支里）。**最小修复方向** 删掉，直接用 `field`；如果它曾是\"白名单键归一化\"的遗留，把那件事写成一条测试。**复核手段** 删掉后跑 `cargo test -p xirang-run-method --offline`（authoring 面现有测试覆盖两条入口的字段应用）。 ---",
    "fix_hint": "见出处 audit-lane-surfaces.md:268 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t10",
@@ -4117,8 +4117,8 @@
    "category": "工具",
    "file": "mcp/src/tools.rs",
    "line": 77,
-   "title": "`nichlink.callgraph` 的参数契约",
-   "evidence": "catalog 给 `nichlink.callgraph` 声明的 `inputSchema.properties` 只有 `function` / `path` / `root`， 描述是「Show direct static callers and callees for one function.」；实现却读 `limit` （`value.clamp(1, 50)`，默认 5 个定义），并在截断行里主动叫调用方 `… +N more definitions (raise \\`limit\\` or pass \\`path\\`)`。按 `inputSchema` 校验参数的 MCP 客户端 无法发出这个参数，于是那句提示是**不可执行**的；反过来，一个未声明的键会静默改变答案长度。 `mcp/src/tools_tests.rs:40-59` 逐项断言 explain/diff/trace/impact/grafts 的窄化参数**必须**被声明， 唯独没覆盖 `callgraph` 的 `limit`——这正是一条「空转的名单钉子」。",
+   "title": "`xirang.callgraph` 的参数契约",
+   "evidence": "catalog 给 `xirang.callgraph` 声明的 `inputSchema.properties` 只有 `function` / `path` / `root`， 描述是「Show direct static callers and callees for one function.」；实现却读 `limit` （`value.clamp(1, 50)`，默认 5 个定义），并在截断行里主动叫调用方 `… +N more definitions (raise \\`limit\\` or pass \\`path\\`)`。按 `inputSchema` 校验参数的 MCP 客户端 无法发出这个参数，于是那句提示是**不可执行**的；反过来，一个未声明的键会静默改变答案长度。 `mcp/src/tools_tests.rs:40-59` 逐项断言 explain/diff/trace/impact/grafts 的窄化参数**必须**被声明， 唯独没覆盖 `callgraph` 的 `limit`——这正是一条「空转的名单钉子」。",
    "fix_hint": "在 catalog 里补 `\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50}`，描述里也点名它； 或删掉 `limit` 读取（只留 `path`）。两条都要顺手把 `callgraph` 加进 `the_evidence_tools_are_advertised_…` 那张表，让「声明了才准读」变成一条可执行规则。",
    "verify_status": "confirmed",
    "verifier": "t12",
@@ -4179,7 +4179,7 @@
    "file": "cli/src/lib.rs",
    "line": 139,
    "title": "CLI `--help` 语义",
-   "evidence": "`nichlink check --help` / `explain` / `grafts` / `snippets` → 报错、stderr、退出 1； `nichlink studio --help` → 打印完整 `USAGE`、退出 0；`nichlink new --help` → 拒绝并给一行 usage； `nichlink build --help` → 先做注册校验（在不含 `Cargo.toml` 的目录里直接报错），成功后才把 `--help` 交给 cargo。 同一个通用旗标，四种语义。另外 `None | Some(\"--help\") | … => 打印 USAGE; Ok(())`（`cli/src/lib.rs:139-142`）让 **裸调** `nichlink` 也走同一条路：stdout 打印用法、退出 0，shell 管线看见「成功」。 `grep -rn '\"--help\"\\|\"-h\"' cli/src` 只在 `cli/src/lib.rs:139`、`cli/src/commands/studio.rs:33` 出现； `cli/src/lib_tests.rs:679` 只钉了 `studio --help`，`:847` 只钉了顶层 `--help`。",
+   "evidence": "`xirang check --help` / `explain` / `grafts` / `snippets` → 报错、stderr、退出 1； `xirang studio --help` → 打印完整 `USAGE`、退出 0；`xirang new --help` → 拒绝并给一行 usage； `xirang build --help` → 先做注册校验（在不含 `Cargo.toml` 的目录里直接报错），成功后才把 `--help` 交给 cargo。 同一个通用旗标，四种语义。另外 `None | Some(\"--help\") | … => 打印 USAGE; Ok(())`（`cli/src/lib.rs:139-142`）让 **裸调** `xirang` 也走同一条路：stdout 打印用法、退出 0，shell 管线看见「成功」。 `grep -rn '\"--help\"\\|\"-h\"' cli/src` 只在 `cli/src/lib.rs:139`、`cli/src/commands/studio.rs:33` 出现； `cli/src/lib_tests.rs:679` 只钉了 `studio --help`，`:847` 只钉了顶层 `--help`。",
    "fix_hint": "在 `cli/src/lib.rs` 加一个共享的 `help(out)` 分支，六个子命令的 argv 循环先认 `-h`/`--help`；裸调（无子命令）打印用法到 **stderr** 并返回 `Err`，与「未知命令」同档。",
    "verify_status": "confirmed",
    "verifier": "t12",
@@ -4618,8 +4618,8 @@
    "category": "其它",
    "file": "mcp/src/mir.rs",
    "line": 217,
-   "title": "`nichlink.mir` 根外路径的两种回复构成宿主文件**存在性 oracle**",
-   "evidence": "t8 实测：`nichlink.mir` 传根外路径时，路径存在回「must stay inside the configured source root」、不存在回「is not a readable file」，两条回复的差别构成宿主路径存在性 oracle（`is_file()` 先于 `is_safe_child`）。",
+   "title": "`xirang.mir` 根外路径的两种回复构成宿主文件**存在性 oracle**",
+   "evidence": "t8 实测：`xirang.mir` 传根外路径时，路径存在回「must stay inside the configured source root」、不存在回「is not a readable file」，两条回复的差别构成宿主路径存在性 oracle（`is_file()` 先于 `is_safe_child`）。",
    "fix_hint": "对根外路径统一回「不在配置的源码根内」，回复里不带存在性信息",
    "verify_status": "unverified",
    "verifier": null,
@@ -5234,7 +5234,7 @@
    "file": "core/src/registry_core/syntax/face.rs",
    "line": 250,
    "title": "D 大逻辑（任何以 `_object` 结尾的用户宏都被当作注册面，非注册宏会得到错误的构建诊断）",
-   "evidence": "`widget_object! { name: \"x\", size: 3 }` 这类与 NichLink 无关的宏，只要 token 形状是 `ident: value`，`parse_faces` 就会把它当作注册面（`name` 是词表字段，`size` 不是词表字段但 `parse_fields` 不校验字段名，只要求 `ident :`）。下游 `build_method/src/validation.rs:52-70` 把 `*_object` 面按父级宏处理，要求显式 `parent:`，于是会为这个无关宏报 `parent-macro` 构建错误。 `_object` 后缀规则是有意的（`core/src/registry_core/syntax/face.rs:254-255` 与生成别名有关），但没有任何一处把“宏名是否属于本次构建的注册机制”作为准入条件；代价是误报构建错误与误收注册面（`FaceSyntax` 会被当作面数据使用，`run_method/src/authoring/manifest/parse/parse.rs:39` 直接读 `macro_name`）。",
+   "evidence": "`widget_object! { name: \"x\", size: 3 }` 这类与 XiRang 无关的宏，只要 token 形状是 `ident: value`，`parse_faces` 就会把它当作注册面（`name` 是词表字段，`size` 不是词表字段但 `parse_fields` 不校验字段名，只要求 `ident :`）。下游 `build_method/src/validation.rs:52-70` 把 `*_object` 面按父级宏处理，要求显式 `parent:`，于是会为这个无关宏报 `parent-macro` 构建错误。 `_object` 后缀规则是有意的（`core/src/registry_core/syntax/face.rs:254-255` 与生成别名有关），但没有任何一处把“宏名是否属于本次构建的注册机制”作为准入条件；代价是误报构建错误与误收注册面（`FaceSyntax` 会被当作面数据使用，`run_method/src/authoring/manifest/parse/parse.rs:39` 直接读 `macro_name`）。",
    "fix_hint": "要求宏路径的段数与来源符合注册机制（例如末段必须是 `control_object`/`external_object`/`<crate>_object` 且该 crate 等于本次构建的宿主 crate），或在 `parse_fields` 拒绝不在 `FACE_FIELD_ORDER` 中的字段名。",
    "verify_status": "confirmed",
    "verifier": "t9",
@@ -5892,7 +5892,7 @@
    "line": 111,
    "title": "边界（同一规则两处实现） · `function_manifest.tsv` 用第二套函数扫描器，内核已有词法扫描器",
    "evidence": "\"这个文件声明了哪些函数\"这一个问题有两份答案。构建期这份是按行文本扫描：`fn ` 出现在注释、文档示例、字符串里都会命中；impl 区块的归属靠\"上一行以 `impl ` 开头且不以 `}` 结尾\"来猜（`build_method/src/manifests.rs:127`～`build_method/src/manifests.rs:137`），块内嵌套的 `impl`/闭包会污染归属。内核那份是词法扫描，两个工具面都在用。 - 两份实现的存在可以直接对照：`core/src/registry_core/source/source.rs:120` 是 `pub fn function_symbols(source: &str)`，而 `build_method/src/manifests.rs:164` 自己又写了一个 `function_name(line)`。 - 这份产物的**树内读者为零**：`grep -rn function_manifest` 只命中写入侧（`build_method/src/pipeline.rs:6`、`build_method/src/pipeline.rs:176`、`build_method/src/lib.rs:121`、`build_method/src/manifests.rs:24`、`build_method/src/manifests.rs:31`），CLI/MCP/Studio 都不读它。也就是说分叉不会马上显现，只会等到树外读者信任它时暴露。 - 该产物的内容是会被别的面报告的（既有的 3p 审计 KN5 就是拿 `function_manifest.tsv` 举例说明错误符号会流进构建产物），所以它不是可以放着不管的死产物。",
-   "fix_hint": "调用 `nichlink::source::function_symbols`（它已经处理了标识符边界与 impl 归属），删掉本地扫描；如果确认无人读这份产物，就在同一轮里删掉写入，别留一个会分叉的第二答案。",
+   "fix_hint": "调用 `xirang::source::function_symbols`（它已经处理了标识符边界与 impl 归属），删掉本地扫描；如果确认无人读这份产物，就在同一轮里删掉写入，别留一个会分叉的第二答案。",
    "verify_status": "partial",
    "verifier": "t10",
    "batch": "B4-MAJOR 逻辑与实现缺陷",
@@ -5944,7 +5944,7 @@
    "file": "run_method/src/macros/face_objects.rs",
    "line": 169,
    "title": "一致性／宏卫生 · 前端回退臂用绝对 crate 路径而不是 `$crate`",
-   "evidence": "只有在\"字段顺序不同/用 `;`/漏分隔符/拼错字段\"时才会走到的容错回退臂，硬写了 `::nichlink_run_method`。 宿主把依赖改名（`run = { package = \"nichlink-run-method\", … }`）时，`$crate::` 仍然解析，而绝对路径解析不到；因为这条臂**只**在宽容路径上出现，同一份声明在合法顺序下能编译、换个顺序就报\"use of undeclared crate or module `nichlink_run_method`\"，错误信息指向宏内部而不是作者的行。仓库其它所有展开点都用 `$crate::`（`run_method/src/macros/face_external.rs:48`、`run_method/src/macros/face_registration.rs:156`），这里是不一致的那一个。",
+   "evidence": "只有在\"字段顺序不同/用 `;`/漏分隔符/拼错字段\"时才会走到的容错回退臂，硬写了 `::xirang_run_method`。 宿主把依赖改名（`run = { package = \"xirang-run-method\", … }`）时，`$crate::` 仍然解析，而绝对路径解析不到；因为这条臂**只**在宽容路径上出现，同一份声明在合法顺序下能编译、换个顺序就报\"use of undeclared crate or module `xirang_run_method`\"，错误信息指向宏内部而不是作者的行。仓库其它所有展开点都用 `$crate::`（`run_method/src/macros/face_external.rs:48`、`run_method/src/macros/face_registration.rs:156`），这里是不一致的那一个。",
    "fix_hint": "改成 `$crate::face_fields!`。**复核手段** 在 `run_method/tests/face_fields.rs` 的既有宽容用例里，把依赖以别名方式接入（或直接断言生成文本里没有绝对 crate 名）。 ---",
    "verify_status": "confirmed",
    "verifier": "t10",
@@ -6172,7 +6172,7 @@
    "file": "macro/src/front_end.rs",
    "line": 18,
    "title": "文档块与声明错位：`split_semicolons` 的文档挂到了 `splice` 上",
-   "evidence": "第一个文档块与第二个文档块之间**没有任何条目**，两个块在同一个 `pub(crate) fn splice` 上合并成一段文档：`splice` 的文档里前半段讲\"在顶层 `;` 处切分 token 流\"，而 `split_semicolons` 本身没有任何文档（它是 `pub(crate)`，`missing_docs` 看不见）。 直接读文件即可验证：`macro/src/front_end.rs:26` 起紧接 `macro/src/front_end.rs:37` 的 `pub(crate) fn splice(`，中间没有第三个条目；`macro/src/front_end.rs:57` 的 `pub(crate) fn split_semicolons` 上方是空行，没有 `///`。**最小修复方向** 把第一个文档块移回 `split_semicolons` 正上方。**复核手段** `cargo doc -p nichlink-macro --offline` 或直接 `read` 这一段；若加上 `#![warn(missing_docs)]` 之外的内部文档门禁（conventions 已能扫 doc 注释），这类错位会被自动抓到。",
+   "evidence": "第一个文档块与第二个文档块之间**没有任何条目**，两个块在同一个 `pub(crate) fn splice` 上合并成一段文档：`splice` 的文档里前半段讲\"在顶层 `;` 处切分 token 流\"，而 `split_semicolons` 本身没有任何文档（它是 `pub(crate)`，`missing_docs` 看不见）。 直接读文件即可验证：`macro/src/front_end.rs:26` 起紧接 `macro/src/front_end.rs:37` 的 `pub(crate) fn splice(`，中间没有第三个条目；`macro/src/front_end.rs:57` 的 `pub(crate) fn split_semicolons` 上方是空行，没有 `///`。**最小修复方向** 把第一个文档块移回 `split_semicolons` 正上方。**复核手段** `cargo doc -p xirang-macro --offline` 或直接 `read` 这一段；若加上 `#![warn(missing_docs)]` 之外的内部文档门禁（conventions 已能扫 doc 注释），这类错位会被自动抓到。",
    "fix_hint": "见出处 audit-lane-surfaces.md:338 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t10",
@@ -6339,7 +6339,7 @@
    "file": "run_method/src/macros/entry.rs",
    "line": 18,
    "title": "术语不一致：注释里出现两个不存在的 crate 名",
-   "evidence": "**file:line** `run_method/src/macros/entry.rs:18`、`run_method/src/macros/entry.rs:24`、`run_method/src/macros/entry.rs:63`（`nichlink-build`）；`run_method/src/macros/face_registration.rs:169`～`run_method/src/macros/face_registration.rs:170`（`nichlink-debug`） **现象/判据** 真实 crate 名是 `nichlink-build-method` 与 `nichlink-debug-method`（`build_method/Cargo.toml:2`、`debug_method/Cargo.toml:2`），lib 名分别是 `nichl",
+   "evidence": "**file:line** `run_method/src/macros/entry.rs:18`、`run_method/src/macros/entry.rs:24`、`run_method/src/macros/entry.rs:63`（`xirang-build`）；`run_method/src/macros/face_registration.rs:169`～`run_method/src/macros/face_registration.rs:170`（`xirang-debug`） **现象/判据** 真实 crate 名是 `xirang-build-method` 与 `xirang-debug-method`（`build_method/Cargo.toml:2`、`debug_method/Cargo.toml:2`），lib 名分别是 `nichl",
    "fix_hint": "见出处 audit-lane-surfaces.md:364 的「最小修复方向」段",
    "verify_status": "confirmed",
    "verifier": "t10,t12",
@@ -6940,8 +6940,8 @@
    "category": "一致性",
    "file": "studio/src/studio/app/navigation.rs",
    "line": 79,
-   "title": "一致性 · `studio/src/studio/app/navigation.rs:79-85` vs `studio/src/bin/nichlink-dev.rs:273-276`",
-   "evidence": "`source_stamp()` 的“相关文件”集合只认 `Cargo.toml | Cargo.lock | official.lock`（`studio/src/studio/app/navigation.rs:83`），而 `nichlink-dev` 的 watcher 认 `build.rs | official.lock | user.lock`（`studio/src/bin/nichlink-dev.rs:275`，并且有用例 `studio/src/bin/nichlink-dev.rs:382-403` 专门钉 `user.lock`）。 两个执行面对“插件目录里什么算源码变更”给出不同答案。用户来源的插件若 crate 锚点已存在（`studio/src/studio/app/mutations.rs:320` 命中），`submit_plugin` 只追加 `user.lock`——此时 `poll_hot_reload`（`studio/src/studio/app/lifecycle.rs:108-117`）看不到戳变化，界面不刷新，而 `nichlink-dev` 会重启 Studio。两边应同源。",
+   "title": "一致性 · `studio/src/studio/app/navigation.rs:79-85` vs `studio/src/bin/xirang-dev.rs:273-276`",
+   "evidence": "`source_stamp()` 的“相关文件”集合只认 `Cargo.toml | Cargo.lock | official.lock`（`studio/src/studio/app/navigation.rs:83`），而 `xirang-dev` 的 watcher 认 `build.rs | official.lock | user.lock`（`studio/src/bin/xirang-dev.rs:275`，并且有用例 `studio/src/bin/xirang-dev.rs:382-403` 专门钉 `user.lock`）。 两个执行面对“插件目录里什么算源码变更”给出不同答案。用户来源的插件若 crate 锚点已存在（`studio/src/studio/app/mutations.rs:320` 命中），`submit_plugin` 只追加 `user.lock`——此时 `poll_hot_reload`（`studio/src/studio/app/lifecycle.rs:108-117`）看不到戳变化，界面不刷新，而 `xirang-dev` 会重启 Studio。两边应同源。",
    "fix_hint": "把“哪些文件是 Studio 的相关源码”提到 `lexicon`（或一个共享谓词），`source_stamp` 与 `relevant_event` 都调它。",
    "verify_status": "partial",
    "verifier": "t11",
@@ -7582,7 +7582,7 @@
    "file": "studio/src/studio/app/tests/call_tree.rs",
    "line": 25,
    "title": "测试夹具重复 · `studio/src/studio/app/tests/call_tree.rs:25-35`、`studio/src/studio/app/tests/evidence.rs:60-67`、`studio/src/studio/app/tests/graph.rs:15-24/66-72/132-138/181-187`",
-   "evidence": "“取 node-editor 夹具 → `select_project(...)` → `App::load()`”三行，被写成 `fixture_app()`（call_tree）、`load_fixture()`（evidence）与 studio/src/studio/app/tests/graph.rs 里**四处内联**，命名还不一致；命名空间字符串 `\"nichlink.fixture.node-editor\"` 出现在至少 5 处。 夹具路径与命名空间是同一个契约（`studio/src/studio/app/support.rs:484-509` 的 `node_editor_fixture`），散落后改一处命名空间会只改到一部分；这也是 `studio/src/studio/app/tests.rs` 前导已经存在的理由。",
+   "evidence": "“取 node-editor 夹具 → `select_project(...)` → `App::load()`”三行，被写成 `fixture_app()`（call_tree）、`load_fixture()`（evidence）与 studio/src/studio/app/tests/graph.rs 里**四处内联**，命名还不一致；命名空间字符串 `\"xirang.fixture.node-editor\"` 出现在至少 5 处。 夹具路径与命名空间是同一个契约（`studio/src/studio/app/support.rs:484-509` 的 `node_editor_fixture`），散落后改一处命名空间会只改到一部分；这也是 `studio/src/studio/app/tests.rs` 前导已经存在的理由。",
    "fix_hint": "把 `fixture_app() -> Option<App>` 放进 `studio/src/studio/app/tests.rs` 前导（`#[cfg(feature = \"prototype-fixtures\")]`），各文件删本地副本。",
    "verify_status": "confirmed",
    "verifier": "t11",
@@ -8463,7 +8463,7 @@
    "file": "mcp/README.md",
    "line": 164,
    "title": "mcp README 自相矛盾：「树 diff 仍待做」（文档承诺面；归并见 `BR-C0.2`）",
-   "evidence": "同一份 README 的 **Reads 列表第 7 条**（`:41-48`）整段描述 `nichlink.diff` 的面级 delta 与 `records: true`，而结尾一段写 “Graft writes, plugins, project scaffolding, tree diffs, and the consistency analysis are still to come (`docs/roadmap-1.0.md` item 7)”（中文：「graft 写入、插件、 项目脚手架、树 diff 与一致性分析仍待做」）。树 diff 就是 `nichlink.diff`，已出厂；被引用的 `docs/roadmap-1.0.md` 第 7 条现在是别的事（「下一批」列表第 7 条是 C19 诊断字段表，第四轮第 7 条是 `petgraph` 升级），引用也已失效。 `grep -n \"nichlink.diff\" mcp/README.md` → `:41`；`grep -n \"still to come\" mcp/README.md` → `:165`。 工具存在且被 `mcp/src/tools_tests.rs:83-98` 钉住（`nichlink.diff` 断言 `no build evidence`）。",
+   "evidence": "同一份 README 的 **Reads 列表第 7 条**（`:41-48`）整段描述 `xirang.diff` 的面级 delta 与 `records: true`，而结尾一段写 “Graft writes, plugins, project scaffolding, tree diffs, and the consistency analysis are still to come (`docs/roadmap-1.0.md` item 7)”（中文：「graft 写入、插件、 项目脚手架、树 diff 与一致性分析仍待做」）。树 diff 就是 `xirang.diff`，已出厂；被引用的 `docs/roadmap-1.0.md` 第 7 条现在是别的事（「下一批」列表第 7 条是 C19 诊断字段表，第四轮第 7 条是 `petgraph` 升级），引用也已失效。 `grep -n \"xirang.diff\" mcp/README.md` → `:41`；`grep -n \"still to come\" mcp/README.md` → `:165`。 工具存在且被 `mcp/src/tools_tests.rs:83-98` 钉住（`xirang.diff` 断言 `no build evidence`）。",
    "fix_hint": "删掉这句过期的路线图话，或按当下实际剩下的集合重写并给出**可解析**的路线图锚点 （若没有剩下的，就写「本桥的能力即上面两张清单」）。",
    "verify_status": "confirmed",
    "verifier": "t12",
@@ -8526,7 +8526,7 @@
    "category": "工具",
    "file": "mcp/src/tools.rs",
    "line": 238,
-   "title": "`nichlink.usages` 的描述比它打印的字段少五项（工具 rustdoc 承诺面；归并见 `BR-C0.4`）",
+   "title": "`xirang.usages` 的描述比它打印的字段少五项（工具 rustdoc 承诺面；归并见 `BR-C0.4`）",
    "evidence": "工具描述把读回的字段枚举为「preset, parts, the localized names, exports, requires, provides, handle traits and contracts, registration rule, admission, flow, runtime checks」；实现打印 20 个标签 + `needs_registry`，比清单多 `module`、`stable_name`、`getting_from_other_registry`、`flow_provider` 与 `needs_registry` 五项（对照 `mcp/src/apply.rs:172-196` 的 `EDITABLE_FIELDS`，这五项都是可写的）。 上一轮 `m2` 修的是**实现**的清单（并自审了 20 个标签全部可写），工具描述这一侧没跟上。 `grep -n \"stable_name\\|flow_provider\\|getting_from_other_registry\" mcp/src/usages.rs` 有， `mcp/README.md:91-98` 与 `mcp/src/tools.rs:238-243` 都只写「handle and part traits and contracts, registration rule, admission, flow, runtime checks」。危害方向是「问我能设什么」的代理拿到更短的答案（与 `m2` 同一条）。",
    "fix_hint": "把描述改成与 `mcp/src/usages.rs:113-141` 同字（或改成「每个可写字段都会打印，含 module / stable_name / getting_from_other_registry / flow_provider / needs_registry」），并在 README 的对应条目同步。",
    "verify_status": "confirmed",
@@ -8567,7 +8567,7 @@
     }
    ],
    "fixed_in_batch": "B3",
-   "batch_2_note": "t5：`nichlink.usages` 的描述与 `mcp/src/usages.rs` 打印的 22 个标签逐字一致（两份 README 同步），并加钉子 `the_usages_description_names_every_field_it_prints`",
+   "batch_2_note": "t5：`xirang.usages` 的描述与 `mcp/src/usages.rs` 打印的 22 个标签逐字一致（两份 README 同步），并加钉子 `the_usages_description_names_every_field_it_prints`",
    "verification": {
     "status": "证实",
     "verified": true,
@@ -8591,7 +8591,7 @@
    "file": "mcp/src/index.rs",
    "line": 155,
    "title": "「可移植路径」在同一 crate 里两种拼法",
-   "evidence": "`mcp/src/index.rs` 只折平台分隔符（Unix 上不动反斜杠），`mcp/src/preview.rs`/`mcp/src/converge_trace.rs` 无条件把 `\\` 折成 `/`。在 Unix 上一个名字里含反斜杠的文件（合法字节）会被 `nichlink.inspect` 报成 `a\\b.rs`、 被 `apply` 的 declaration 锚点报成 `a/b.rs`——同一个桥对同一个文件给出两种拼法。 三处 `[代码]`；内核已有唯一实现 `portable_path` （`core/src/registry_core/declaration/source_location.rs:33-39`，公开地址是 `nichlink::declaration::portable_path`），本 crate 没有用。",
+   "evidence": "`mcp/src/index.rs` 只折平台分隔符（Unix 上不动反斜杠），`mcp/src/preview.rs`/`mcp/src/converge_trace.rs` 无条件把 `\\` 折成 `/`。在 Unix 上一个名字里含反斜杠的文件（合法字节）会被 `xirang.inspect` 报成 `a\\b.rs`、 被 `apply` 的 declaration 锚点报成 `a/b.rs`——同一个桥对同一个文件给出两种拼法。 三处 `[代码]`；内核已有唯一实现 `portable_path` （`core/src/registry_core/declaration/source_location.rs:33-39`，公开地址是 `xirang::declaration::portable_path`），本 crate 没有用。",
    "fix_hint": "三处改调它（或收一个 `mcp::portable_path` 助手转发）， 使「跨平台拼法」只有一份规则。",
    "verify_status": "confirmed",
    "verifier": "t12",
@@ -8633,7 +8633,7 @@
     "rule": "冻结记录的 file/line 不改；本字段只登记漂移。`check_report.py` 只豁免「带 location_note 的条目那一种精确 file:line 拼写」，同一文件的其它引用照旧受检查。"
    },
    "fixed_in_batch": "B3",
-   "batch_2_note": "t6 + t13：同一 crate 里两种「可移植路径」拼法收回一处：mcp 三处改为转发内核 `nichlink::declaration::portable_path`（`mcp/src/index.rs:178` 一行转发）；t13 再把 build_method 4 处 + conventions 2 处 + 2 个测试收口",
+   "batch_2_note": "t6 + t13：同一 crate 里两种「可移植路径」拼法收回一处：mcp 三处改为转发内核 `xirang::declaration::portable_path`（`mcp/src/index.rs:178` 一行转发）；t13 再把 build_method 4 处 + conventions 2 处 + 2 个测试收口",
    "verification": {
     "status": "证实",
     "verified": true,
@@ -8723,7 +8723,7 @@
    "file": "mcp/src/tools.rs",
    "line": 58,
    "title": "目录顺序 ≠ 分派顺序，且没有钉子保证两张名单齐全",
-   "evidence": "catalog 里 `nichlink.apply` 排第 6、分派里排最后；catalog 里 `grafts` 在 `impact` 之前， 分派里相反。两张名单必须逐名比对才能确认齐全（本次比对结果：**17 个工具两处都在**，见「查了、干净」）， 而 `mcp/src/tools_tests.rs:40-98` 只抽查了 6 个名字。「新增一个工具却漏了分派臂」会静默变成 `unknown tool \\`name\\``（`:317`），「有分派臂没有目录项」则永不可达。 两张名单的 `[代码]` 逐项比对（本报告已完成）；`grep -c \"nichlink\\.\" mcp/src/tools.rs` 的分布见上。",
+   "evidence": "catalog 里 `xirang.apply` 排第 6、分派里排最后；catalog 里 `grafts` 在 `impact` 之前， 分派里相反。两张名单必须逐名比对才能确认齐全（本次比对结果：**17 个工具两处都在**，见「查了、干净」）， 而 `mcp/src/tools_tests.rs:40-98` 只抽查了 6 个名字。「新增一个工具却漏了分派臂」会静默变成 `unknown tool \\`name\\``（`:317`），「有分派臂没有目录项」则永不可达。 两张名单的 `[代码]` 逐项比对（本报告已完成）；`grep -c \"xirang\\.\" mcp/src/tools.rs` 的分布见上。",
    "fix_hint": "分派臂按 catalog 同序排列（`apply` 回到第 6 位）；补一条钉子：遍历 `tools()` 的每个 `name` 调一次 `tool_call`，断言回复的文本不是 `unknown tool`。",
    "verify_status": "confirmed",
    "verifier": "t12",
@@ -8781,8 +8781,8 @@
    "file": "cli/README.zh-CN.md",
    "line": 13,
    "title": "中文 CLI README 的命令表少 `snippets`；两份都漏 `studio [path]`",
-   "evidence": "`USAGE` 与 `lib.rs:139-152` 的分派都有 **8** 条子命令（new/check/build/snippets/explain/grafts/studio/mcp）。 `cli/README.md:15-23` 的表有 9 行（explain 两条），`cli/README.zh-CN.md:13-24` 只有 **8** 行——缺 `nichlink snippets`。两份 README 的 studio 行都写 `nichlink studio`，而 `USAGE:52` 与 `studio.rs:26-41` 都接受一个可选路径（`nichlink studio <path>`，上一轮才修好「丢弃参数」那件事）。 `[实测]` `grep -c \"^| \\`nichlink\" cli/README.md cli/README.zh-CN.md` → 9 / 8； `grep -o \"^| \\`nichlink [a-z-]*\" cli/README.zh-CN.md` 无 `snippets`。",
-   "fix_hint": "中文表补 `snippets` 行；两份表的 studio 行改成 `nichlink studio [path]`。",
+   "evidence": "`USAGE` 与 `lib.rs:139-152` 的分派都有 **8** 条子命令（new/check/build/snippets/explain/grafts/studio/mcp）。 `cli/README.md:15-23` 的表有 9 行（explain 两条），`cli/README.zh-CN.md:13-24` 只有 **8** 行——缺 `xirang snippets`。两份 README 的 studio 行都写 `xirang studio`，而 `USAGE:52` 与 `studio.rs:26-41` 都接受一个可选路径（`xirang studio <path>`，上一轮才修好「丢弃参数」那件事）。 `[实测]` `grep -c \"^| \\`xirang\" cli/README.md cli/README.zh-CN.md` → 9 / 8； `grep -o \"^| \\`xirang [a-z-]*\" cli/README.zh-CN.md` 无 `snippets`。",
+   "fix_hint": "中文表补 `snippets` 行；两份表的 studio 行改成 `xirang studio [path]`。",
    "verify_status": "confirmed",
    "verifier": "t12",
    "batch": "B3-桥与宿主",
@@ -8815,7 +8815,7 @@
     }
    ],
    "fixed_in_batch": "B3",
-   "batch_2_note": "t5：`cli/README.zh-CN.md` 补 `snippets` 行，两份命令表的 studio 行都改 `nichlink studio [path]`（表格行 9 / 9 对齐）",
+   "batch_2_note": "t5：`cli/README.zh-CN.md` 补 `snippets` 行，两份命令表的 studio 行都改 `xirang studio [path]`（表格行 9 / 9 对齐）",
    "verification": {
     "status": "未获独立复核",
     "verified": false,
@@ -8897,8 +8897,8 @@
    "file": "mcp/src/preview.rs",
    "line": 14,
    "title": "`mcp/src/preview.rs` 的目录说明与它实际跳过的集合不符",
-   "evidence": "两处文档都说副本跳过 `target/` 与 NichLink 自己的运行期目录，并断言 「`target/` is the one directory that can be large」（`target/` 是唯一可能很大的目录）。 实际只跳过 `target` 与 `.nichlink`（`:45-47`），`.git` 会被整份复制并参与 diff—— 在本检出上 `.git` 是 9.9 MB，而真实仓库常见 GB 级；这句「唯一」因此是错的， 也是 `BR-4` 那 36 条虚假 `+ …` 的直接来源。 `[代码]`：`:45-47` 的跳过条件只有两个名字；`[实测]`：`.git` 9.9 MB、树 46 MB（见 `BR-4`）。",
-   "fix_hint": "改成「跳过构建产物与 VCS/工具目录（当前是 `target/`、`.nichlink/`、以及拟新增的 `.git/`）」， 或删掉「唯一可能很大」这半句——一句话的断言比一份清单更容易过期。",
+   "evidence": "两处文档都说副本跳过 `target/` 与 XiRang 自己的运行期目录，并断言 「`target/` is the one directory that can be large」（`target/` 是唯一可能很大的目录）。 实际只跳过 `target` 与 `.xirang`（`:45-47`），`.git` 会被整份复制并参与 diff—— 在本检出上 `.git` 是 9.9 MB，而真实仓库常见 GB 级；这句「唯一」因此是错的， 也是 `BR-4` 那 36 条虚假 `+ …` 的直接来源。 `[代码]`：`:45-47` 的跳过条件只有两个名字；`[实测]`：`.git` 9.9 MB、树 46 MB（见 `BR-4`）。",
+   "fix_hint": "改成「跳过构建产物与 VCS/工具目录（当前是 `target/`、`.xirang/`、以及拟新增的 `.git/`）」， 或删掉「唯一可能很大」这半句——一句话的断言比一份清单更容易过期。",
    "verify_status": "confirmed",
    "verifier": "t12",
    "batch": "B3-桥与宿主",
@@ -9025,8 +9025,8 @@
    "file": "cli/src/lib.rs",
    "line": 169,
    "title": "文档注释里的工具名拼错：`nihlink`",
-   "evidence": "`build` 的 argv 规则文档写 “and `nihlink build` hands the rest of its arguments to cargo verbatim”， 中文半边同样写 `nihlink build`。可执行的命令名是 `nichlink`；这是本仓唯一一处把产品名拼错的地方 （`grep -rn nihlink mcp/src cli/src plugin-host/src` 只有这两行）。 `[实测]`：`grep -rn \"nihlink\\b\" mcp/src cli/src plugin-host/src` → 2 命中（同一 doc 块的两半）。",
-   "fix_hint": "两处改成 `nichlink`。顺带说明：这类错字不会被 `doc_blocks`/`doc_anchors` 门禁抓到 （它们管围栏与锚点，不管散文里的产品名），所以属人工复核项。",
+   "evidence": "`build` 的 argv 规则文档写 “and `nihlink build` hands the rest of its arguments to cargo verbatim”， 中文半边同样写 `nihlink build`。可执行的命令名是 `xirang`；这是本仓唯一一处把产品名拼错的地方 （`grep -rn nihlink mcp/src cli/src plugin-host/src` 只有这两行）。 `[实测]`：`grep -rn \"nihlink\\b\" mcp/src cli/src plugin-host/src` → 2 命中（同一 doc 块的两半）。",
+   "fix_hint": "两处改成 `xirang`。顺带说明：这类错字不会被 `doc_blocks`/`doc_anchors` 门禁抓到 （它们管围栏与锚点，不管散文里的产品名），所以属人工复核项。",
    "verify_status": "confirmed",
    "verifier": "t12",
    "batch": "B3-桥与宿主",
@@ -9059,7 +9059,7 @@
     }
    ],
    "fixed_in_batch": "B3",
-   "batch_2_note": "t5：`cli/src/lib.rs:169`/`:175` 的 `nihlink build` 改 `nichlink build`（`\\bnihlink\\b` 在 cli/mcp/plugin-host 三处源码 0 命中）",
+   "batch_2_note": "t5：`cli/src/lib.rs:169`/`:175` 的 `nihlink build` 改 `xirang build`（`\\bnihlink\\b` 在 cli/mcp/plugin-host 三处源码 0 命中）",
    "verification": {
     "status": "未获独立复核",
     "verified": false,
@@ -9280,7 +9280,7 @@
    "file": "conventions/src/doc_blocks.rs",
    "line": 174,
    "title": "门禁-假阴性：`doc_blocks` 的 markdown 半边不按 CommonMark 配对围栏字符/长度",
-   "evidence": "门禁的文档说 CommonMark 有两种围栏字符，于是两种都认；但闭合时既不比对字符、也不比对长度。结果两类内容整段隐形：① 4 个反引号包住的 rust 围栏块——开围栏被读成 info string，`names_rust` 为假，整块从不打开；② `~~~rust` 块内部出现一行反引号围栏时，该行被当作闭合，其后的内容不再被解析。 - 判据 `[实测]`：我把探针写进自己的报告文件（当时的 `docs/audit-2026-09-28/audit-lane-gates.md`）后跑 `cargo test -p nichlink-conventions --offline documented_rust_blocks_parse`，输出里**只有**第 3 行那条（rust 围栏 + `pub struct BrokenP1 {`），我用 4 反引号与 `~~~rust`+内嵌反引号刻意写坏的另两个块**一条都没被报出**。该文件现已改名豁免，探针内容不再留在报告里。",
+   "evidence": "门禁的文档说 CommonMark 有两种围栏字符，于是两种都认；但闭合时既不比对字符、也不比对长度。结果两类内容整段隐形：① 4 个反引号包住的 rust 围栏块——开围栏被读成 info string，`names_rust` 为假，整块从不打开；② `~~~rust` 块内部出现一行反引号围栏时，该行被当作闭合，其后的内容不再被解析。 - 判据 `[实测]`：我把探针写进自己的报告文件（当时的 `docs/audit-2026-09-28/audit-lane-gates.md`）后跑 `cargo test -p xirang-conventions --offline documented_rust_blocks_parse`，输出里**只有**第 3 行那条（rust 围栏 + `pub struct BrokenP1 {`），我用 4 反引号与 `~~~rust`+内嵌反引号刻意写坏的另两个块**一条都没被报出**。该文件现已改名豁免，探针内容不再留在报告里。",
    "fix_hint": "记住开围栏的字符与长度，只在\"同一字符且长度 ≥ 开围栏长度\"时闭合（CommonMark 的规则）；info 解析时按反引号/波浪号各自剥前缀。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -9422,7 +9422,7 @@
    "file": "examples/control-button/Cargo.toml",
    "line": 14,
    "title": "门禁-假阴性：两个 example 宿主的版本要求没有任何门禁覆盖",
-   "evidence": "两个宿主对 `nichlink-run-method` 写的 `version = \"0.1.6\"` 是发布会一起移动的字面量，但它们不参与任何检查：`release_version` 跳过分包成员；`tools/nichlink-publish --check-table` 的成员循环在 `publish = false` 处 `continue`（`tools/nichlink-publish:567-572`），其 `metadata_requirement_problems` 也只在 `shipping` 集合里找包；`tools/nichlink-package-audit` 同样跳过。今天两处都恰好是 0.1.6（版本线一致），所以问题不可见；下次推进版本线时，漏改这两处**不会**让任何命令变红。 - 判据 `[读码]`：三处跳过点如上；两处字面量今日与 `[workspace.package] version` 相同（全量 grep：`0.1.6` 在 `*/Cargo.toml` 里共 19 处依赖要求行，其中恰好这 2 行的宿主 `publish = false`）。",
+   "evidence": "两个宿主对 `xirang-run-method` 写的 `version = \"0.1.6\"` 是发布会一起移动的字面量，但它们不参与任何检查：`release_version` 跳过分包成员；`tools/xirang-publish --check-table` 的成员循环在 `publish = false` 处 `continue`（`tools/xirang-publish:567-572`），其 `metadata_requirement_problems` 也只在 `shipping` 集合里找包；`tools/xirang-package-audit` 同样跳过。今天两处都恰好是 0.1.6（版本线一致），所以问题不可见；下次推进版本线时，漏改这两处**不会**让任何命令变红。 - 判据 `[读码]`：三处跳过点如上；两处字面量今日与 `[workspace.package] version` 相同（全量 grep：`0.1.6` 在 `*/Cargo.toml` 里共 19 处依赖要求行，其中恰好这 2 行的宿主 `publish = false`）。",
    "fix_hint": "`release_version` 对非发布成员也检查\"带 `version` 的依赖要求必须等于发布版本\"（或一律省略 `version`）；或在 `--check-table` 里对非发布成员做同样的 caret 检查。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -9493,7 +9493,7 @@
    "file": "conventions/src/naming.rs",
    "line": 238,
    "title": "门禁-假阳性：`naming` 的\"要求位置\"扫描不跳过注释",
-   "evidence": "该门禁的边界声明是\"只读名字处于**要求**位置的地方\"（`conventions/src/naming.rs:143-149`），但 YAML 注释与 Rust 注释不剥离。于是工作流里一句注释 `# 旧名：cargo test -p nichlink-old` 会被报成\"names `nichlink-old`, which is not a workspace package\"；脚手架模板里一行注释同理。这正是\"让人把门禁关掉\"的那种误报——它要求你去改记录性注释。 - 判据 `[读码]`：`package_arguments` 直接在 `text` 上 `find(needle)`，没有注释剥离；`requirement_names` 也直接在 `text` 上扫描。旁证：`conventions/src/naming_tests.rs:119` 的 fixture 里那句注释会被读到，只因它点名的名字恰好合法才没有 finding——说明\"注释会被读\"是既成行为。",
+   "evidence": "该门禁的边界声明是\"只读名字处于**要求**位置的地方\"（`conventions/src/naming.rs:143-149`），但 YAML 注释与 Rust 注释不剥离。于是工作流里一句注释 `# 旧名：cargo test -p xirang-old` 会被报成\"names `xirang-old`, which is not a workspace package\"；脚手架模板里一行注释同理。这正是\"让人把门禁关掉\"的那种误报——它要求你去改记录性注释。 - 判据 `[读码]`：`package_arguments` 直接在 `text` 上 `find(needle)`，没有注释剥离；`requirement_names` 也直接在 `text` 上扫描。旁证：`conventions/src/naming_tests.rs:119` 的 fixture 里那句注释会被读到，只因它点名的名字恰好合法才没有 finding——说明\"注释会被读\"是既成行为。",
    "fix_hint": "YAML 先剥行尾 `#`（注意引号内的 `#`）；模板用\"剥注释、保留字面量\"的 mask 后再扫（不能用 `mask_non_code`，它会把模板里的要求文本一起抹掉）。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -9631,10 +9631,10 @@
    "severity_note": null,
    "lane": "GTE",
    "category": "工具",
-   "file": "tools/nichlink-publish",
+   "file": "tools/xirang-publish",
    "line": 101,
    "title": "工具-脚本：`--workspace-version` 不与其它模式互斥，且在派发前 `exit 0`",
-   "evidence": "`--workspace-version` 在互斥表之外，并且它的 `exit 0` 发生在 `--check-table` 分支（`:541`）与发布循环（`:693`）之前。因此 `tools/nichlink-publish --check-table --workspace-version` **实测**只打印 `0.1.6` 并 exit 0，表检查根本没跑；同理 `--publish --yes --workspace-version` 在干净树上会 exit 0 而什么都没上传（干净树才走到 `:289`；脏树会先被 `:152` 的 dirty 检查拦下，所以今天只能观察到前者的行为）。脚本自己在 `:131-143` 用长注释说明\"检查模式与 `--publish` 组合会什么都不做却 exit 0，宁可拒绝\"——正是同一个隐患，只是漏了第三个模式。 - 判据 `[实测]`：`tools/nichlink-publish --check-table --workspace-version; echo $?` → `0.1.6` / `0`。",
+   "evidence": "`--workspace-version` 在互斥表之外，并且它的 `exit 0` 发生在 `--check-table` 分支（`:541`）与发布循环（`:693`）之前。因此 `tools/xirang-publish --check-table --workspace-version` **实测**只打印 `0.1.6` 并 exit 0，表检查根本没跑；同理 `--publish --yes --workspace-version` 在干净树上会 exit 0 而什么都没上传（干净树才走到 `:289`；脏树会先被 `:152` 的 dirty 检查拦下，所以今天只能观察到前者的行为）。脚本自己在 `:131-143` 用长注释说明\"检查模式与 `--publish` 组合会什么都不做却 exit 0，宁可拒绝\"——正是同一个隐患，只是漏了第三个模式。 - 判据 `[实测]`：`tools/xirang-publish --check-table --workspace-version; echo $?` → `0.1.6` / `0`。",
    "fix_hint": "把 `workspace_version_only` 纳入互斥检查（与任何其它模式同现即 exit 2），或把它的提前返回移到所有模式判定之后。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -9695,9 +9695,9 @@
    "severity_note": null,
    "lane": "GTE",
    "category": "工具",
-   "file": "tools/nichlink-release-audit",
+   "file": "tools/xirang-release-audit",
    "line": 23,
-   "title": "工具-脚本：`nichlink-release-audit` 的符号审计可能静默为空且仍报成功",
+   "title": "工具-脚本：`xirang-release-audit` 的符号审计可能静默为空且仍报成功",
    "evidence": "`nm` 不可用或失败时，`$symbols` 文件仍是空文件（或只写一行 `nm unavailable`），`count` 变成 0/`unavailable`，脚本照常走完并打印 `symbol_audit=<tsv>`。TSV 里每个 artifact 的 `defined_symbols` 可以是 0，没有任何断言要求非空——\"审计了符号\"这句话在 nm 坏掉的那天就是空的。 - 判据 `[读码]`：`:24` 的 `|| :` 与 `:74` 的收尾打印；`:17-36` 的循环没有任何非空校验。",
    "fix_hint": "`nm` 失败即报错（或明确标注该 artifact 未审计），并对 `count == 0` 报警；收尾行改为只在至少一个 artifact 有符号时打印。",
    "verify_status": "confirmed",
@@ -9759,11 +9759,11 @@
    "severity_note": null,
    "lane": "GTE",
    "category": "工具",
-   "file": "tools/nichlink-visual",
+   "file": "tools/xirang-visual",
    "line": 116,
-   "title": "工具-脚本：`nichlink-visual --help` 用硬编码行范围打印，句子中途截断",
-   "evidence": "头部注释块是第 2–36 行，`--help` 只印到第 26 行：实测最后一行停在\"写两个文件：`<scene>.txt`\"，而文件第 27 行紧接着\"是面板的纯文本——布局…\"；同时整段 \"Why tmux\"（第 32–36 行）不出现。行号范围是无注释的魔数，注释一改就漂。 - 判据 `[实测]`：`tools/nichlink-visual --help | tail -6` 的输出如上；`tools/nichlink-visual:32-36` 是未打印的段落。",
-   "fix_hint": "改用 `tools/nichlink-publish:111-117` 的同款 awk（\"打印开头连续注释块，遇到首行代码即停\"），去掉行号范围。",
+   "title": "工具-脚本：`xirang-visual --help` 用硬编码行范围打印，句子中途截断",
+   "evidence": "头部注释块是第 2–36 行，`--help` 只印到第 26 行：实测最后一行停在\"写两个文件：`<scene>.txt`\"，而文件第 27 行紧接着\"是面板的纯文本——布局…\"；同时整段 \"Why tmux\"（第 32–36 行）不出现。行号范围是无注释的魔数，注释一改就漂。 - 判据 `[实测]`：`tools/xirang-visual --help | tail -6` 的输出如上；`tools/xirang-visual:32-36` 是未打印的段落。",
+   "fix_hint": "改用 `tools/xirang-publish:111-117` 的同款 awk（\"打印开头连续注释块，遇到首行代码即停\"），去掉行号范围。",
    "verify_status": "confirmed",
    "verifier": "t13",
    "batch": "B2-门禁与工具",
@@ -9823,10 +9823,10 @@
    "severity_note": null,
    "lane": "GTE",
    "category": "工具",
-   "file": "tools/nichlink-external-rehearsal",
+   "file": "tools/xirang-external-rehearsal",
    "line": 64,
    "title": "工具-脚本：两处 GNU 专属语法，macOS 上会失败（CI 只在 Linux 跑，所以不红）",
-   "evidence": "BSD/macOS `sed -i` 要求跟一个备份后缀，无后缀写法会把替换脚本当成后缀、把文件名当成脚本，报错退出；BSD `date` 没有 `%N`，`$(( (end - start) / 1000000 ))` 会在非数字上失败。这两条命令 CI 只在一个 Linux 单元上跑（`.github/workflows/ci.yml:37`、`:50`），而 CI 矩阵含 `macos-latest`、`AGENTS.md` 把三条 cargo 命令写成可在本机跑的验证入口，因此 macOS 贡献者手动跑这两个工具会撞到与门禁无关的失败。 - 判据 `[读码]`：两处语法如上；`tools/nichlink-scale-audit:8` 对 `/usr/bin/time` 有存在性回退，同一份工具集里标准不一。",
+   "evidence": "BSD/macOS `sed -i` 要求跟一个备份后缀，无后缀写法会把替换脚本当成后缀、把文件名当成脚本，报错退出；BSD `date` 没有 `%N`，`$(( (end - start) / 1000000 ))` 会在非数字上失败。这两条命令 CI 只在一个 Linux 单元上跑（`.github/workflows/ci.yml:37`、`:50`），而 CI 矩阵含 `macos-latest`、`AGENTS.md` 把三条 cargo 命令写成可在本机跑的验证入口，因此 macOS 贡献者手动跑这两个工具会撞到与门禁无关的失败。 - 判据 `[读码]`：两处语法如上；`tools/xirang-scale-audit:8` 对 `/usr/bin/time` 有存在性回退，同一份工具集里标准不一。",
    "fix_hint": "`sed -i.bak` 后删备份（或改用 `awk`/临时文件）；时长改用 `date +%s`（×1000）或换成 `scale_audit` 自己打印毫秒。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -9889,9 +9889,9 @@
    "category": "文档/漂移",
    "file": "mcp/Cargo.toml",
    "line": 27,
-   "title": "文档-漂移：roadmap 与 `nichlink-package-audit` 头部写的发布层级顺序与活表矛盾，且按它发布必然失败",
-   "evidence": "`nichlink-mcp` 在第 2 层——但它真实的内部依赖是 `nichlink-build-method` + `nichlink-core` + `nichlink-debug-method` + `nichlink-run-method`（`mcp/Cargo.toml:27`、`:33`、`:39`、`:40`），因此它必须在 run_method、debug_method 之后；活表把它放在第 5 层（core | macro+build-method | run-method | debug-method+plugin-host | mcp | studio | cli）。按文档的顺序手动发布会在 `cargo publish -p nichlink-mcp` 处解析失败。 - 判据 `[实测+读码]`：`tools/nichlink-publish --check-table` 从清单推导依赖并逐条核对两张表，实测 exit 0 / `9 crates`——即活表是被门禁交叉验证过的唯一顺序；roadmap:255 的散文顺序不被任何门禁检查，且与能被推导出来的事实矛盾。",
-   "fix_hint": "把 `docs/roadmap-1.0.md:255` 与 `tools/nichlink-package-audit:37-40` 改成与活表一致，或删掉顺序、改为\"顺序以 `tools/nichlink-publish` 的 `levels` 表为准（`--check-table` 会核对）\"。",
+   "title": "文档-漂移：roadmap 与 `xirang-package-audit` 头部写的发布层级顺序与活表矛盾，且按它发布必然失败",
+   "evidence": "`xirang-mcp` 在第 2 层——但它真实的内部依赖是 `xirang-build-method` + `xirang-core` + `xirang-debug-method` + `xirang-run-method`（`mcp/Cargo.toml:27`、`:33`、`:39`、`:40`），因此它必须在 run_method、debug_method 之后；活表把它放在第 5 层（core | macro+build-method | run-method | debug-method+plugin-host | mcp | studio | cli）。按文档的顺序手动发布会在 `cargo publish -p xirang-mcp` 处解析失败。 - 判据 `[实测+读码]`：`tools/xirang-publish --check-table` 从清单推导依赖并逐条核对两张表，实测 exit 0 / `9 crates`——即活表是被门禁交叉验证过的唯一顺序；roadmap:255 的散文顺序不被任何门禁检查，且与能被推导出来的事实矛盾。",
+   "fix_hint": "把 `docs/roadmap-1.0.md:255` 与 `tools/xirang-package-audit:37-40` 改成与活表一致，或删掉顺序、改为\"顺序以 `tools/xirang-publish` 的 `levels` 表为准（`--check-table` 会核对）\"。",
    "verify_status": "confirmed",
    "verifier": "t13",
    "batch": "B2-门禁与工具",
@@ -9930,7 +9930,7 @@
     }
    ],
    "fixed_in_batch": "B2",
-   "batch_2_note": "t3：roadmap 两处与 `tools/nichlink-package-audit` 头部不再复述发布顺序，顺序归 `tools/nichlink-publish` 的 `levels` 表唯一来源",
+   "batch_2_note": "t3：roadmap 两处与 `tools/xirang-package-audit` 头部不再复述发布顺序，顺序归 `tools/xirang-publish` 的 `levels` 表唯一来源",
    "verification": {
     "status": "未获独立复核",
     "verified": false,
@@ -9955,7 +9955,7 @@
    "file": "conventions/src/size.rs",
    "line": 66,
    "title": "文档-漂移：size 棘轮的条目数在文档里是 14，在代码里是 1",
-   "evidence": "同一份 roadmap 第 29 行已经写了\"尺寸上限已于 2026-09-28 由 450 放宽到 600\"，而第 40 行仍把欠账说成 14 项。上限放宽后 13 项缩回上限内、棘轮强制删除，剩下的只有 1 项。读者（含维护者）会以为还有 14 个超标文件要拆。 - 判据 `[实测]`：`cargo test -p nichlink-conventions --offline the_size_ceiling_holds_except_for_the_pinned_debt` 绿，且 `conventions/src/size.rs:66-67` 就一项；`conventions/src/size.rs:24-28` 明确写了\"条目数不在这里复述——它就是 `BASELINE.len()`\"，同 crate 的 `conventions/src/mounting.rs:10` 却复述了（见 G-20）。",
+   "evidence": "同一份 roadmap 第 29 行已经写了\"尺寸上限已于 2026-09-28 由 450 放宽到 600\"，而第 40 行仍把欠账说成 14 项。上限放宽后 13 项缩回上限内、棘轮强制删除，剩下的只有 1 项。读者（含维护者）会以为还有 14 个超标文件要拆。 - 判据 `[实测]`：`cargo test -p xirang-conventions --offline the_size_ceiling_holds_except_for_the_pinned_debt` 绿，且 `conventions/src/size.rs:66-67` 就一项；`conventions/src/size.rs:24-28` 明确写了\"条目数不在这里复述——它就是 `BASELINE.len()`\"，同 crate 的 `conventions/src/mounting.rs:10` 却复述了（见 G-20）。",
    "fix_hint": "把 roadmap 那句的\"现为 14 项\"改成不写数字（引用 `BASELINE`）。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -10072,7 +10072,7 @@
     }
    ],
    "fixed_in_batch": "B2",
-   "batch_2_note": "t3：CHANGELOG 两处 `version = \"0.1.4\"` 要求改指 `nichlink-*` 版本要求（该字面量全仓 0 命中）",
+   "batch_2_note": "t3：CHANGELOG 两处 `version = \"0.1.4\"` 要求改指 `xirang-*` 版本要求（该字面量全仓 0 命中）",
    "verification": {
     "status": "未获独立复核",
     "verified": false,
@@ -10097,7 +10097,7 @@
    "file": "AGENTS.md",
    "line": 151,
    "title": "文档-漂移：`AGENTS.md` 的门禁清单比实际门禁宽，且缺 4 道",
-   "evidence": "清单里\"a feature-gated target whose `required-features` is missing\"只有**手列**的那一个 target（`studio`/`nichlink-dev`）能被判\"缺失\"——manifest 里没有任何东西声明\"这个 target 只在检出内工作\"；其余 crate 的 target 即使漏了 `required-features` 也不会红（能红的是\"`required-features` 指名的特性不存在/默认开着\"这两种）。同一清单也没有提到 `naming`、`release_version`、`release_workflow`、`doc_anchors` 四道门禁。 - 判据 `[读码]`：`conventions/src/features.rs:30-31` 的 `WORKSPACE_ONLY_TARGETS` 只有一项；`conventions/src/features.rs:58-73` 只做\"指名的特性存在且非默认\"。",
+   "evidence": "清单里\"a feature-gated target whose `required-features` is missing\"只有**手列**的那一个 target（`studio`/`xirang-dev`）能被判\"缺失\"——manifest 里没有任何东西声明\"这个 target 只在检出内工作\"；其余 crate 的 target 即使漏了 `required-features` 也不会红（能红的是\"`required-features` 指名的特性不存在/默认开着\"这两种）。同一清单也没有提到 `naming`、`release_version`、`release_workflow`、`doc_anchors` 四道门禁。 - 判据 `[读码]`：`conventions/src/features.rs:30-31` 的 `WORKSPACE_ONLY_TARGETS` 只有一项；`conventions/src/features.rs:58-73` 只做\"指名的特性存在且非默认\"。",
    "fix_hint": "把清单写成\"例如\"，或为\"缺失\"那条加上\"（对手列 target 判定）\"限定，并补上缺失的四道门禁名。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -10168,7 +10168,7 @@
    "file": "build_method/Cargo.toml",
    "line": 16,
    "title": "文档-漂移：roadmap 说依赖要求写 `0.1.0` 以便不必连锁重发，而工作树里写的是 `^0.1.6`，且两道门禁**强制**它等于工作区版本",
-   "evidence": "roadmap 把\"独立发版\"记成\"包形状保持九个 crate\"这条决策的理由之一，并说下界停在 `0.1.0`、补丁版本不连锁。实际上下界随每次发布一起抬（今天 19 处全是 `0.1.6`），而且 `release_version` 与 `--check-table` 都要求\"成员要求 == 工作区版本\"，因此\"只把一个 crate 发到新版本、其余不动\"在清单层就被判红——两条口径（散文的意图 vs 门禁的强制）不一致。 - 判据 `[实测]`：`tools/nichlink-publish --check-table` 实测 exit 0 / 9 crates，而它内部的推导就是 `want=\"^$workspace_version\"`（`tools/nichlink-publish:463`）与 `req != want` → 报问题（`:505`）；把任意一处要求改成 `0.1.0` 会让它报 `asks for ^0.1.0, but every internal requirement must be ^0.1.6`（我未执行该变异，本轮无写权限；判定读自上述两处代码路径）。",
+   "evidence": "roadmap 把\"独立发版\"记成\"包形状保持九个 crate\"这条决策的理由之一，并说下界停在 `0.1.0`、补丁版本不连锁。实际上下界随每次发布一起抬（今天 19 处全是 `0.1.6`），而且 `release_version` 与 `--check-table` 都要求\"成员要求 == 工作区版本\"，因此\"只把一个 crate 发到新版本、其余不动\"在清单层就被判红——两条口径（散文的意图 vs 门禁的强制）不一致。 - 判据 `[实测]`：`tools/xirang-publish --check-table` 实测 exit 0 / 9 crates，而它内部的推导就是 `want=\"^$workspace_version\"`（`tools/xirang-publish:463`）与 `req != want` → 报问题（`:505`）；把任意一处要求改成 `0.1.0` 会让它报 `asks for ^0.1.0, but every internal requirement must be ^0.1.6`（我未执行该变异，本轮无写权限；判定读自上述两处代码路径）。",
    "fix_hint": "把 roadmap 那句改成与实现一致（\"下界随发布线一起抬，因此发布是一条线，不是九个\"），或（若确想独立发版）把要求下界固定为 `0.1.0` 并放宽两道门禁——后者是设计决策，留给维护者。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -10306,11 +10306,11 @@
    "severity_note": null,
    "lane": "GTE",
    "category": "注释",
-   "file": "tools/nichlink-package-audit",
+   "file": "tools/xirang-package-audit",
    "line": 5,
-   "title": "注释-准确性：`nichlink-package-audit` 的头部注释描述了一张已不存在的表",
-   "evidence": "脚本里**没有**任何 `crates='…'` 表：`:227-249` 从根清单的 `members` 推导每个成员，从 `cargo metadata --no-deps` 读依赖，目录直接取成员路径。也就是说这十几行注释在解释\"一份手工表、一个手工顺序、目录为什么必须写出来\"——三者都已不存在。更糟的是它复述的顺序本身是错的（G-16）：读者会被引向去找一张表，并相信那个顺序。 - 判据 `[读码]`：`tools/nichlink-package-audit:205-249`（推导）vs `:37-53`（散文）；`tools/nichlink-package-audit:90-100` 的注释还保留了\"扫描 TOML 漏掉的三种拼法\"这段已改写的实现史，与实现（改从 metadata 读）不一致。",
-   "fix_hint": "把 `:37-53` 换成\"crate 集合与依赖从工作区推导（同 `tools/nichlink-publish --check-table` 的口径），顺序以 `levels` 表为准\"；删掉\"目录为何手写\"那段（它解释的是被替换掉的实现）。",
+   "title": "注释-准确性：`xirang-package-audit` 的头部注释描述了一张已不存在的表",
+   "evidence": "脚本里**没有**任何 `crates='…'` 表：`:227-249` 从根清单的 `members` 推导每个成员，从 `cargo metadata --no-deps` 读依赖，目录直接取成员路径。也就是说这十几行注释在解释\"一份手工表、一个手工顺序、目录为什么必须写出来\"——三者都已不存在。更糟的是它复述的顺序本身是错的（G-16）：读者会被引向去找一张表，并相信那个顺序。 - 判据 `[读码]`：`tools/xirang-package-audit:205-249`（推导）vs `:37-53`（散文）；`tools/xirang-package-audit:90-100` 的注释还保留了\"扫描 TOML 漏掉的三种拼法\"这段已改写的实现史，与实现（改从 metadata 读）不一致。",
+   "fix_hint": "把 `:37-53` 换成\"crate 集合与依赖从工作区推导（同 `tools/xirang-publish --check-table` 的口径），顺序以 `levels` 表为准\"；删掉\"目录为何手写\"那段（它解释的是被替换掉的实现）。",
    "verify_status": "confirmed",
    "verifier": "t13",
    "batch": "B2-门禁与工具",
@@ -10349,7 +10349,7 @@
     }
    ],
    "fixed_in_batch": "B2",
-   "batch_2_note": "t3：`tools/nichlink-package-audit` 头部不再描述已不存在的手工表：crate 集合与依赖从工作区推导",
+   "batch_2_note": "t3：`tools/xirang-package-audit` 头部不再描述已不存在的手工表：crate 集合与依赖从工作区推导",
    "verification": {
     "status": "未获独立复核",
     "verified": false,
@@ -10516,7 +10516,7 @@
    "file": "CHANGELOG.md",
    "line": 14,
    "title": "注释-准确性：`ci.yml` 留了一条条件已经满足的悬挂指令",
-   "evidence": "\"首次 crates.io 发布\"已于 2026-09-25 发生（`CHANGELOG.md:14-17`：0.1.0 九个 crate 一同上线，0.1.1/0.1.3/0.1.4/0.1.5 相继跟进），因此这条注释今天读起来像一条待办；而紧邻的 `tools/nichlink-package-audit` 步骤已经把九个 crate 的打包纳入（`:69`），`cargo package -p nichlink-core` 单独一步（`:55`）于是与它重复。要么补上那句命令（若确要独立验证 build-method 的 tarball），要么删掉这条注释。",
+   "evidence": "\"首次 crates.io 发布\"已于 2026-09-25 发生（`CHANGELOG.md:14-17`：0.1.0 九个 crate 一同上线，0.1.1/0.1.3/0.1.4/0.1.5 相继跟进），因此这条注释今天读起来像一条待办；而紧邻的 `tools/xirang-package-audit` 步骤已经把九个 crate 的打包纳入（`:69`），`cargo package -p xirang-core` 单独一步（`:55`）于是与它重复。要么补上那句命令（若确要独立验证 build-method 的 tarball），要么删掉这条注释。",
    "fix_hint": "删掉悬挂指令，或把它改成不带时间条件的说明（\"package-audit 覆盖九包；core 的单独一步是早期残留\"）。",
    "verify_status": "confirmed",
    "verifier": "t13",
@@ -10633,7 +10633,7 @@
     }
    ],
    "fixed_in_batch": "B2",
-   "batch_2_note": "t3：AGENTS.md / `tools/nichlink-package-audit` / roadmap 去掉 “from today / 从今天起 / 今天” 一类时态锚点",
+   "batch_2_note": "t3：AGENTS.md / `tools/xirang-package-audit` / roadmap 去掉 “from today / 从今天起 / 今天” 一类时态锚点",
    "verification": {
     "status": "未获独立复核",
     "verified": false,
@@ -10657,7 +10657,7 @@
    "file": "mcp/src/tools.rs",
    "line": 139,
    "title": "自我描述与行为不一致（本项目的老毛病，两处不一致都算缺陷）",
-   "evidence": "| # | 位置 | 自述 | 实际 | | --- | --- | --- | --- | | a | `mcp/src/tools.rs:139-157`（`nichlink.diff` 描述，`:149` 起） | 「A record comes back `ok`, `stale` …, or `re-identified` …；`unreadable` counts a record file that could not be read」 | 回复里还有一个 `undeclared` 桶（`mcp/src/diff.rs:143/169/206-239`），而且它按 `mcp/src/grafts.rs:115` 的说法意味着「这条记录永远不会生效」。工具的**自述里没有这个桶**，agent 只能从回复正文里第一次见到它 | | b | `mcp/src/diff.rs:26 项目自己的规则——「一个工具/检查的自我描述必须与行为一致，两处不一致都算缺陷」。 - 修复方向：把 a/b/c/d 的自述改成实际行为（或让行为回到自述）；a 尤其重要，因为它是 agent 唯一的工具契约。",
+   "evidence": "| # | 位置 | 自述 | 实际 | | --- | --- | --- | --- | | a | `mcp/src/tools.rs:139-157`（`xirang.diff` 描述，`:149` 起） | 「A record comes back `ok`, `stale` …, or `re-identified` …；`unreadable` counts a record file that could not be read」 | 回复里还有一个 `undeclared` 桶（`mcp/src/diff.rs:143/169/206-239`），而且它按 `mcp/src/grafts.rs:115` 的说法意味着「这条记录永远不会生效」。工具的**自述里没有这个桶**，agent 只能从回复正文里第一次见到它 | | b | `mcp/src/diff.rs:26 项目自己的规则——「一个工具/检查的自我描述必须与行为一致，两处不一致都算缺陷」。 - 修复方向：把 a/b/c/d 的自述改成实际行为（或让行为回到自述）；a 尤其重要，因为它是 agent 唯一的工具契约。",
    "fix_hint": "见出处 audit-logic-hunt.md:306 的「最小修复方向」段",
    "verify_status": "unverified",
    "verifier": null,
@@ -10703,8 +10703,8 @@
    "category": "其它",
    "file": "run_method/src/macros/face_registration.rs",
    "line": 160,
-   "title": "宏里的 `::nichlink_debug_method::submit!`：opt-in 且 `cfg(debug_assertions)` 门控，不是「无条件悬空路径」",
-   "evidence": "t8 实测 debug/release 两跑 + 生成计划读码：`collector: debug` 走 `#[cfg(debug_assertions)] ::nichlink_debug_method::submit!`，出厂路径（两个示例）走 `development` 空 arm ⇒ t7 的「无条件幻影依赖」被证伪；保留的窄缺口是「隐藏开关无文档」。",
+   "title": "宏里的 `::xirang_debug_method::submit!`：opt-in 且 `cfg(debug_assertions)` 门控，不是「无条件悬空路径」",
+   "evidence": "t8 实测 debug/release 两跑 + 生成计划读码：`collector: debug` 走 `#[cfg(debug_assertions)] ::xirang_debug_method::submit!`，出厂路径（两个示例）走 `development` 空 arm ⇒ t7 的「无条件幻影依赖」被证伪；保留的窄缺口是「隐藏开关无文档」。",
    "fix_hint": "见出处 audit-logic-hunt.md:326 的「最小修复方向」段",
    "verify_status": "unverified",
    "verifier": null,
@@ -11044,7 +11044,7 @@
    "anchor_note": "文件级定位（该条目针对整个文件/目录族，正文给全量清单）",
    "title": "A③ 名与内容不符（误导 → MAJOR） · `run_method/src/authoring/validation/validation.rs`",
    "evidence": "文件叫 `validation`，内容是 `AuthoringContext`（:47 的 `new(package_root, namespace)`、:56 的 `scope(...)`）与**进程级环境访问器** `authoring_namespace()`（:71）、`package_root()`（:99）、`source_root()`（:120）、`legacy_rule_path_for_source()`（:91）。 这是本仓 authoring 的**执行上下文与全局状态**实现，不是校验逻辑（真正的校验在 `core/src/registry_core/authoring/validation/validation.rs` 与 `run_method/src/authoring/manifest/parse`）。读者按名字找校验规则会打开错的文件；反过来，想知道「`package_root()` 是谁设的、作用域何时恢复」的人在 `validation` 下也想不到。名字与内容不符 → MAJOR。",
-   "fix_hint": "`run_method/src/authoring/validation/validation.rs` → `run_method/src/authoring/context.rs`（或 `authoring_context.rs`），模块名 `validation` → `context`。 - **⚠️ 这是公开路径变更（t27 补的漏项）**：`conventions/src/shims.rs:50` 把 `run_method/src/authoring/validation/validation.rs` 的重导出 `pub use nichlink::authoring::validation::*;` 钉在 `SHIMS` 棘轮里——也就是说 `nichlink_run_method::authoring::validation` 是**下游可写的公开路径**。同一张表（`:27-80`）还钉着 `run_method/src/authoring/parse/parse.rs`、`run_method/src/authoring/face_manifest.rs`、`run_method/src/runtime/evidence.rs`、`run_method/src/runtime/runtime.rs`、`run_method/src/runtime/trace/trace.rs`、`run_method/src/plugin/plugin.rs`、`run_method/src/registry/registry.rs`、`run_method/src/lib.rs`。**凡改这些文件/模块名，必须同时改 `SHIMS` 条目并保留历史路径别名**，否则要么门禁红，要么悄悄移除下游仍在用的路径。",
+   "fix_hint": "`run_method/src/authoring/validation/validation.rs` → `run_method/src/authoring/context.rs`（或 `authoring_context.rs`），模块名 `validation` → `context`。 - **⚠️ 这是公开路径变更（t27 补的漏项）**：`conventions/src/shims.rs:50` 把 `run_method/src/authoring/validation/validation.rs` 的重导出 `pub use xirang::authoring::validation::*;` 钉在 `SHIMS` 棘轮里——也就是说 `xirang_run_method::authoring::validation` 是**下游可写的公开路径**。同一张表（`:27-80`）还钉着 `run_method/src/authoring/parse/parse.rs`、`run_method/src/authoring/face_manifest.rs`、`run_method/src/runtime/evidence.rs`、`run_method/src/runtime/runtime.rs`、`run_method/src/runtime/trace/trace.rs`、`run_method/src/plugin/plugin.rs`、`run_method/src/registry/registry.rs`、`run_method/src/lib.rs`。**凡改这些文件/模块名，必须同时改 `SHIMS` 条目并保留历史路径别名**，否则要么门禁红，要么悄悄移除下游仍在用的路径。",
    "verify_status": "confirmed",
    "verifier": "t27",
    "evidence_kind": "reviewed",
@@ -11163,7 +11163,7 @@
    "line": 65,
    "anchor_note": null,
    "title": "A③ 名与内容不符（误导 → MAJOR） · `mcp/src/evidence.rs`",
-   "evidence": "261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `nichlink.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line`（:169）、`tree_report`（:190）。内容以**构建证据读取器**为主，`explain` 只是其中一个 handler。 - **判据（降级后的两条，都是 MINOR）**： 1. 工具名 `nichlink.explain` 与文件名 `mcp/src/evidence.rs` 不一致（尽管这在本桥里**不是唯一**：5/17 个工具与文件不同名）； 2. `evidence` 一词在本仓**一名多义**：`mcp/src/evidence.rs`（构建产物证据）vs `run_method/src/runtime/evidence.rs`（已观测调用证据）vs `studio/src/studio/app/tests/evidence.rs` —— 属 D-9 的实例。 - **最小改法（与 D-9 统一，采用 t27 倾向）**：`mcp/src/evidence.rs` → **`mcp/src/build_evidence.rs`**（保留词加限定，与 D-9 的示例一致）。若维护者更看重\"一工具一文件\"，则拆成两半：读取器 → `build_evidence.rs`，`explain` handler → `cli/src/explain.rs`；**二选一，不要同时**。",
+   "evidence": "261 行，7 个函数：`out_dir`（:36）、`build_evidence`（:46）、`explain`（:65，即 `xirang.explain` 工具的 handler）、`node_report`（:104）、`scope_line`（:141）、`pruning_line`（:169）、`tree_report`（:190）。内容以**构建证据读取器**为主，`explain` 只是其中一个 handler。 - **判据（降级后的两条，都是 MINOR）**： 1. 工具名 `xirang.explain` 与文件名 `mcp/src/evidence.rs` 不一致（尽管这在本桥里**不是唯一**：5/17 个工具与文件不同名）； 2. `evidence` 一词在本仓**一名多义**：`mcp/src/evidence.rs`（构建产物证据）vs `run_method/src/runtime/evidence.rs`（已观测调用证据）vs `studio/src/studio/app/tests/evidence.rs` —— 属 D-9 的实例。 - **最小改法（与 D-9 统一，采用 t27 倾向）**：`mcp/src/evidence.rs` → **`mcp/src/build_evidence.rs`**（保留词加限定，与 D-9 的示例一致）。若维护者更看重\"一工具一文件\"，则拆成两半：读取器 → `build_evidence.rs`，`explain` handler → `cli/src/explain.rs`；**二选一，不要同时**。",
    "fix_hint": "改名为 `mcp/src/build_evidence.rs`（t27 倾向，与 D-9 一致）；`cli/src/explain.rs` 仅作备选，二选一、不要同时。",
    "verify_status": "partial",
    "verifier": "t27,t31",
@@ -11527,7 +11527,7 @@
    "line": 1,
    "anchor_note": "文件级定位（该条目针对整个文件/目录族，正文给全量清单）",
    "title": "A④ 跨 crate / 跨目录同名不同职责 · `run_method/src/authoring/face_manifest.rs` 与 `run_method/src/authoring/manifest/face_manifest.rs`",
-   "evidence": "`run_method/src/authoring/face_manifest.rs`（89 行，自述「File-backed authoring for NichLink registration faces」，做文件化创作）与 `run_method/src/authoring/manifest/face_manifest.rs`（22 行，自述「Stable registration-face metadata model」，是数据模型）。 同一个名字下一个是 I/O、一个是模型；`manifest/` 里的那个才配得上\"manifest\"这个词，`authoring/` 里那个其实在做**文件读写**。",
+   "evidence": "`run_method/src/authoring/face_manifest.rs`（89 行，自述「File-backed authoring for XiRang registration faces」，做文件化创作）与 `run_method/src/authoring/manifest/face_manifest.rs`（22 行，自述「Stable registration-face metadata model」，是数据模型）。 同一个名字下一个是 I/O、一个是模型；`manifest/` 里的那个才配得上\"manifest\"这个词，`authoring/` 里那个其实在做**文件读写**。",
    "fix_hint": "`run_method/src/authoring/face_manifest.rs` → `authoring/face_file.rs`（或 `face_store.rs`）；`run_method/src/authoring/manifest/face_manifest.rs` 保持。",
    "verify_status": "confirmed",
    "verifier": "t27",
@@ -11639,8 +11639,8 @@
    "line": 1,
    "anchor_note": "文件级定位（该条目针对整个文件/目录族，正文给全量清单）",
    "title": "A④ 跨 crate / 跨目录同名不同职责 · 保留词表：`evidence` / `index` / `artifact` / `registry` 一名多义",
-   "evidence": "（机器统计 + 逐个读模块文档）： | 词 | 出现处 | 各自含义 | | --- | --- | --- | | `evidence` | `mcp/src/evidence.rs`、`run_method/src/runtime/evidence.rs`、`studio/src/studio/app/tests/evidence.rs` | 构建产物证据 / 已观测调用证据 / 前者与后者的测试 | | `index` | `core/src/registry_core/tree/index/index.rs`、`mcp/src/index.rs`、`studio/src/studio/app/source_index.rs` | 注册树索引（NodeId→entry）/ 源码文件与函数索引 / 源码索引（Studio 侧，命名更好） | | `artifact` | `core/src/registry_core/plugin/artifact/artifact.rs`、`run_method/src/runtime/trace/artifact/artifact.rs` | 插件二进制+manifest / trace 快照 | | `registry` | `core/src/registry_core/tree/registry.rs`、`run_method/src/registry/registry.rs`（shim）、`mcp/src/registry.rs`（工具）、`examples/control-button/tests/registry.rs` | 注册机本体 / 历史路径 / `nichlink.registry` 工具 / 示例测试 | 这四个词在本仓都**已被载义**（`EvidenceKind`/`CallEvidence`、`NodeId→entry` 索引、插件工件、`Registry` 类型）。第二个含义借用它们时，读者必须打开文件才知道是哪一套。",
-   "fix_hint": "① `mcp/src/index.rs` → `studio/src/studio/app/source_index.rs`（照抄 studio `studio/src/studio/app/source_index.rs` 的命名，那里已经是对的）；② `run_method/src/runtime/trace/artifact/` → `…/snapshot/`，文件 → `snapshot.rs`（它与插件 artifact 毫无关系）；③ `mcp/src/evidence.rs` 按 NAM-05 改 **`build_evidence.rs`**（与 D-9 一致；不采用 `cli/src/explain.rs` 单改）；④ `mcp/src/registry.rs` 保留（工具名就是 `nichlink.registry`）。把这四个词列成「保留词表」写进命名共识（见 D）。",
+   "evidence": "（机器统计 + 逐个读模块文档）： | 词 | 出现处 | 各自含义 | | --- | --- | --- | | `evidence` | `mcp/src/evidence.rs`、`run_method/src/runtime/evidence.rs`、`studio/src/studio/app/tests/evidence.rs` | 构建产物证据 / 已观测调用证据 / 前者与后者的测试 | | `index` | `core/src/registry_core/tree/index/index.rs`、`mcp/src/index.rs`、`studio/src/studio/app/source_index.rs` | 注册树索引（NodeId→entry）/ 源码文件与函数索引 / 源码索引（Studio 侧，命名更好） | | `artifact` | `core/src/registry_core/plugin/artifact/artifact.rs`、`run_method/src/runtime/trace/artifact/artifact.rs` | 插件二进制+manifest / trace 快照 | | `registry` | `core/src/registry_core/tree/registry.rs`、`run_method/src/registry/registry.rs`（shim）、`mcp/src/registry.rs`（工具）、`examples/control-button/tests/registry.rs` | 注册机本体 / 历史路径 / `xirang.registry` 工具 / 示例测试 | 这四个词在本仓都**已被载义**（`EvidenceKind`/`CallEvidence`、`NodeId→entry` 索引、插件工件、`Registry` 类型）。第二个含义借用它们时，读者必须打开文件才知道是哪一套。",
+   "fix_hint": "① `mcp/src/index.rs` → `studio/src/studio/app/source_index.rs`（照抄 studio `studio/src/studio/app/source_index.rs` 的命名，那里已经是对的）；② `run_method/src/runtime/trace/artifact/` → `…/snapshot/`，文件 → `snapshot.rs`（它与插件 artifact 毫无关系）；③ `mcp/src/evidence.rs` 按 NAM-05 改 **`build_evidence.rs`**（与 D-9 一致；不采用 `cli/src/explain.rs` 单改）；④ `mcp/src/registry.rs` 保留（工具名就是 `xirang.registry`）。把这四个词列成「保留词表」写进命名共识（见 D）。",
    "verify_status": "confirmed",
    "verifier": "t27",
    "evidence_kind": "reviewed",
@@ -11758,7 +11758,7 @@
    "file": "plugin-host/src/lazy_wasm.rs",
    "line": 24,
    "anchor_note": null,
-   "title": "A④ 跨 crate / 跨目录同名不同职责 · `pub use nichlink_run_method::PluginChannel as ValidationChannel`",
+   "title": "A④ 跨 crate / 跨目录同名不同职责 · `pub use xirang_run_method::PluginChannel as ValidationChannel`",
    "evidence": "`plugin-host/src/lazy_wasm.rs:24` 把内核的 `PluginChannel` 重导出为 `ValidationChannel`，文档（:20-23）说明是\"保留历史路径\"。 别名 `ValidationChannel` 与本体 `PluginChannel` 不同名不同义（一个像\"校验通道\"，一个就是\"插件通道\"）；`plugin-host/tests/fault_matrix.rs` 用的是别名。全仓 `pub use … as` 只有 4 处：`plugin::graft::document as graft_document`（避免与 `graft` 模块冲突，有理由）、`run_method/src/lib.rs:49-50` 的两个宏内部名（有理由）、本条（历史路径）。",
    "fix_hint": "保留别名（历史路径是契约），但在契约里补一句「等价于 `PluginChannel`」——最好直接写在文档首行；或在新代码里统一用 `PluginChannel`，别名只留兼容。",
    "verify_status": "confirmed",
@@ -12158,7 +12158,7 @@
    "line": 258,
    "anchor_note": null,
    "title": "B④ 名字描述实现而不是意图 · `_owned` 家族与 `_strings` 一类：全量 25 行，8 行计入",
-   "evidence": "生产函数名含 `_owned/_leak/_boxed/_vec/_raw/_strings/_string/_opt/_impl` 之一，排除 Rust 惯用语 `into_owned`/`from_owned`/`from_raw`。**输出 25 行**。 - **计入 D-7 的 8 行**（名字的主要区分轴是实现，不是意图）： | 名字 | file:line | 建议 | | --- | --- | --- | | `split_csv_owned` | `core/src/registry_core/authoring/parse/parse.rs:258` | `parse_field_list` | | `parse_admission_owned` | `core/src/registry_core/authoring/parse/admission.rs:128` | `parse_admission_snapshot` | | `parse_requirements_owned` | `core/src/registry_core/authoring/parse/rules.rs:108` | `parse_requirements_snapshot` | | `parse_registration_rule_owned` | `core/src/registry_core/authoring/parse/rules.rs:140` | `parse_registration_rule_snapshot` | | `quoted_strings` | `core/src/registry_core/authoring/parse/admission.rs:53` | `read_string_literals` | | `rule_method_strings` | `build_method/src/contracts.rs:193` | `rule_method_calls`（并见 S11 的行为缺陷） | | `argv_strings` | `cli/src/lib.rs:107` | `argv_arguments`（或 `collect_argv`） | | `is_nichlink_owned_source` | `run_method/src/authoring/operations/paths.rs:41` | `is_generated_source`（谓词里嵌了实现词 `owned`） | - **不计入的 17 行及理由**（同一次输出的其余部分）： - 领域用词（\"字符串字面量\"是源码里的东西，不是表示法）：`rust_string`、`json_string`、`push_json_string`、`literal_string`、`raw_string_end`、`path_to_string`、`option_string`、`written_string_list`、`literal_string_expr`、`rule_source_path_string`（返回的是\"把路径渲染成文本\"，`_string` 在这里说取值形态而不是实现轴）、`render_optional_source`（`optional` 是语法形态）、`parse_optional_source`×2、`parse_optional_id`（同上）。",
+   "evidence": "生产函数名含 `_owned/_leak/_boxed/_vec/_raw/_strings/_string/_opt/_impl` 之一，排除 Rust 惯用语 `into_owned`/`from_owned`/`from_raw`。**输出 25 行**。 - **计入 D-7 的 8 行**（名字的主要区分轴是实现，不是意图）： | 名字 | file:line | 建议 | | --- | --- | --- | | `split_csv_owned` | `core/src/registry_core/authoring/parse/parse.rs:258` | `parse_field_list` | | `parse_admission_owned` | `core/src/registry_core/authoring/parse/admission.rs:128` | `parse_admission_snapshot` | | `parse_requirements_owned` | `core/src/registry_core/authoring/parse/rules.rs:108` | `parse_requirements_snapshot` | | `parse_registration_rule_owned` | `core/src/registry_core/authoring/parse/rules.rs:140` | `parse_registration_rule_snapshot` | | `quoted_strings` | `core/src/registry_core/authoring/parse/admission.rs:53` | `read_string_literals` | | `rule_method_strings` | `build_method/src/contracts.rs:193` | `rule_method_calls`（并见 S11 的行为缺陷） | | `argv_strings` | `cli/src/lib.rs:107` | `argv_arguments`（或 `collect_argv`） | | `is_xirang_owned_source` | `run_method/src/authoring/operations/paths.rs:41` | `is_generated_source`（谓词里嵌了实现词 `owned`） | - **不计入的 17 行及理由**（同一次输出的其余部分）： - 领域用词（\"字符串字面量\"是源码里的东西，不是表示法）：`rust_string`、`json_string`、`push_json_string`、`literal_string`、`raw_string_end`、`path_to_string`、`option_string`、`written_string_list`、`literal_string_expr`、`rule_source_path_string`（返回的是\"把路径渲染成文本\"，`_string` 在这里说取值形态而不是实现轴）、`render_optional_source`（`optional` 是语法形态）、`parse_optional_source`×2、`parse_optional_id`（同上）。",
    "fix_hint": "上表\"建议\"列。",
    "verify_status": "partial",
    "verifier": "t27,t31",
@@ -12632,8 +12632,8 @@
    "file": "core/src/registry_core/identity/node_id.rs",
    "line": 12,
    "anchor_note": null,
-   "title": "`core/`（+ lib `nichlink`）",
-   "evidence": "它是「NichLink 的协议词汇与纯方法内核——所有不读盘、不读环境、不涉进程生命周期的定义都住在这里的那个组织单位」。 读者把 `core/` 当成 no_std 标准库或「被 `use core::` 指向的东西」。判据/命令：`grep -n 'name = \"nichlink\"' core/Cargo.toml`（→`core/Cargo.toml:32` 的 lib 名）；`cargo metadata … | python3 -c '…\"nichlink\" in names…'`（→ `False`，没有叫 `nichlink` 的包）。",
+   "title": "`core/`（+ lib `xirang`）",
+   "evidence": "它是「XiRang 的协议词汇与纯方法内核——所有不读盘、不读环境、不涉进程生命周期的定义都住在这里的那个组织单位」。 读者把 `core/` 当成 no_std 标准库或「被 `use core::` 指向的东西」。判据/命令：`grep -n 'name = \"xirang\"' core/Cargo.toml`（→`core/Cargo.toml:32` 的 lib 名）；`cargo metadata … | python3 -c '…\"xirang\" in names…'`（→ `False`，没有叫 `xirang` 的包）。",
    "fix_hint": "建议保留 `plugin-host`（crate/目录名）**",
    "verify_status": "partial",
    "verifier": "t35",
@@ -12666,10 +12666,10 @@
    "amb_axis": 1,
    "amb_category_name": "生态保留名",
    "amb_question": "问一：生态保留名",
-   "amb_role": "它是「NichLink 的协议词汇与纯方法内核——所有不读盘、不读环境、不涉进程生命周期的定义都住在这里的那个组织单位」。",
-   "amb_reader": "读者把 `core/` 当成 no_std 标准库或「被 `use core::` 指向的东西」。判据/命令：`grep -n 'name = \"nichlink\"' core/Cargo.toml`（→`core/Cargo.toml:32` 的 lib 名）；`cargo metadata … | python3 -c '…\"nichlink\" in names…'`（→ `False`，没有叫 `nichlink` 的包）。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
-   "amb_impact": "lib 改名是**公开路径**（`use nichlink::…`、docs.rs 链接、63 处 `core/…rs:NN` 文档锚点、`conventions/src/shims.rs` 棘轮）；**身份不受影响**（方案 §6 已证 `NodeId` 不含 crate 名）。",
+   "amb_role": "它是「XiRang 的协议词汇与纯方法内核——所有不读盘、不读环境、不涉进程生命周期的定义都住在这里的那个组织单位」。",
+   "amb_reader": "读者把 `core/` 当成 no_std 标准库或「被 `use core::` 指向的东西」。判据/命令：`grep -n 'name = \"xirang\"' core/Cargo.toml`（→`core/Cargo.toml:32` 的 lib 名）；`cargo metadata … | python3 -c '…\"xirang\" in names…'`（→ `False`，没有叫 `xirang` 的包）。",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_impact": "lib 改名是**公开路径**（`use xirang::…`、docs.rs 链接、63 处 `core/…rs:NN` 文档锚点、`conventions/src/shims.rs` 棘轮）；**身份不受影响**（方案 §6 已证 `NodeId` 不含 crate 名）。",
    "amb_verdict": "partial：证实（抽核 4 个 file:line 全命中）"
   },
   {
@@ -12724,7 +12724,7 @@
    "amb_question": "问一：生态保留名",
    "amb_role": "它是「构建期把宿主源码变成生成的注册计划与清单的那一半——构建脚本背后的组织单位」。",
    "amb_reader": "读者把 `build_method/` 当成「构建脚本相关的东西」或「一个构建方法」；`grep -rn build.rs` 全仓 4 个文件 3 种角色（真构建脚本 2、CLI 命令实现 1、模块文件 1）。判据/命令：`find . -name build.rs -not -path '*/target/*' | sort`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "`docs/audit-2026-09-28/audit-publish-surface-merge-plan.md:65``（`src/build/build.rs` 的模块文件与构建脚本同名）、`:89`/`:151` 的 feature `build`、37 处 `build_method/…rs:NN` 锚点。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -12780,7 +12780,7 @@
    "amb_question": "问二：跨生态理解",
    "amb_role": "它是「运行期承载注册状态、记录已发生的调用、并执行创作写盘的那一半」。",
    "amb_reader": "全仓 5 个 `run` 系公开名（`build_method::run`、`cli::run`、`mcp::run`、`RuntimeCheckSpec::run`、`CallTrace::runtime`，见 AMB-20）。判据/命令：`grep -rnE '^pub fn run\\b' --include=*.rs build_method/src cli/src mcp/src`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "50 处 `run_method/…rs:NN` 锚点；`docs/audit-2026-09-28/audit-publish-surface-merge-plan.md:90``/`:148` 的 feature `run`；`:175-178` 的 `RUN_METHOD_CRATE` 字符串常量（改名必须连带改值）。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -12836,7 +12836,7 @@
    "amb_question": "问三：同族易混",
    "amb_role": "它是「**把锁里写下的插件变成正在运行的插件**的那个运行期宿主」——**不创建插件**。",
    "amb_reader": "读者把 `plugins/` 当成放插件本体的目录（VS Code `extensions/`、WordPress `plugins/` 都是这个意思）。判据/命令：`grep -n \"PLUGIN_LOCK_DIRECTORY\" plugin-host/src/admission.rs`（→ `:38`）；`sed -n '40p;194p' docs/audit-2026-09-28/audit-publish-surface-merge-plan.md`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "只影响**未执行的**合并方案（模块 `plugins` + feature `plugins`，见 `docs/audit-2026-09-28/audit-publish-surface-merge-plan.md:91`）；现状 crate 名不动，因此已发布面、文档锚点、threat-model 全都不用改。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -12857,7 +12857,7 @@
    "line": 18,
    "anchor_note": null,
    "title": "公开类型 `Registry`",
-   "evidence": "它是「已注册的注册面组成的**树**——可注册、可查询、可嫁接的那一个数据结构」。 读者/agent 把 `Registry`/`registry_core`/MCP 工具 `nichlink.registry`（`mcp/src/tools.rs:114`）当成包注册表。判据/命令：`grep -n \"pub struct Registry\" core/src/registry_core/tree/registry.rs`；`grep -n \"index.crates.io\\|the registry\" tools/nichlink-publish`。",
+   "evidence": "它是「已注册的注册面组成的**树**——可注册、可查询、可嫁接的那一个数据结构」。 读者/agent 把 `Registry`/`registry_core`/MCP 工具 `xirang.registry`（`mcp/src/tools.rs:114`）当成包注册表。判据/命令：`grep -n \"pub struct Registry\" core/src/registry_core/tree/registry.rs`；`grep -n \"index.crates.io\\|the registry\" tools/xirang-publish`。",
    "fix_hint": "建议保留 `plugin-host`（crate/目录名）**",
    "verify_status": "confirmed",
    "verifier": "t35",
@@ -12891,8 +12891,8 @@
    "amb_category_name": "Cargo 生态词",
    "amb_question": "问一：生态保留名",
    "amb_role": "它是「已注册的注册面组成的**树**——可注册、可查询、可嫁接的那一个数据结构」。",
-   "amb_reader": "读者/agent 把 `Registry`/`registry_core`/MCP 工具 `nichlink.registry`（`mcp/src/tools.rs:114`）当成包注册表。判据/命令：`grep -n \"pub struct Registry\" core/src/registry_core/tree/registry.rs`；`grep -n \"index.crates.io\\|the registry\" tools/nichlink-publish`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_reader": "读者/agent 把 `Registry`/`registry_core`/MCP 工具 `xirang.registry`（`mcp/src/tools.rs:114`）当成包注册表。判据/命令：`grep -n \"pub struct Registry\" core/src/registry_core/tree/registry.rs`；`grep -n \"index.crates.io\\|the registry\" tools/xirang-publish`。",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "公开类型（docs.rs 页面）与 MCP 工具名（agent 的调用契约）；`registry` 是 D-9 的保留词，本条的登记行与 D-9 共用一份词表；63 处 `core/…rs:NN` 锚点中与该类型相关者。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -12948,8 +12948,8 @@
    "amb_question": "问一：生态保留名",
    "amb_role": "它是「两个可直接编译的**演示宿主工程**——用来演示宿主该怎么声明注册面与外部实现」。",
    "amb_reader": "读者按 `cargo run --example <dir>` 找。判据/命令：`sed -n '2p' Cargo.toml`（members 含 `examples/control-button`）；`cargo run --offline --example control-button; echo $?`（→ exit 101）。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
-   "amb_impact": "根 `Cargo.toml:2`、`tools/nichlink-external-rehearsal`、13 处 `examples/` 锚点与 README 措辞。",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_impact": "根 `Cargo.toml:2`、`tools/xirang-external-rehearsal`、13 处 `examples/` 锚点与 README 措辞。",
    "amb_verdict": "partial：证实（抽核 4 个 file:line 全命中）"
   },
   {
@@ -13004,7 +13004,7 @@
    "amb_question": "问一：生态保留名",
    "amb_role": "它是「把编译期登记与运行期观测的调用证据汇成可查询证据的那个组织单位」。",
    "amb_reader": "读者以为它与「debug 构建配置」有关或它是一个函数方法。`[机器]` 全仓**没有任何标识符含 `Method`**（`grep -rnE '\\w*Method\\w*' <8 crates>/src` → 0 行）→ 歧义只在目录/crate 名这一层。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "3 处 `debug_method/…` 锚点；合并后目录消失，只剩 feature `evidence`。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13021,11 +13021,11 @@
     "AMB"
    ],
    "category": "命名歧义/类别3（同族易混）",
-   "file": "studio/src/bin/nichlink-dev.rs",
+   "file": "studio/src/bin/xirang-dev.rs",
    "line": 1,
    "anchor_note": null,
-   "title": "bin `nichlink-dev` 与 feature `dev-supervisor`",
-   "evidence": "它是「开发期重建并启动 Studio 的**监督器**」。 读者以为 `nichlink-dev` 是 studio 的开发版二进制。判据/命令：`ls studio/src/bin/`；`grep -n \"required-features\" -B 4 studio/Cargo.toml`。",
+   "title": "bin `xirang-dev` 与 feature `dev-supervisor`",
+   "evidence": "它是「开发期重建并启动 Studio 的**监督器**」。 读者以为 `xirang-dev` 是 studio 的开发版二进制。判据/命令：`ls studio/src/bin/`；`grep -n \"required-features\" -B 4 studio/Cargo.toml`。",
    "fix_hint": "建议保留 `plugin-host`（crate/目录名）**",
    "verify_status": "confirmed",
    "verifier": "t35",
@@ -13059,8 +13059,8 @@
    "amb_category_name": "同族易混",
    "amb_question": "问三：同族易混",
    "amb_role": "它是「开发期重建并启动 Studio 的**监督器**」。",
-   "amb_reader": "读者以为 `nichlink-dev` 是 studio 的开发版二进制。判据/命令：`ls studio/src/bin/`；`grep -n \"required-features\" -B 4 studio/Cargo.toml`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_reader": "读者以为 `xirang-dev` 是 studio 的开发版二进制。判据/命令：`ls studio/src/bin/`；`grep -n \"required-features\" -B 4 studio/Cargo.toml`。",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "bin 名（README/CI/`docs/audit-2026-09-28/audit-publish-surface-merge-plan.md:125``）。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13116,7 +13116,7 @@
    "amb_question": "问二：跨生态理解",
    "amb_role": "它是「本仓的**品牌与界面截图资源**目录（给 README/文档用，不参与构建）」。",
    "amb_reader": "读者按 `assets/`/`images/` 找图。判据/命令：`ls -R picture`；`grep -rn \"picture/\" --include=*.md --include=*.html . | grep -v /target/`（4 处引用）。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "只触及根 README（不打包）与一份 docs 的注释；不动任何公开面。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13172,7 +13172,7 @@
    "amb_question": "问一：生态保留名",
    "amb_role": "两者是「同一件事的两个版本/层级（路线图索引 与 1.0 登记）」，因此名字必须在**字母层面**就可区分。",
    "amb_reader": "读者/文件系统分不开。判据/命令：`ls docs | grep -i roadmap`（→ 三个名字）。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "`docs/` 内部引用与 `doc_anchors` 门禁；与 `audit-naming-review.md` **无重叠**（那篇 0 次提到 ROADMAP/大小写）。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13193,7 +13193,7 @@
    "line": 342,
    "anchor_note": null,
    "title": "内核模块 `syntax`（+ feature `syntax`）",
-   "evidence": "它是「解析 NichLink **注册面声明**的语法层（并负责拒绝病态嵌套）」。 读者以为它解析 `.rs` 的文法。判据/命令：`head -1 core/src/registry_core/syntax/syntax.rs`（→ \"Parser shared by build-time checks and live authoring.\"）；`grep -rn 'features = \\[\"syntax\"\\]' --include=Cargo.toml .`（→ 3 处）。",
+   "evidence": "它是「解析 XiRang **注册面声明**的语法层（并负责拒绝病态嵌套）」。 读者以为它解析 `.rs` 的文法。判据/命令：`head -1 core/src/registry_core/syntax/syntax.rs`（→ \"Parser shared by build-time checks and live authoring.\"）；`grep -rn 'features = \\[\"syntax\"\\]' --include=Cargo.toml .`（→ 3 处）。",
    "fix_hint": "建议保留 `plugin-host`（crate/目录名）**",
    "verify_status": "confirmed",
    "verifier": "t35",
@@ -13226,9 +13226,9 @@
    "amb_axis": 4,
    "amb_category_name": "本仓一名多义",
    "amb_question": "问四：本仓库一名多义",
-   "amb_role": "它是「解析 NichLink **注册面声明**的语法层（并负责拒绝病态嵌套）」。",
+   "amb_role": "它是「解析 XiRang **注册面声明**的语法层（并负责拒绝病态嵌套）」。",
    "amb_reader": "读者以为它解析 `.rs` 的文法。判据/命令：`head -1 core/src/registry_core/syntax/syntax.rs`（→ \"Parser shared by build-time checks and live authoring.\"）；`grep -rn 'features = \\[\"syntax\"\\]' --include=Cargo.toml .`（→ 3 处）。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "内核公开路径（shims 棘轮）；3 个清单的 feature；`docs/audit-2026-09-28/audit-publish-surface-merge-plan.md:39`` 明说该 feature 不变（若采纳需同步）。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13284,7 +13284,7 @@
    "amb_question": "问一：生态保留名",
    "amb_role": "它是「**本仓工件文本的 JSON 字符串编码器**」。",
    "amb_reader": "读者按格式名找一个格式实现。判定/命令：`head -1 core/src/registry_core/json/json.rs`；`grep -rn \"json::\" core/src build_method/src | head`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "内核公开路径（4 个公开函数被 diagnostic/mir/渲染器使用）。",
    "amb_verdict": "unverified：证实（抽核 4 个 file:line 全命中）",
    "location_note": {
@@ -13348,7 +13348,7 @@
    "amb_question": "问一：生态保留名",
    "amb_role": "它是「发布态保留的注册拓扑与静态计划——被剪枝后仍然存在的那一份」。",
    "amb_reader": "读者以为与 release 构建配置有关。判据/命令：`head -1 core/src/registry_core/release/release.rs`；`ls core/src/registry_core/release/`（只有 `release.rs`，D-3 的「无载荷目录」另计）。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "内核公开路径 + `StaticPlan` 被生成代码引用（字符串常量在 `lexicon`）。",
    "amb_verdict": "unverified：证实（抽核 4 个 file:line 全命中）",
    "location_note": {
@@ -13412,7 +13412,7 @@
    "amb_question": "问二：跨生态理解",
    "amb_role": "它是「检查每条能力需求是否被某个提供者满足的分析器」。",
    "amb_reader": "读者按 pip/依赖清单理解。判据/命令：`head -1 core/src/registry_core/requirements/requirements.rs`；`grep -n \"requires:\" core/src/registry_core/declaration/registration.rs | head -3`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "内核公开路径；`impact`/`converge` 两个 MCP 工具消费其结论。",
    "amb_verdict": "unverified：证实（抽核 4 个 file:line 全命中）",
    "location_note": {
@@ -13476,7 +13476,7 @@
    "amb_question": "问四：本仓库一名多义",
    "amb_role": "它是「从 Rust 源码文本里抽出函数与调用点的**词法扫描器**」。",
    "amb_reader": "Rust/Cargo 里 `source` 同时是「源码」与「依赖来源」（`[source]` 配置），两个含义都在生态里。判据/命令：`head -1 core/src/registry_core/source/source.rs`；`grep -rn \"pub enum PluginSource\" core/src`；`grep -rn \"pub source:\" core/src/registry_core/declaration/*.rs | head -3`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "模块是内核公开路径；`PluginSource` 是插件公开面（改名属公开 API 变更）。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13532,7 +13532,7 @@
    "amb_question": "问四：本仓库一名多义",
    "amb_role": "在本仓它一律是「**本工具写出并读回的自描述文件**（自带来源/校验信息）」。",
    "amb_reader": "判据/命令：`grep -rn \"artifact\" mcp/src/mir.rs run_method/src/runtime/trace/artifact/*.rs | head -6`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "`PluginArtifact`/`VerifiedPluginArtifact` 是插件公开面；MIR/trace 工件是 CLI/MCP 的格式契约（改类型名不动格式）。",
    "amb_verdict": "unverified：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13553,7 +13553,7 @@
    "line": 13,
    "anchor_note": null,
    "title": "`index` 一名三义",
-   "evidence": "(1) 是「注册树的查找表」、(2) 是「源码文本的索引器」，两者都不是 crates.io 的 index。 JS 的 `index.{js,ts}` 与 Cargo 的 registry index 都在读者预期里。判据/命令：`grep -n \"pub struct RegistryIndex\\|pub fn index\" core/src/registry_core/tree/index/index.rs`；`grep -n \"index.crates.io\" tools/nichlink-publish`。",
+   "evidence": "(1) 是「注册树的查找表」、(2) 是「源码文本的索引器」，两者都不是 crates.io 的 index。 JS 的 `index.{js,ts}` 与 Cargo 的 registry index 都在读者预期里。判据/命令：`grep -n \"pub struct RegistryIndex\\|pub fn index\" core/src/registry_core/tree/index/index.rs`；`grep -n \"index.crates.io\" tools/xirang-publish`。",
    "fix_hint": "建议保留 `plugin-host`（crate/目录名）**",
    "verify_status": "confirmed",
    "verifier": "t35",
@@ -13587,8 +13587,8 @@
    "amb_category_name": "",
    "amb_question": "问四：本仓库一名多义",
    "amb_role": "(1) 是「注册树的查找表」、(2) 是「源码文本的索引器」，两者都不是 crates.io 的 index。",
-   "amb_reader": "JS 的 `index.{js,ts}` 与 Cargo 的 registry index 都在读者预期里。判据/命令：`grep -n \"pub struct RegistryIndex\\|pub fn index\" core/src/registry_core/tree/index/index.rs`；`grep -n \"index.crates.io\" tools/nichlink-publish`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_reader": "JS 的 `index.{js,ts}` 与 Cargo 的 registry index 都在读者预期里。判据/命令：`grep -n \"pub struct RegistryIndex\\|pub fn index\" core/src/registry_core/tree/index/index.rs`；`grep -n \"index.crates.io\" tools/xirang-publish`。",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "`RegistryIndex` 是内核公开类型（改名需 shim）；`mcp/src/index.rs` 为内部模块。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）",
    "location_note": {
@@ -13617,7 +13617,7 @@
    "line": 1,
    "anchor_note": null,
    "title": "`host` 一名两义",
-   "evidence": "`host` 在本仓有两个层级——「被 NichLink 托管的**宿主应用**」与「托管插件的**插件宿主**」。 判据/命令：`head -1 plugin-host/src/lib.rs`；`grep -rn \"host project\" README.md | head -2`。",
+   "evidence": "`host` 在本仓有两个层级——「被 XiRang 托管的**宿主应用**」与「托管插件的**插件宿主**」。 判据/命令：`head -1 plugin-host/src/lib.rs`；`grep -rn \"host project\" README.md | head -2`。",
    "fix_hint": "建议保留 `plugin-host`（crate/目录名）**",
    "verify_status": "unverified",
    "verifier": null,
@@ -13650,9 +13650,9 @@
    "amb_axis": 4,
    "amb_category_name": "本仓一名多义",
    "amb_question": "问四：本仓库一名多义",
-   "amb_role": "`host` 在本仓有两个层级——「被 NichLink 托管的**宿主应用**」与「托管插件的**插件宿主**」。",
+   "amb_role": "`host` 在本仓有两个层级——「被 XiRang 托管的**宿主应用**」与「托管插件的**插件宿主**」。",
    "amb_reader": "判据/命令：`head -1 plugin-host/src/lib.rs`；`grep -rn \"host project\" README.md | head -2`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "`host!()`/`application!()` 是宿主公开宏（不改名，只做文档义务）。",
    "amb_verdict": "unverified：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13708,7 +13708,7 @@
    "amb_question": "问三：同族易混",
    "amb_role": "feature 是「可选能力的开关」，因此它的名字应当是**能力名**（名词或领域词），不是模块名或动词。",
    "amb_reader": "判据/命令：`grep -rn '^\\[features\\]' -A 20 */Cargo.toml | head -40`；`sed -n '89,93p;122,126p' docs/audit-2026-09-28/audit-publish-surface-merge-plan.md`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
    "amb_impact": "宿主清单（`docs/audit-2026-09-28/audit-publish-surface-merge-plan.md:148-151``）、`cargo install` 的 `required-features`、CI 的 `--all-features`。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
@@ -13764,8 +13764,8 @@
    "amb_question": "问四：本仓库一名多义",
    "amb_role": "函数名应当是「**动作 + 宾语**」的角色（`run_from_env`、`owning_registry`、`build_index`、`evaluate`）， 只有**入口位**才允许裸动词（与 §D 的 D-5 同规则）。 它是「**把锁里写下的插件变成正在运行的插件**的那个运行期宿主——负责验签、准入、隔离执行与原子换代的组织单位」。它**不创建插件**（没有生成/编译插件的代码：全 crate 无 `compile`/`build` 生产路径）。 它是「**定义『什么叫一个可准入的插件』的词汇层**——工件、锁、信任、槽位、策略、合同的定义集合」， 即一个**家族**（不是单一职能），与 `support`/`misc` 同类，只是这个家族的名字恰好是一个生态常用词。 它是「**保留历史公开路径的转发层**（shim）——本身不实现任何插件逻辑」。",
    "amb_reader": "判据/命令见 §5 的脚本（输出 13 行）；**影响的 831 个名字里 212 个按分词命中词表但都带了限定词**（`GraftPlan`/`FaceView`/`PluginArtifact`…）——它们是正确形状，不动。 `grep -rn \"use crate::registry_core::plugin\" core/src | grep -v plugin/ | head`（消费者分布）； `head -1 core/src/registry_core/plugin/plugin.rs`。",
-   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `nichlink-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
-   "amb_impact": "`cli::main`、`RuntimeCheckSpec::run`、`Registry::registry`、`Registry::index` 都是公开 API（改名属公开面变更；`cli` 已有 `run` 可作别名）。 家族改名触及内核公开路径（`nichlink::plugin::…` 被 `plugin-host`、`run_method` 与文档引用）+ shims 棘轮； 子模块不动则影响面为零。",
+   "amb_conflict": "**否（4 个该改、7 个登记即可）**。最值：`cli::main` → **`run_from_env`**；`RuntimeCheckSpec::run` → **`check`**； `Registry::registry(id)` → **`owning_registry(id)`**；`Registry::index()` → **`build_index()`**（或用 `RegistryIndex::from(&registry)`）。 其余（`target`/`graft`/`source`/`requirements` 访问器、`CallTrace::runtime`）进词表。 **是**。`plugin-host` 里的 `host` 正是「宿主」这个角色名词（为插件提供运行环境的那个东西）， 且本仓的 README、`docs/threat-model*.md`、`PluginAdmission` 的文档都这么说——**建议保留 `plugin-host`（crate/目录名）**。 若要更强，`plugin-runtime` 会把重心收在「运行期」（懒激活 + 隔离执行 + 后端），但会**丢掉准入与验签那一半**， 而且代价明确：已发布的 `xirang-plugin-host` 已在 crates.io（0.1.0–0.1.5 无法撤回，只能 yank）， 10 处 `plugin-host/…rs:NN` 文档锚点、`docs/threat-model*`、示例与 README 的依赖写法都要改，收益只是措辞更锐。 **真正该改的是方案里的模块名 `plugins`**（§3）：那才是把「用户插件所在地」与「运行插件的代码」搞成同名的那个改动。 **否（家族名要带限定）**。建议家族改 **`plugin_protocol`**（模块首行自己就说 \"Plugin protocol: …\"）， 子模块角色名（现状 → 角色，**建议不动**，因为父路径已经限定）： `artifact/`=「一个插件工件及其校验状态」；`catalog/",
+   "amb_impact": "`cli::main`、`RuntimeCheckSpec::run`、`Registry::registry`、`Registry::index` 都是公开 API（改名属公开面变更；`cli` 已有 `run` 可作别名）。 家族改名触及内核公开路径（`xirang::plugin::…` 被 `plugin-host`、`run_method` 与文档引用）+ shims 棘轮； 子模块不动则影响面为零。",
    "amb_verdict": "confirmed：证实（抽核 4 个 file:line 全命中）"
   },
   {
@@ -16926,7 +16926,7 @@
     },
     {
      "label": "B. 默认跳过 .git/target 等构建与 VCS 目录，跳过清单写进自述",
-     "cost": "中（遍历集合要与「包内容」的门禁对齐，tools/nichlink-package-audit 已有同类清单可复用）",
+     "cost": "中（遍历集合要与「包内容」的门禁对齐，tools/xirang-package-audit 已有同类清单可复用）",
      "affected": "预览 diff 的忠实度、CI 包内容门禁、上一条的测试夹具"
     },
     {
@@ -16944,8 +16944,8 @@
   },
   {
    "id": "DEC-02",
-   "title": "`NICH_LINK_NAMESPACE` 下命名空间自相矛盾：verify 用 Cargo 名、diff/search 用覆盖名",
-   "context": "t12 活体复现（BRG-BR-6/LGC-LG-13，含遗留 S12）：同一份覆盖命名空间的项目里，`nichlink.verify` 报 `reidentified 3`、`build current`，而 `diff`/`search` 按覆盖名读；两边都「自信」，用户无法从输出判断谁对。",
+   "title": "`XIRANG_NAMESPACE` 下命名空间自相矛盾：verify 用 Cargo 名、diff/search 用覆盖名",
+   "context": "t12 活体复现（BRG-BR-6/LGC-LG-13，含遗留 S12）：同一份覆盖命名空间的项目里，`xirang.verify` 报 `reidentified 3`、`build current`，而 `diff`/`search` 按覆盖名读；两边都「自信」，用户无法从输出判断谁对。",
    "options": [
     {
      "label": "A. 统一用 root 命名空间（verify 改读 root）",
@@ -17000,7 +17000,7 @@
   {
    "id": "DEC-04",
    "title": "版本线政策：是否放宽 `req == workspace_version`，或改用 `[workspace.dependencies]`",
-   "context": "t14 实测：`tools/nichlink-publish` 强制每个内部依赖的 req 等于工作区版本，因此一次版本线推进要动 13 个文件、同步 20 处内部要求；而 `docs/roadmap-1.0.md:74` 的决策 1 仍写着「各 crate 独立发版」的理由——文档与工具的门禁区已经矛盾（GTE-G-16、GTE-G-27）。",
+   "context": "t14 实测：`tools/xirang-publish` 强制每个内部依赖的 req 等于工作区版本，因此一次版本线推进要动 13 个文件、同步 20 处内部要求；而 `docs/roadmap-1.0.md:74` 的决策 1 仍写着「各 crate 独立发版」的理由——文档与工具的门禁区已经矛盾（GTE-G-16、GTE-G-27）。",
    "options": [
     {
      "label": "A. 保留强制相等，改文档（删掉「独立发版」的旧理由）",
@@ -17010,7 +17010,7 @@
     {
      "label": "B. 放宽为「兼容范围」（如 `^0.1`），允许各 crate 独立推进",
      "cost": "高（要放弃当前的单一版本线保证，发布表与 external-rehearsal 都要改判据）",
-     "affected": "tools/nichlink-publish、tools/nichlink-external-rehearsal、CI 发布流、CHANGELOG 形态"
+     "affected": "tools/xirang-publish、tools/xirang-external-rehearsal、CI 发布流、CHANGELOG 形态"
     },
     {
      "label": "C. 用 `[workspace.dependencies]` 收敛（工具已支持，根清单 0 次使用）",
@@ -17258,7 +17258,7 @@
    "report": "audit-lane-kernel.md",
    "line": 375,
    "kind": "item",
-   "text": "运行过的东西：`cargo test -p nichlink-conventions --offline documented_rust_blocks_parse`（报告改名与围栏改 `text` 后 1 passed）与 `cargo test -p nichlink-core --offline --lib`（基线，结果见交付消息）。本轮**没有**新增测试或探针文件（写权限只覆盖本报告），因此 K 系列的复核手段都以“探针命令”形式给出，未逐条实跑；每条探针都写明了期望值与当前值。"
+   "text": "运行过的东西：`cargo test -p xirang-conventions --offline documented_rust_blocks_parse`（报告改名与围栏改 `text` 后 1 passed）与 `cargo test -p xirang-core --offline --lib`（基线，结果见交付消息）。本轮**没有**新增测试或探针文件（写权限只覆盖本报告），因此 K 系列的复核手段都以“探针命令”形式给出，未逐条实跑；每条探针都写明了期望值与当前值。"
   },
   {
    "report": "audit-lane-kernel.md",
@@ -17312,7 +17312,7 @@
    "report": "audit-lane-surfaces.md",
    "line": 401,
    "kind": "item",
-   "text": "执行面没有重做内核的纯逻辑（除 S1/S4/S8 点名的三处外）**：布局解析委托给 `source_layout`（`build_method/src/source_layout.rs`）、身份经 `registry_identity` 与 `lexicon`（`build_method/src/identity.rs:7`）、源码遍历把文件系统事实经 `nichlink::source::SourceTree` 注入（`run_method/src/authoring/operations/operations.rs:257`～`run_method/src/authoring/opera"
+   "text": "执行面没有重做内核的纯逻辑（除 S1/S4/S8 点名的三处外）**：布局解析委托给 `source_layout`（`build_method/src/source_layout.rs`）、身份经 `registry_identity` 与 `lexicon`（`build_method/src/identity.rs:7`）、源码遍历把文件系统事实经 `xirang::source::SourceTree` 注入（`run_method/src/authoring/operations/operations.rs:257`～`run_method/src/authoring/opera"
   },
   {
    "report": "audit-lane-surfaces.md",
@@ -17450,7 +17450,7 @@
    "report": "audit-logic-safety-report.md",
    "line": 600,
    "kind": "item",
-   "text": "`/tmp/nichverify/synthprobe`（dep：`nichlink-core`，features `syntax`）：K-01 读→写往返；X-2 表头拼错 vs 正确；K-07 三形态（空锁/表头在后/仅注释）；X-1 十字段空身份。"
+   "text": "`/tmp/nichverify/synthprobe`（dep：`xirang-core`，features `syntax`）：K-01 读→写往返；X-2 表头拼错 vs 正确；K-07 三形态（空锁/表头在后/仅注释）；X-1 十字段空身份。"
   },
   {
    "report": "audit-logic-safety-report.md",
@@ -17506,7 +17506,7 @@
   },
   {
    "item": "STR-幻影依赖（t7 结构基线 §3.4 / §6.3 的合并理由）",
-   "was": "run_method 的宏无条件发射 `::nichlink_debug_method::submit!`，形成幻影依赖 → 建议合并 debug_method",
+   "was": "run_method 的宏无条件发射 `::xirang_debug_method::submit!`，形成幻影依赖 → 建议合并 debug_method",
    "now": "**撤销**：t8 实测证伪（`collector: debug` 才发、且有 `#[cfg(debug_assertions)]` 门控；出厂路径两个示例走 `development` 空 arm）。t14 据此撤销合并推荐。保留的窄缺口是「隐藏开关无文档」（LGC-LH-11，MINOR）",
    "verifier": "t8（实测）+ t14（据此改结论）",
    "source": "audit-logic-hunt.md:326（LH-11）；audit-boundary-refactor-plan.md 附录 B"
@@ -17885,7 +17885,7 @@
     ],
     "fixed_in_batch": "内核入口",
     "status": "已收回一份实现（同族三例全部收回）",
-    "batch_2_note": "t7 + t8 + t16：内核公开 `nichlink::authoring::parse::compact_admission`（`core/src/registry_core/authoring/parse/admission.rs:73`）成为唯一渲染器，`parse_admission_expression` 的历史单列表分支并入它；Studio 的 `admission_text`（`studio/src/studio/app/source_index.rs:69`）只委派；同族第三例 `compact_registration_rule`（`core/src/registry_core/authoring/parse/rules.rs:82`）与 `registration_rule_text`（`studio/src/studio/app/source_index.rs:96`）同批收回",
+    "batch_2_note": "t7 + t8 + t16：内核公开 `xirang::authoring::parse::compact_admission`（`core/src/registry_core/authoring/parse/admission.rs:73`）成为唯一渲染器，`parse_admission_expression` 的历史单列表分支并入它；Studio 的 `admission_text`（`studio/src/studio/app/source_index.rs:69`）只委派；同族第三例 `compact_registration_rule`（`core/src/registry_core/authoring/parse/rules.rs:82`）与 `registration_rule_text`（`studio/src/studio/app/source_index.rs:96`）同批收回",
     "resolution": "本条的 `fix_hint`（「建议下一步把内核的 compact_admission 提升为公开入口」）已在第二批落地：内核公开入口就是 `core/src/registry_core/authoring/parse/admission.rs:73` 的 `compact_admission`（同族第三例在 `core/src/registry_core/authoring/parse/rules.rs:82`）；Studio 侧不再有第二份紧凑拼法实现（结构钉子 `studio/src/studio/app/source_index.rs:207` 的 `the_call_site_carries_no_second_compact_renderer` 钉住函数体只委派），`consumers_fixed` 仍指两个用户可见面（Edit 预填、检视器行）。t11 独立验证：crate 外可调（含 run_method shim 路径）、改坏内核入口会让 Studio 5 条红、把副本放回的变异下结构检查器报 FOUND",
     "verification": {
      "status": "证实",
@@ -17902,7 +17902,7 @@
  },
  "fix_batch_2": {
   "as_of": "2026-09-28（第二批记账；t1–t22 的落地窗口 19:01–20:13）",
-  "note": "第二批修复轮（B2 门禁与工具 / B3 桥与宿主 / 内核公开入口 / X-1）的逐条记账。本块的每个数字都由 `findings[].fixed_in_batch` / `.verification` 现算（`check_report.py` 逐条复算），不另立事实；主清单 212 条的 file/line/title/severity 与 §0–§12 的结论一字未改。数据由 `/tmp/nichlink-audit-logs/patch_fix_batch_2.py` 落盘：`build_findings.py` 再生成后需重跑它。",
+  "note": "第二批修复轮（B2 门禁与工具 / B3 桥与宿主 / 内核公开入口 / X-1）的逐条记账。本块的每个数字都由 `findings[].fixed_in_batch` / `.verification` 现算（`check_report.py` 逐条复算），不另立事实；主清单 212 条的 file/line/title/severity 与 §0–§12 的结论一字未改。数据由 `/tmp/xirang-audit-logs/patch_fix_batch_2.py` 落盘：`build_findings.py` 再生成后需重跑它。",
   "labels": [
    "B2",
    "B3",
@@ -18018,12 +18018,12 @@
   },
   "new_public_symbols": [
    {
-    "symbol": "nichlink::authoring::parse::compact_admission",
+    "symbol": "xirang::authoring::parse::compact_admission",
     "file": "core/src/registry_core/authoring/parse/admission.rs",
     "line": 73,
     "task": "t7",
     "gate": "`#[cfg(feature = \"syntax\")]` 之后（t11 负向实测：去掉 `syntax` 即 `E0432`）",
-    "shim": "nichlink_run_method::authoring::parse::compact_admission（Studio 走的这条）",
+    "shim": "xirang_run_method::authoring::parse::compact_admission（Studio 走的这条）",
     "consumer": "studio/src/studio/app/source_index.rs:69（`admission_text`）",
     "verification": {
      "status": "证实",
@@ -18032,12 +18032,12 @@
     }
    },
    {
-    "symbol": "nichlink::authoring::parse::compact_registration_rule",
+    "symbol": "xirang::authoring::parse::compact_registration_rule",
     "file": "core/src/registry_core/authoring/parse/rules.rs",
     "line": 78,
     "task": "t16",
     "gate": "同族，`#[cfg(feature = \"syntax\")]` 之后",
-    "shim": "nichlink_run_method::authoring::parse::compact_registration_rule",
+    "shim": "xirang_run_method::authoring::parse::compact_registration_rule",
     "consumer": "studio/src/studio/app/source_index.rs:96（`registration_rule_text`）",
     "verification": {
      "status": "未获独立复核",
@@ -18071,7 +18071,7 @@
      "mcp/src/evidence_tests.rs"
     ],
     "conclusion": "词形单源：`mcp/src/overlay.rs:72` 与 `mcp/src/converge.rs:133` 改为消费 `evidence.freshness()`，两文件里 `\"current\"` / `\"stale (run` 0 命中（grep exit 1）；新增耦合钉子 `evidence::evidence_tests::every_report_spells_the_freshness_word_that_one_place_produces`（对已发布证据的树与无证据的树分别断言 explain / overlay / converge 三条打印同一句词）。",
-    "evidence": "三态（同一变异：`freshness()` 的 current 分支 → `healthy`）：① 改动前+变异 ⇒ `cargo test -p nichlink-mcp --offline` `108 passed; 0 failed`（overlay/converge 仍回旧词 ⇒ 三份词形无耦合，这就是 t10 的变异 E）；② 现码+同一变异 ⇒ `107 passed; 2 failed`（`overlay::overlay_tests::a_published_scope_marks_the_slots_it_prunes` 与上述新钉子）；③ 还原 ⇒ `109 passed; 0 failed`，工作区探针三条均 `build current`；变异只在 /tmp 副本，工作区四个 in-scope 文件与备份逐字节一致。",
+    "evidence": "三态（同一变异：`freshness()` 的 current 分支 → `healthy`）：① 改动前+变异 ⇒ `cargo test -p xirang-mcp --offline` `108 passed; 0 failed`（overlay/converge 仍回旧词 ⇒ 三份词形无耦合，这就是 t10 的变异 E）；② 现码+同一变异 ⇒ `107 passed; 2 failed`（`overlay::overlay_tests::a_published_scope_marks_the_slots_it_prunes` 与上述新钉子）；③ 还原 ⇒ `109 passed; 0 failed`，工作区探针三条均 `build current`；变异只在 /tmp 副本，工作区四个 in-scope 文件与备份逐字节一致。",
     "verification": {
      "status": "进行中（t25；其报告 audit-verify-extra.md 已在写，本节不据未完成的复核下结论）",
      "report": null
@@ -18205,7 +18205,7 @@
      "F-4"
     ],
     "not_covered": [
-     "完整 `tools/nichlink-external-rehearsal` 复跑（只静态 + BSD 仿真）",
+     "完整 `tools/xirang-external-rehearsal` 复跑（只静态 + BSD 仿真）",
      "`nm` 整个缺失的 mini PATH、`readelf`/`.inventory`、FULL/MINIMAL 分支",
      "t1 的棘轮性能计时",
      "t1/t2/t4 自述里“顺带修掉”的邻域（含 `GTE-G-17` 的 roadmap 半边、`GTE-G-19` 的 AGENTS.md 描述）"
@@ -18270,7 +18270,7 @@
     "not_covered": [
      "Windows 分隔符路径（BR-9 的折叠只在 Unix 上以“文件名含反斜杠”的夹具暴露）",
      "BR-C6 的另一半 `plugin-host/src/lazy_wasm.rs` 的 `is_loaded`（只核未被触碰）",
-     "BR-1 的语义等价未做端到端（`nichlink.grafts` 的 `NOT declared by the host entry` 输出）",
+     "BR-1 的语义等价未做端到端（`xirang.grafts` 的 `NOT declared by the host entry` 输出）",
      "BR-C7 只端到端覆盖 `add`，其余动词与 `confirm` 门未逐动作跑",
      "BR-15 / BR-C2 / BR-C3 / BR-C4 不在 t10 的逐条清单内"
     ]
@@ -18338,7 +18338,7 @@
     "severity": "low",
     "status": "已由 t23 关闭",
     "where": "mcp/src/overlay.rs:72 / mcp/src/converge.rs:133",
-    "note": "两处改为消费 `evidence.freshness()`，不再内联 `current` / `stale (run nichlink check)`；新耦合钉子 `evidence::evidence_tests::every_report_spells_the_freshness_word_that_one_place_produces` 的三态证据：改前+变异 108 passed 全绿 → 现码+同一变异 107 passed / 2 failed → 还原 109 passed 全绿（详见 §13.6）；t10 的「部分证实」判定不改，t23 的独立复核 t25 进行中。"
+    "note": "两处改为消费 `evidence.freshness()`，不再内联 `current` / `stale (run xirang check)`；新耦合钉子 `evidence::evidence_tests::every_report_spells_the_freshness_word_that_one_place_produces` 的三态证据：改前+变异 108 passed 全绿 → 现码+同一变异 107 passed / 2 failed → 还原 109 passed 全绿（详见 §13.6）；t10 的「部分证实」判定不改，t23 的独立复核 t25 进行中。"
    },
    {
     "id": "SUR-S10 位置漂移",
@@ -18359,7 +18359,7 @@
    "as_of": "2026-09-28（t52 第三轮记账）",
    "items": [
     {
-     "symbol": "nichlink::authoring::parse::compact_registration_rule",
+     "symbol": "xirang::authoring::parse::compact_registration_rule",
      "file": "core/src/registry_core/authoring/parse/rules.rs",
      "from": 82,
      "to": 78
@@ -18370,7 +18370,7 @@
  },
  "fix_batch_3": {
   "as_of": "2026-09-28（第三轮记账；B4 落地与复核窗口 20:30–22:55）",
-  "note": "第三轮记账：B4 的独立复核结论、t34/t35 的新条目、平台逼迫的假绿（单列一节）、新增公开面与版本线含义、以及\"不可离线判定\"的环境用例。本块的每个数字都由它自己的清单现算（`check_report.py` 逐条复算），不另立事实；主清单 212 条的 file/line/title/severity/evidence 与 §0–§13 的既有结论一字未改。数据由 `/tmp/nichlink-audit-logs/patch_fix_batch_3.py` 落盘（在 `patch_fix_batch_2.py` 之后跑；`build_findings.py` 再生成后两个脚本都要重跑）。",
+  "note": "第三轮记账：B4 的独立复核结论、t34/t35 的新条目、平台逼迫的假绿（单列一节）、新增公开面与版本线含义、以及\"不可离线判定\"的环境用例。本块的每个数字都由它自己的清单现算（`check_report.py` 逐条复算），不另立事实；主清单 212 条的 file/line/title/severity/evidence 与 §0–§13 的既有结论一字未改。数据由 `/tmp/xirang-audit-logs/patch_fix_batch_3.py` 落盘（在 `patch_fix_batch_2.py` 之后跑；`build_findings.py` 再生成后两个脚本都要重跑）。",
   "labels": [
    "B4-core",
    "B4-studio",
@@ -18676,7 +18676,7 @@
      {
       "id": "STU-S-06",
       "what": "内核 `item_symbols`（`core/src/registry_core/source/items.rs:56`，由 `source.rs` 以 `#[path] mod items; pub use items::*;` 挂载）；Studio `studio/src/studio/app/search_queries.rs` 合并为一个 `source_rows_for_text(...)`",
-      "red": "Studio 四条钉子（旧词表）→ `left: [] right: [\"measure\"]` / `[\"render\"]` / `let` 误报 / `[\"Panel\"]`；内核红侧 `error[E0432]: unresolved import nichlink::source::item_symbols`"
+      "red": "Studio 四条钉子（旧词表）→ `left: [] right: [\"measure\"]` / `[\"render\"]` / `let` 误报 / `[\"Panel\"]`；内核红侧 `error[E0432]: unresolved import xirang::source::item_symbols`"
      }
     ],
     "new_public": [
@@ -18836,7 +18836,7 @@
     "from": "t41（覆盖面缺陷，队长点名）",
     "closed": false,
     "where": "run_method/src/lib.rs:17,52（非默认 `authoring` 特性）",
-    "what": "LGC-LG-05 的修复与两条钉子都在非默认特性之后 ⇒ 标准 verify 里 `cargo test -p nichlink-run-method --offline` **跑不到它们**（实测 `manifest::face` 默认 **0** 条、加 `--features authoring` **8** 条）",
+    "what": "LGC-LG-05 的修复与两条钉子都在非默认特性之后 ⇒ 标准 verify 里 `cargo test -p xirang-run-method --offline` **跑不到它们**（实测 `manifest::face` 默认 **0** 条、加 `--features authoring` **8** 条）",
     "status": "未修（建议）：账本口径＝**该条目的验证命令必须带 `--features authoring`**；与既有教训\"非默认特性下裸跑是 0 passed、看起来像绿\"并列。`cargo test --workspace`（特性合并）与 CI 的 `--all-features` 覆盖得到（t41 已在 workspace 日志里确认两条钉子跑绿）"
    }
   ],
@@ -18870,7 +18870,7 @@
     "test": "studio::app::tests::new_project::new_project_and_explicit_root_face_compile",
     "command": "cargo test --workspace --offline",
     "verdict": "不可离线判定 / 环境相关",
-    "why": "该用例生成一个宿主工程并跑 `cargo check --offline`，离线解析 `nichlink-run-method ^0.1.6` 依赖本机 `CARGO_HOME` 的 git 缓存与版本线状态（缓存里只有 0.1.5 时会 `failed to select a version`），与代码交付无关",
+    "why": "该用例生成一个宿主工程并跑 `cargo check --offline`，离线解析 `xirang-run-method ^0.1.6` 依赖本机 `CARGO_HOME` 的 git 缓存与版本线状态（缓存里只有 0.1.5 时会 `failed to select a version`），与代码交付无关",
     "measured": [
      "t38 的窗口：它是工作区**唯一**失败，三条对照证明与本任务无关（无 `.git` 的隔离副本同一条命令 EXIT=0、20:32 的 `/tmp/land1-g2.log:1244`（t28 开工前）已是同一失败、单跑该测试也稳定红）",
      "t58 的窗口：同一失败，41 套件绿、唯一红即它",
@@ -18883,7 +18883,7 @@
   "new_public_surface": [
    {
     "symbol": "try_render_requirements",
-    "crate": "nichlink-core",
+    "crate": "xirang-core",
     "task": "t43",
     "anchor": "core/src/registry_core/authoring/parse/rules.rs:203",
     "signature": "pub fn try_render_requirements(value: &str) -> Result<String, FaceParseError>",
@@ -18893,7 +18893,7 @@
    },
    {
     "symbol": "face_views_and_unreadable",
-    "crate": "nichlink-build-method",
+    "crate": "xirang-build-method",
     "task": "t29",
     "anchor": "build_method/src/face_view.rs:168",
     "signature": "pub fn face_views_and_unreadable(root, package) -> (Vec<FaceView>, Vec<String>)",
@@ -18903,7 +18903,7 @@
    },
    {
     "symbol": "item_symbols / SourceItem",
-    "crate": "nichlink-core",
+    "crate": "xirang-core",
     "task": "t36",
     "anchor": "core/src/registry_core/source/items.rs:56 / :21",
     "signature": "pub fn item_symbols(source: &str) -> Vec<SourceItem>；pub struct SourceItem { name, signature, line, is_function }",
@@ -18913,7 +18913,7 @@
    },
    {
     "symbol": "try_parse_requirements_owned",
-    "crate": "nichlink-core",
+    "crate": "xirang-core",
     "task": "t32",
     "anchor": "core/src/registry_core/authoring/parse/rules.rs:255",
     "signature": "pub fn try_parse_requirements_owned(...) -> Result<…, FaceParseError>",
@@ -18923,8 +18923,8 @@
    }
   ],
   "release_implication": {
-   "version_line": "这四个入口都随**未发布**的 `0.1.6` 走：工作区版本仍是 `0.1.6`（各 `Cargo.toml`），无需额外抬版本；`tools/nichlink-publish --check-table` 不受影响（它只按清单比较依赖表）。",
-   "package_audit": "`tools/nichlink-package-audit` 的**内容**半边对这些入口成立（t36 实测 `cargo package -p nichlink-core --list --offline` 列出 `src/registry_core/source/items.rs`）；**隔离打包**半边要等这些 crate 的带版本号 `nichlink-*` 依赖进 index，未发布期间 warn + 跳过（**skip ≠ 失败**）。这批新增把等待态**加深**了一层：Studio 现在调用未发布 0.1.6 的内核符号。发布顺序仍是 core 在前（core → … → run_method → studio），发布后重跑 `--verify-consumers`。",
+   "version_line": "这四个入口都随**未发布**的 `0.1.6` 走：工作区版本仍是 `0.1.6`（各 `Cargo.toml`），无需额外抬版本；`tools/xirang-publish --check-table` 不受影响（它只按清单比较依赖表）。",
+   "package_audit": "`tools/xirang-package-audit` 的**内容**半边对这些入口成立（t36 实测 `cargo package -p xirang-core --list --offline` 列出 `src/registry_core/source/items.rs`）；**隔离打包**半边要等这些 crate 的带版本号 `xirang-*` 依赖进 index，未发布期间 warn + 跳过（**skip ≠ 失败**）。这批新增把等待态**加深**了一层：Studio 现在调用未发布 0.1.6 的内核符号。发布顺序仍是 core 在前（core → … → run_method → studio），发布后重跑 `--verify-consumers`。",
    "note": "新增跨 crate 公开符号不改版本线；把它们写进 `[0.1.6]` 的 Added 段是**文书义务**，不是发布动作。"
   },
   "coverage_notes": [
@@ -18995,7 +18995,7 @@
  },
  "fix_batch_4": {
   "as_of": "2026-09-28 深夜（末轮记账；t60–t89 的落地与复核窗口）",
-  "note": "第四轮（末轮）记账：把 §14 之后的全部轮次折进来——LG-32 第二半与其最小改进、LG-47 链（修→装置→加固→复核）、K-10 家族、SUR-S11、B6-studio 10/10、B5-core/B5-build_method 的注释轴、以及八份新的独立复核报告。本块的每个数字都由它自己的清单现算（`check_report.py` 逐条复算），不另立事实；主清单 212 条的 file/line/title/severity/evidence 与 §0–§14 的既有结论一字未改（本块只新增字段与顶层键）。数据由 `/tmp/nichlink-audit-logs/patch_fix_batch_4.py` 落盘（在 batch_2/batch_3 两个脚本之后跑；`build_findings.py` 再生成后三个脚本都要重跑）。",
+  "note": "第四轮（末轮）记账：把 §14 之后的全部轮次折进来——LG-32 第二半与其最小改进、LG-47 链（修→装置→加固→复核）、K-10 家族、SUR-S11、B6-studio 10/10、B5-core/B5-build_method 的注释轴、以及八份新的独立复核报告。本块的每个数字都由它自己的清单现算（`check_report.py` 逐条复算），不另立事实；主清单 212 条的 file/line/title/severity/evidence 与 §0–§14 的既有结论一字未改（本块只新增字段与顶层键）。数据由 `/tmp/xirang-audit-logs/patch_fix_batch_4.py` 落盘（在 batch_2/batch_3 两个脚本之后跑；`build_findings.py` 再生成后三个脚本都要重跑）。",
   "labels": [
    "LG-32",
    "LG-47",
@@ -19451,7 +19451,7 @@
   "new_public_surface": [
    {
     "symbol": "try_rule_syntax_from_text",
-    "crate": "nichlink-core",
+    "crate": "xirang-core",
     "task": "t66",
     "anchor": "core/src/registry_core/authoring/parse/rules.rs:120",
     "signature": "pub fn try_rule_syntax_from_text(text: &str) -> Result<String, FaceParseError>",
@@ -19592,7 +19592,7 @@
     "id": "fix5-R1",
     "what": "`examples/**` 里仍写旧符号名 `cut.full()` **2 处**：`examples/control-button/tests/static_plan_allocations.rs:138` 与 `examples/control-button/tests/registry.rs:300`。",
     "why_not_collected": "`NAM-35` 的口径是\"保旧名 + 加新名\"，因此旧名仍可用、示例仍编译 ✓；而 `examples/**` 是身份红线且不在本批各组 inScope ⇒ 本批不收，转尾段/后续按新名口径收敛。",
-    "evidence": "`grep -rn \"\\.full()\" examples/` = 2 处（上述两行）；`cargo test -p nichlink-example-control-button --offline` exit 0（旧名转发器在生效）。"
+    "evidence": "`grep -rn \"\\.full()\" examples/` = 2 处（上述两行）；`cargo test -p xirang-example-control-button --offline` exit 0（旧名转发器在生效）。"
    },
    {
     "id": "fix5-R2",
@@ -19607,7 +19607,7 @@
     "was": 16,
     "now": 17,
     "why": "本批动了 `conventions/src/shims.rs`：`NAM-03/09` 两行**路径**更新（t96）、A1 末片 4 行路径更新（t105）；条目**总数**从 16 到 17。",
-    "evidence": "本单复算：`grep -cE '^\\s+\\\\(' conventions/src/shims.rs` = **17**；`cargo test -p nichlink-conventions --offline` 的 shims 棘轮两条绿。"
+    "evidence": "本单复算：`grep -cE '^\\s+\\\\(' conventions/src/shims.rs` = **17**；`cargo test -p xirang-conventions --offline` 的 shims 棘轮两条绿。"
    },
    {
     "row": "合并方案 §? bilingual 违例数",

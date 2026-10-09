@@ -206,11 +206,11 @@ fn quoted(text: &str) -> Vec<String> {
 /// 遍历永不进入的目录名。
 ///
 /// `target/` holds build output, and `build_method` writes generated Rust into it
-/// (`<member>/target/nichlink/out/*.rs`). A generated file is not source: the
+/// (`<member>/target/xirang/out/*.rs`). A generated file is not source: the
 /// mounting gate once read `include!` out of a stale artifact, which is a failure
 /// a maintainer cannot fix by editing the file the gate names.
 /// `target/` 存放构建产物，而 `build_method` 会把生成的 Rust 写进去
-/// （`<member>/target/nichlink/out/*.rs`）。生成的文件不是源码：挂载门禁曾从一份过期产物里
+/// （`<member>/target/xirang/out/*.rs`）。生成的文件不是源码：挂载门禁曾从一份过期产物里
 /// 读到 `include!`，而那是维护者无法通过编辑门禁点名的那个文件来修复的失败。
 const SKIPPED_DIRECTORIES: &[&str] = &["target"];
 
@@ -361,12 +361,12 @@ pub fn lines(path: &Path) -> Vec<String> {
 /// 以工作区根为基准渲染路径，使用 `/` 分隔符。
 ///
 /// The fold is not written here: it forwards to the kernel's
-/// [`nichlink_kernel::declaration::portable_path`], the one implementation, so a gate
+/// [`xirang_kernel::declaration::portable_path`], the one implementation, so a gate
 /// report and the surface it describes cannot spell the same file two ways.
-/// 这份折叠不在这里写：它转发到内核的 [`nichlink_kernel::declaration::portable_path`]，那是唯一的
+/// 这份折叠不在这里写：它转发到内核的 [`xirang_kernel::declaration::portable_path`]，那是唯一的
 /// 实现，因此门禁报告与它所描述的执行面不会把同一个文件拼成两种样子。
 pub fn relative(root: &Path, path: &Path) -> String {
-    nichlink_kernel::declaration::portable_path(
+    xirang_kernel::declaration::portable_path(
         &path.strip_prefix(root).unwrap_or(path).to_string_lossy(),
     )
 }
@@ -423,7 +423,7 @@ fn visit_fixture_members(root: &Path, directory: &Path, members: &mut Vec<String
         if path.file_name().and_then(|name| name.to_str()) == Some("src") {
             let owner = path.parent().unwrap_or(root).strip_prefix(root);
             let text = owner
-                .map(|owner| nichlink_kernel::declaration::portable_path(&owner.to_string_lossy()))
+                .map(|owner| xirang_kernel::declaration::portable_path(&owner.to_string_lossy()))
                 .unwrap_or_default();
             members.push(if text.is_empty() {
                 ".".to_owned()
@@ -446,7 +446,7 @@ mod tests {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "nichlink-conventions-{name}-{}-{}",
+            "xirang-conventions-{name}-{}-{}",
             std::process::id(),
             sequence
         ));
@@ -479,17 +479,17 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
-    /// Build output is not source. `<member>/target/nichlink/out/*.rs` is where
+    /// Build output is not source. `<member>/target/xirang/out/*.rs` is where
     /// `build_method` writes generated Rust, and a stale artifact must not be read
     /// as a declaration the repository ships.
-    /// 构建产物不是源码。`<member>/target/nichlink/out/*.rs` 是 `build_method` 写生成 Rust 的
+    /// 构建产物不是源码。`<member>/target/xirang/out/*.rs` 是 `build_method` 写生成 Rust 的
     /// 地方，而一份过期产物不得被读成仓库出厂的声明。
     #[test]
     fn build_output_is_not_walked_into() {
         let root = synthetic("target");
-        fs::create_dir_all(root.join("target/nichlink/out")).expect("artifact dir");
+        fs::create_dir_all(root.join("target/xirang/out")).expect("artifact dir");
         fs::write(
-            root.join("target/nichlink/out/generated.rs"),
+            root.join("target/xirang/out/generated.rs"),
             "include!(\"stale\");\n",
         )
         .expect("artifact file");

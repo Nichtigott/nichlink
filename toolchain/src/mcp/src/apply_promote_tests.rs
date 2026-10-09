@@ -30,7 +30,7 @@ fn scratch(label: &str) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "nichlink-promote-{label}-{}-{sequence}",
+        "xirang-promote-{label}-{}-{sequence}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -80,7 +80,7 @@ fn promote_requires_the_callers_own_confirm() {
 #[test]
 fn a_missing_record_is_refused_with_the_path_it_looked_in() {
     let root = scratch("record");
-    std::fs::create_dir_all(root.join(".nichlink/external-grafts")).expect("records directory");
+    std::fs::create_dir_all(root.join(".xirang/external-grafts")).expect("records directory");
     let refused = refusal(run_promote(
         &root,
         &root,
@@ -88,7 +88,7 @@ fn a_missing_record_is_refused_with_the_path_it_looked_in() {
         &json!({"selector": "button_fast", "confirm": true}),
     ));
     assert!(
-        refused.contains(".nichlink/external-grafts/button_fast/graft.plan"),
+        refused.contains(".xirang/external-grafts/button_fast/graft.plan"),
         "the refusal names the file it wanted: {refused}"
     );
 }
@@ -110,7 +110,7 @@ fn the_generators_own_face_layout_is_found() {
     let root = scratch("layout");
     let generated = root.join("src/panel/object/frame/frame.rs");
     std::fs::create_dir_all(generated.parent().expect("a parent")).expect("face directory");
-    std::fs::write(&generated, "// generated-by=NichLink\n").expect("the face");
+    std::fs::write(&generated, "// generated-by=XiRang\n").expect("the face");
     assert_eq!(
         external_file(&root, "panel::object::frame").expect("the generator's layout is found"),
         generated
@@ -120,7 +120,7 @@ fn the_generators_own_face_layout_is_found() {
     // 单段的情形同一条规则：模块 `fast` 就是 `src/fast/fast.rs`。
     let single = root.join("src/fast/fast.rs");
     std::fs::create_dir_all(single.parent().expect("a parent")).expect("face directory");
-    std::fs::write(&single, "// generated-by=NichLink\n").expect("the face");
+    std::fs::write(&single, "// generated-by=XiRang\n").expect("the face");
     assert_eq!(
         external_file(&root, "fast").expect("a one-segment module is found too"),
         single
@@ -144,7 +144,7 @@ fn the_generators_own_face_layout_is_found() {
 #[test]
 fn an_external_declaration_is_read_into_the_hosts_spellings() {
     let source = "\
-nichlink_toolchain::run_method::external_object! {
+xirang_toolchain::run_method::external_object! {
     source: \"button_fast/button_fast.rs\",
     kind: ButtonFast,
     preset: NoPreset,
@@ -161,7 +161,7 @@ nichlink_toolchain::run_method::external_object! {
     runtime_checks: [],
 }
 ";
-    let face = nichlink_kernel::syntax::parse_face(source)
+    let face = xirang_kernel::syntax::parse_face(source)
         .expect("the declaration parses")
         .expect("it declares one face");
     let external = External::from_syntax(
@@ -204,7 +204,7 @@ external_object! {
     registry_rule: RegistrationRule::preset(Preset::A),
 }
 ";
-    let face = nichlink_kernel::syntax::parse_face(rich)
+    let face = xirang_kernel::syntax::parse_face(rich)
         .expect("parses")
         .expect("one face");
     let refused = External::from_syntax(&face, std::path::Path::new("x.rs"), String::new())
@@ -221,7 +221,7 @@ external_object! {
     admission: allowed([\"crate::inner\"]),
 }
 ";
-    let face = nichlink_kernel::syntax::parse_face(admitted)
+    let face = xirang_kernel::syntax::parse_face(admitted)
         .expect("parses")
         .expect("one face");
     let refused = External::from_syntax(&face, std::path::Path::new("x.rs"), String::new())
@@ -255,7 +255,7 @@ static_graft_plan!(
     cut(crate::c::NODE_ID) graft(ext::c_fast::NODE_ID),
 );
 ";
-    let before = nichlink_kernel::syntax::entries::graft_entries(source).expect("parses");
+    let before = xirang_kernel::syntax::entries::graft_entries(source).expect("parses");
     assert_eq!(before.len(), 3, "three entries to start");
     // The entries report their own lines (the fixture spreads them over lines 3–6), and the
     // neighbours' lines are what the rewrite must not disturb.
@@ -272,7 +272,7 @@ static_graft_plan!(
     // The middle entry, spread over two lines: the neighbours must come back untouched.
     // 中间那条（摊在两行上）：邻居必须原样回来。
     let middle = repoint_graft(source, &before[1].cut, &before[1].graft).expect("the span closes");
-    let after = nichlink_kernel::syntax::entries::graft_entries(&middle).expect("still parses");
+    let after = xirang_kernel::syntax::entries::graft_entries(&middle).expect("still parses");
     assert_eq!(after.len(), 3, "the entry count is unchanged: {middle}");
     assert_eq!(after[0].graft, "ext::a_fast::NODE_ID", "{middle}");
     assert_eq!(after[2].graft, "ext::c_fast::NODE_ID", "{middle}");
@@ -289,7 +289,7 @@ static_graft_plan!(
     // 最后一条：没有下一条可以框定边界，也没有逗号可以带走。
     let last =
         repoint_graft(&middle, &after[2].cut, &after[2].graft).expect("the last span closes");
-    let rest = nichlink_kernel::syntax::entries::graft_entries(&last).expect("still parses");
+    let rest = xirang_kernel::syntax::entries::graft_entries(&last).expect("still parses");
     assert_eq!(rest.len(), 3, "still three entries: {last}");
     assert_eq!(rest[2].graft, rest[2].cut, "{last}");
     assert_eq!(rest[0].graft, "ext::a_fast::NODE_ID", "{last}");
@@ -303,10 +303,10 @@ static_graft_plan!(
     cut(crate::slider::NODE_ID) graft(control_button_graft::slider_fast::NODE_ID),
 );
 ";
-    let parsed = nichlink_kernel::syntax::entries::graft_entries(two).expect("parses");
+    let parsed = xirang_kernel::syntax::entries::graft_entries(two).expect("parses");
     let first =
         repoint_graft(two, &parsed[0].cut, &parsed[0].graft).expect("the first span closes");
-    let left = nichlink_kernel::syntax::entries::graft_entries(&first).expect("still parses");
+    let left = xirang_kernel::syntax::entries::graft_entries(&first).expect("still parses");
     assert_eq!(left.len(), 2, "{first}");
     assert_eq!(left[0].graft, left[0].cut, "{first}");
     assert_eq!(
@@ -353,7 +353,7 @@ fn a_preview_learns_the_namespace_from_the_project_not_the_copy() {
     // A record the preview can load from the project root, so the call gets past that step and reaches
     // the namespace it used to ask the copy for.
     // 一条预览能从项目根读到的记录，好让这次调用越过那一步、到达它过去向副本索要的命名空间。
-    let record = root.join(".nichlink/external-grafts/fast/graft.plan");
+    let record = root.join(".xirang/external-grafts/fast/graft.plan");
     std::fs::create_dir_all(record.parent().expect("the record directory")).expect("record dir");
     std::fs::write(
         &record,

@@ -7,12 +7,12 @@ set -eu
 # Why a script and not nine hand-typed commands: every dependent writes its
 # internal requirement as a caret requirement on the current version line
 # (`docs/roadmap-1.0.md` decision 1), so publishing `run_method` before the index
-# serves `nichlink-kernel` at that version fails resolution. The order below is that
+# serves `xirang-kernel` at that version fails resolution. The order below is that
 # dependency chain, and the script waits for
 # each level to appear in the index before starting the next one — the wait is
 # the part a human forgets.
 # 为什么要脚本而不是手敲九条命令：每个依赖方都把内部依赖写成对**当前版本线**的 caret 要求
-# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供那一版的 `nichlink-kernel` 之前发布
+# （`docs/roadmap-1.0.md` 决策 1），因此在 index 提供那一版的 `xirang-kernel` 之前发布
 # `run_method` 会解析失败。下面的顺序就是那条依赖链，脚本会在开始下一层之前等待上一层出现
 # 在 index 里——这个等待正是人容易忘掉的部分。
 #
@@ -23,23 +23,23 @@ set -eu
 # 上已发布的版本不可变——只能 yank，不能替换。
 #
 # Dry-run behaviour before the first release: a crate whose versioned
-# `nichlink-*` dependency is not on the index yet is *skipped with a warning*
-# instead of failing, exactly like `tools/nichlink-package-audit`. So today the
-# dry run verifies `nichlink-kernel` in full and reports the other eight as
+# `xirang-*` dependency is not on the index yet is *skipped with a warning*
+# instead of failing, exactly like `tools/xirang-package-audit`. So today the
+# dry run verifies `xirang-kernel` in full and reports the other eight as
 # waiting; after core is published it verifies the next level, and so on.
-# 首次发布之前的 dry-run 行为：带版本号的 `nichlink-*` 依赖尚未出现在 index 上的 crate
-# 会被**跳过并警告**，而不是失败，与 `tools/nichlink-package-audit` 一致。因此今天 dry-run
-# 会完整校验 `nichlink-kernel`、把其余八个报成"等待中"；core 发布之后就会校验下一层，依此类推。
+# 首次发布之前的 dry-run 行为：带版本号的 `xirang-*` 依赖尚未出现在 index 上的 crate
+# 会被**跳过并警告**，而不是失败，与 `tools/xirang-package-audit` 一致。因此今天 dry-run
+# 会完整校验 `xirang-kernel`、把其余八个报成"等待中"；core 发布之后就会校验下一层，依此类推。
 #
 # Real publish:
-#   CARGO_REGISTRY_TOKEN=... tools/nichlink-publish --publish --yes
-#   tools/nichlink-publish --publish --yes --allow-dirty   # from a dirty tree
+#   CARGO_REGISTRY_TOKEN=... tools/xirang-publish --publish --yes
+#   tools/xirang-publish --publish --yes --allow-dirty   # from a dirty tree
 #
 # The dependency table is hand-maintained, and a hand-maintained table goes
 # stale silently; check it against the manifests before trusting the order:
-#   tools/nichlink-publish --check-table
+#   tools/xirang-publish --check-table
 # 依赖表是手工维护的，而手工维护的表会静默过期；在信任这个顺序之前先拿清单核对：
-#   tools/nichlink-publish --check-table
+#   tools/xirang-publish --check-table
 #
 # Both modes above are checks: they upload nothing, and neither combines with
 # `--publish` (that combination is refused rather than quietly doing nothing).
@@ -47,50 +47,50 @@ set -eu
 # 而不是静默地什么都不做）。
 #
 # Print the release version this checkout names, read the same way the release reads it:
-#   tools/nichlink-publish --workspace-version
+#   tools/xirang-publish --workspace-version
 # The release workflow calls this instead of carrying its own copy of the reader, because
 # two readers of one number diverge and the tag check is where a wrong answer is
 # irreversible (audit RC4).
 # It is a mode of its own: it prints the number and exits, so it combines with no other
 # mode or flag — the combination exits 2 rather than skipping the other mode silently.
 # 打印本检出点名的发布版本，读法与发布本身一致：
-#   tools/nichlink-publish --workspace-version
+#   tools/xirang-publish --workspace-version
 # 发布工作流调用它，而不是自带一份读取器副本——同一个数字的两个读取器会分歧，而 tag 检查正是
 # "答错就不可逆"的地方（审计 RC4）。
 # 它是独立模式：打印这个数字后即退出，因此不与任何其它模式或标志组合——组合会以 2 退出，而不是
 # 静默跳过另一个模式。
 #
 # After it finishes, prove that a stranger can consume the release:
-#   tools/nichlink-publish --verify-consumers
+#   tools/xirang-publish --verify-consumers
 # That builds a throwaway crate outside this checkout and `cargo add`s all nine
 # crates by version, so resolution runs against the index rather than against the
 # local paths. Packaging was verified before the upload; this is the half that
 # only the published crates can answer.
 # 发布完成后，证明陌生人能消费这个版本：
-#   tools/nichlink-publish --verify-consumers
+#   tools/xirang-publish --verify-consumers
 # 它在本检出之外建一个一次性 crate，按版本 `cargo add` 九个 crate，因此解析发生在 index 上
 # 而不是本地路径上。打包在上传前已经验证过；这一半只有已发布的 crate 才答得出来。
 #
 # The index probe below is deliberately duplicated from
-# `tools/nichlink-package-audit` rather than shared: both tools must stay
+# `tools/xirang-package-audit` rather than shared: both tools must stay
 # runnable on their own from any directory (CI runs the audit, a maintainer runs
 # this one), and the probe is the only thing they have in common.
-# 下面的 index 探针刻意与 `tools/nichlink-package-audit` 各留一份而不共用：两个工具都必须
+# 下面的 index 探针刻意与 `tools/xirang-package-audit` 各留一份而不共用：两个工具都必须
 # 能从任意目录独立运行（CI 跑审计，维护者跑本脚本），而探针是它们唯一共通的东西。
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 
 index_url="https://index.crates.io"
-wait_seconds=${NICHLINK_PUBLISH_WAIT:-300}
+wait_seconds=${XIRANG_PUBLISH_WAIT:-300}
 
 # One level per line, in dependency order. Crates on the same line are
 # independent of each other.
 # 每行一层，按依赖顺序。同一行内的 crate 互不依赖。
 levels='
-nichlink-kernel
-nichlink-macro
-nichlink-toolchain
+xirang-kernel
+xirang-macro
+xirang-toolchain
 '
 
 publish=false
@@ -328,12 +328,12 @@ fi
 # Measured on a mutant whose `macro/Cargo.toml` spells `version = '0.1.7'`:
 # `cargo metadata --no-deps` says 0.1.7, `cargo pkgid` says 0.1.6, and `--check-table`
 # stays green. The compact JSON is split with the same awk/sed idiom
-# `tools/nichlink-package-audit` already uses, so no JSON parser is added here.
+# `tools/xirang-package-audit` already uses, so no JSON parser is added here.
 # 某个 crate 会被 `cargo publish` 真正打包的版本，向 cargo 问，而不是读清单文本。
 # `version_problems` 读文本，会漏掉合法拼写；而 `cargo pkgid` 是错的来源：它按 **lockfile**
 # 作答，而发布工作流里更早的构建已经把它刷成了新数字。在一个把 `macro/Cargo.toml` 写成
 # `version = '0.1.7'` 的变异体上实测：`cargo metadata --no-deps` 说 0.1.7，`cargo pkgid`
-# 说 0.1.6，而 `--check-table` 仍是绿的。紧凑 JSON 用 `tools/nichlink-package-audit` 已在用的
+# 说 0.1.6，而 `--check-table` 仍是绿的。紧凑 JSON 用 `tools/xirang-package-audit` 已在用的
 # 同一套 awk/sed 惯例切分，因此这里没有引入 JSON 解析器。
 metadata_snapshot=$(cargo metadata --no-deps --format-version 1 2>/dev/null || true)
 resolved_version() {
@@ -343,23 +343,23 @@ resolved_version() {
     sed 's/.*"version":"\([^"]*\)".*/\1/'
 }
 
-# "<crate>:<space-separated versioned nichlink-* dependencies>"
-# "<crate>:<以空格分隔的带版本号 nichlink-* 依赖>"
+# "<crate>:<space-separated versioned xirang-* dependencies>"
+# "<crate>:<以空格分隔的带版本号 xirang-* 依赖>"
 dependencies='
-nichlink-kernel:
-nichlink-macro:nichlink-kernel
-nichlink-toolchain:nichlink-kernel nichlink-macro
+xirang-kernel:
+xirang-macro:xirang-kernel
+xirang-toolchain:xirang-kernel xirang-macro
 '
 
 # The internal dependencies of one crate, read from the table above.
 # The internal dependencies of one crate, read from the table above as whole
 # lines. Reading it word-wise would hand back an edge line's dependencies as
 # entries of their own, and stopping at the first word would drop every
-# dependency after the first — which is what let `nichlink-cli` look publishable
-# while `nichlink-mcp` and `nichlink-studio` were still missing from the index.
+# dependency after the first — which is what let `xirang-cli` look publishable
+# while `xirang-mcp` and `xirang-studio` were still missing from the index.
 # 读取上表中某个 crate 的内部依赖，按整行读取。按词读取会把一条边行的被依赖者当成独立条目，
-# 而在第一个词处停下会丢掉第一个之后的每个依赖——正是这一点让 `nichlink-cli` 在
-# `nichlink-mcp` 与 `nichlink-studio` 尚未进入 index 时看起来可以发布。
+# 而在第一个词处停下会丢掉第一个之后的每个依赖——正是这一点让 `xirang-cli` 在
+# `xirang-mcp` 与 `xirang-studio` 尚未进入 index 时看起来可以发布。
 deps_of() {
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
@@ -423,10 +423,10 @@ if [ "$verify_consumers" = true ]; then
 error: the index does not serve this version for: ${unresolved# }
 Nothing is wrong with the checkout: those crates are not published yet, or the
 tag was published for a different version than $workspace_version. Publish first
-(\`tools/nichlink-publish --publish --yes\`), then run this again.
+(\`tools/xirang-publish --publish --yes\`), then run this again.
 错误：index 上还没有这些 crate 的该版本：${unresolved# }
 本检出没有问题：这些 crate 尚未发布，或者标签对应的版本不是 $workspace_version。请先发布
-（\`tools/nichlink-publish --publish --yes\`），再重跑本命令。
+（\`tools/xirang-publish --publish --yes\`），再重跑本命令。
 EOF
     exit 1
   fi
@@ -443,12 +443,12 @@ fi
 # manifest said `0.1.1` passed while the tag check and the index wait used the
 # root's `0.1.0` — and `cargo publish` uploads the *member's* version. The three
 # readings are: the crate's own version, a dependency spelled inline, and a
-# dependency spelled as a `[dependencies.nichlink-x]` table with its version on a
+# dependency spelled as a `[dependencies.xirang-x]` table with its version on a
 # separate line.
 # 一个已发布清单里的版本问题，每行一条，没有则为空。`--check-table` 过去只比依赖**名字**，
 # 因此某个清单写着 `0.1.1` 的成员照样通过，而 tag 检查与 index 等待用的是根清单的 `0.1.0`——
 # `cargo publish` 上传的却是**该成员**的版本。这里读三处：crate 自己的版本、行内写的依赖、
-# 以及用 `[dependencies.nichlink-x]` 表写、版本在另一行的依赖。
+# 以及用 `[dependencies.xirang-x]` 表写、版本在另一行的依赖。
 version_problems() {
   manifest=$1
   crate=$2
@@ -470,13 +470,13 @@ version_problems() {
 # Every internal requirement must be the caret requirement on the current version line.
 # Read from `cargo metadata --no-deps` rather than from manifest text: the text readers
 # tested a dependency key and its `version` on the *same line*, so a multi-line inline
-# table — `nichlink-kernel = {`, then `path = …`, then `version = "0.9.9",`, then `}` —
+# table — `xirang-kernel = {`, then `path = …`, then `version = "0.9.9",`, then `}` —
 # hid a wrong requirement while `--check-table` stayed green (audit RC1a, recorded
 # earlier as R2). Cargo answers the question for every spelling at once: the plain line,
 # the dotted table, the target-specific table, and the multi-line inline table.
 # 每条内部要求都必须是对当前版本线的 caret 要求。它从 `cargo metadata --no-deps` 读，而不是
 # 读清单文本：文本读取器把依赖键与它的 `version` 放在**同一行**上测，于是多行内联表——
-# `nichlink-kernel = {`、`path = …`、`version = "0.9.9",`、`}`——能藏住一条错误要求而
+# `xirang-kernel = {`、`path = …`、`version = "0.9.9",`、`}`——能藏住一条错误要求而
 # `--check-table` 保持绿色（审计 RC1a，更早记为 R2）。cargo 一次就回答了所有拼写：普通行、
 # 点表、按目标限定的表，以及多行内联表。
 metadata_requirement_problems() {
@@ -512,7 +512,7 @@ metadata_requirement_problems() {
           crate = index(shipping, " " candidate " ") ? candidate : ""
           next
         }
-        if (crate != "" && match($0, /"name":"nichlink-[a-z-]+"/)) {
+        if (crate != "" && match($0, /"name":"xirang-[a-z-]+"/)) {
           named = substr($0, RSTART, RLENGTH)
           if (match($0, /"req":"[^"]*"/)) {
             pinned = substr($0, RSTART, RLENGTH)
@@ -540,7 +540,7 @@ workspace_requirement_problems() {
   want=$1
   awk -v want="$want" '
     /^\[/ { section = $0; next }
-    section == "[workspace.dependencies]" && /^nichlink-[a-z-]+ *=/ {
+    section == "[workspace.dependencies]" && /^xirang-[a-z-]+ *=/ {
       if (match($0, /version *= *"[^"]*"/)) {
         value = substr($0, RSTART, RLENGTH)
         sub(/^version *= *"/, "", value)
@@ -595,17 +595,17 @@ if [ "$check_table" = true ]; then
     shipped="$shipped $name"
     # `[dependencies]` and `[build-dependencies]` both have to resolve on the
     # index, including a target-specific section and a dotted
-    # `[dependencies.nichlink-x]` table; `[dev-dependencies]` never ships, so it
+    # `[dependencies.xirang-x]` table; `[dev-dependencies]` never ships, so it
     # is deliberately ignored. Any other spelling is not read here, so a crate
     # declared that way shows up as a disagreement with the table — which is the
     # direction that gets looked at.
     # `[dependencies]` 与 `[build-dependencies]` 都必须在 index 上解析，包括按目标限定的段
-    # 与 `[dependencies.nichlink-x]` 这种点表；`[dev-dependencies]` 不会出厂，因此有意忽略。
+    # 与 `[dependencies.xirang-x]` 这种点表；`[dev-dependencies]` 不会出厂，因此有意忽略。
     # 其他拼法这里读不到，因此那样声明的 crate 会表现为与表不一致——正是会被看见的那个方向。
     actual=$(awk '
       /^\[/ {
         section = $0
-        if (section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\.nichlink-[a-z-]+\]$/) {
+        if (section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\.xirang-[a-z-]+\]$/) {
           name = section
           sub(/^\[.*dependencies\./, "", name)
           sub(/\]$/, "", name)
@@ -613,13 +613,13 @@ if [ "$check_table" = true ]; then
         }
         next
       }
-      section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+ *=/ { print $1 }
-      # `nichlink-x.workspace = true` names the same dependency in its inherited
+      section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^xirang-[a-z-]+ *=/ { print $1 }
+      # `xirang-x.workspace = true` names the same dependency in its inherited
       # spelling; reading it through `[workspace.dependencies]` is what stops the
       # table from looking wrong and inviting its own removal.
-      # `nichlink-x.workspace = true` 用继承的拼法命名同一个依赖；经
+      # `xirang-x.workspace = true` 用继承的拼法命名同一个依赖；经
       # `[workspace.dependencies]` 读出它，才不会让表显得不对并诱使人删掉它。
-      section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^nichlink-[a-z-]+\.workspace *= *true/ {
+      section ~ /^\[((build-)?dependencies|target\..*\.dependencies)\]$/ && /^xirang-[a-z-]+\.workspace *= *true/ {
         name = $1
         sub(/\.workspace.*/, "", name)
         print name
@@ -825,12 +825,12 @@ Publish summary (version $workspace_version)
   verified:${published:- none}
   skipped:${skipped:- none}
   failed:${failed:- none}
-Skipped crates have a versioned nichlink-* dependency that is not on
+Skipped crates have a versioned xirang-* dependency that is not on
 $index_url yet; run this again after that dependency lands. After the real
-publish, re-run tools/nichlink-package-audit: every crate becomes checkable, and
+publish, re-run tools/xirang-package-audit: every crate becomes checkable, and
 the CI step keeps validating all nine from then on.
-跳过的 crate 有尚未发布到 $index_url 的 nichlink-* 版本依赖；该依赖上线后重跑本脚本。
-真正发布之后重跑 tools/nichlink-package-audit：所有 crate 都变为可检查，CI 步骤从此持续
+跳过的 crate 有尚未发布到 $index_url 的 xirang-* 版本依赖；该依赖上线后重跑本脚本。
+真正发布之后重跑 tools/xirang-package-audit：所有 crate 都变为可检查，CI 步骤从此持续
 校验全部九个。
 EOF
 

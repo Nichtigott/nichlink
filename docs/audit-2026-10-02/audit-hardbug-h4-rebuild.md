@@ -12,7 +12,7 @@ with a leading minus"，实现返回绝对值），而题面的第二条线索�
 
 ## 重建后的树（实测）
 
-命令：`tools/nichlink-mcp-hardbug build target/hardbug-runs/t16-h4 h4-one-file-many-algorithms`
+命令：`tools/xirang-mcp-hardbug build target/hardbug-runs/t16-h4 h4-one-file-many-algorithms`
 
 **自证**（`build` 自己打的）：`default face green (exit 0); the census names ZeroArm::Refuse at line 44` ✓
 ——这正是这道题要的形状：**默认面绿**，点名缺陷的是**普查的分支栏**。
@@ -42,7 +42,7 @@ apparatus   tool_sha256  1e194b96368537cd44b150876ac02f03ec75c0474b24fcff14bc5cb
 ## 一条**做不到**的验收，如实说
 
 T-16 的验收写着"新树的 `truth.json` 与**旧树哈希不同**"。**这条无法核对**：W8 那棵树的哈希**从未被提交进
-仓库**——它只活在 `/tmp/nichlink-w8/…/.audit/truth.json` 里，已随那次清理消失（`docs/` 里搜 `tree_sha256`
+仓库**——它只活在 `/tmp/xirang-w8/…/.audit/truth.json` 里，已随那次清理消失（`docs/` 里搜 `tree_sha256`
 只剩 D9 那一行说"`score` 打印三处哈希"，没有任何旧值）。因此这里**换一条可核对的性质**：重建后的树**恰有一处**
 契约违规、且线索与真值指向同一处（上表逐行可查）。
 

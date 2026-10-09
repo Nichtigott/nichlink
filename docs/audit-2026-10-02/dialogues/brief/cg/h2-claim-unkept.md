@@ -93,12 +93,12 @@ Now h2-claim-unkept. Content:
 
 ① 症状：树能编译、测试全绿（offsets 1 passed），但台账里两条记录写了同一个指纹，而其中一个同族少了一条声明。
 ② `root cause`：
-   (a) 台账失效条目 = `host/.nichlink/adopted/entries` 第 2 行（`root/control/panel` … `edc72845…` … "recorded before the panel was rewritten"）：它与第 1 行（button 标本）指纹逐字相同，而被指名的两个文件字节不同（button.rs sha256=06c45576…，panel.rs=d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着"在 panel 被重写之前记录"，时间戳 2026-09-20 早于 button 的 2026-10-01 ⇒ 失效的是 panel 那条。
+   (a) 台账失效条目 = `host/.xirang/adopted/entries` 第 2 行（`root/control/panel` … `edc72845…` … "recorded before the panel was rewritten"）：它与第 1 行（button 标本）指纹逐字相同，而被指名的两个文件字节不同（button.rs sha256=06c45576…，panel.rs=d886e9b0…）⇒ 至少一条不描述它指名的字节；panel 那条自己写着"在 panel 被重写之前记录"，时间戳 2026-09-20 早于 button 的 2026-10-01 ⇒ 失效的是 panel 那条。
    (b) 少一条声明的兄弟 = `host/src/control/object/spinner/spinner.rs:19-23` 的 `control_object!`：只有 kind/exports/parent 三条，缺 `handle_contracts: [crate::control::ControlHandle],`（参照 `button.rs:23`）。
    `mechanism`：约束来自 `control.rs:13-16`（"The interface every direct child must implement"）——每个兄弟在自己的注册面里复述一遍 `handle_contracts`；spinner 少了这一条，而 `registry_rule.rs:5-6` 只 `require_exports(&["control.render"])`，没有任何东西要求 handle_contracts ⇒ 缺失不被门禁抓到，测试全绿。
 ③ `fix`：spinner.rs:23 前补 `handle_contracts: [crate::control::ControlHandle],`；台账里把 panel 那条的指纹按现存字节重录（或删除该失效条目）。不动 `control.rs`、不动 `registry_rule.rs`、不动 offsets 测试。
 ④ `counter-proof`：`diff` 把 8 个兄弟逐个与 button 比，只有 spinner 多出一个"缺行"hunk（其它 7 个只差名字替换）⇒ "恰好缺一条"是可核对的；台账侧：若两条记录其实都还描述字节，指纹就不该相同而文件字节不同（两个 sha256 都算过）；若失效的是 button 那条，panel 那条的 note/time 就失去意义——两条互斥，note 与时间戳指向 panel。
-   `evidence`：`cat host/.nichlink/adopted/entries`（rc=0）；`sha256sum`（rc=0，见答案：06c45576…/d886e9b0…）；`node …/spinner/spinner.rs`（rc=0，块 19-23 缺一行）；`cargo test --offline` → `the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（rc=0）。
+   `evidence`：`cat host/.xirang/adopted/entries`（rc=0）；`sha256sum`（rc=0，见答案：06c45576…/d886e9b0…）；`node …/spinner/spinner.rs`（rc=0，块 19-23 缺一行）；`cargo test --offline` → `the_rendered_offsets_add_up ... ok`、`test result: ok. 1 passed; 0 failed`（rc=0）。
 …[推理：此处截断，全文 2305 字符；原件见 outputs/ 里的对话渲染脚本可重跑]
 ```
 
@@ -241,7 +241,7 @@ BATCHING.md content:
   1. `diff -r -x .codegraph s1 <v>` for v in s2..s8 — served s2,s3,s4,s5,s6,s7,s8 (7 questions) — output 1.1KB — logs/_shared.txt. Result: s3/s4 identical to s1; s2 diff = audit.rs:9; s5 diff = query.rs:27 + render.rs:9; s6 = model.rs:38; s7 = buckets.rs:10; s8 = render.rs:9+12.
   2. `diff -r -x .codegraph trees/s1 trees/g4` — served g4 — 229 B — logs/g4.txt.
   3. `sha256sum + 逐兄弟 diff` — served h2 — 1.2KB — logs/h2-claim-unkept.txt.
-  4. `cat .nichlink/adopted/entries` — served h2 (already logged).
+  4. `cat .xirang/adopted/entries` — served h2 (already logged).
   5. Hash checks `node /tmp/copycheck.mjs` — apparatus + all 15 (logs/_shared.txt).
   6. `node /tmp/treecheck.mjs` — apparatus (11 mismatches) — output in APPARATUS.md.
 - Shared *codegraph* bash batches: each codegraph invocation is logged with its own CMD/EXIT in its question's log, so token attribution stays per question even though one bash call carried several (e.g. one call carried s2+s5 calls; one carried s6+s7+s8+g2; one carried s4+g1). List them.
@@ -298,12 +298,12 @@ variable REGISTRATION_RULE (rust) — host/src/control/registry_rule/registry_ru
 
 ① 症状：树能编译、测试全绿（offsets `1 passed`）；问题在台账与兄弟形状上，不在测试运行上。
 ② `root cause`（两处）：
-   - **失效台账条目**＝`host/.nichlink/adopted/entries` 第 2 行（`root/control/panel|the panel's original contract|…|2026-09-20T09:00:00+08:00|src/control/object/panel/panel.rs|edc72845…|recorded before the panel was rewritten`）。
+   - **失效台账条目**＝`host/.xirang/adopted/entries` 第 2 行（`root/control/panel|the panel's original contract|…|2026-09-20T09:00:00+08:00|src/control/object/panel/panel.rs|edc72845…|recorded before the panel was rewritten`）。
    - **少一条声明的兄弟**＝`host/src/control/object/spinner/spinner.rs:19-23` 的 `control_object!`：只有 `kind`/`exports`/`parent` 三条，缺参照兄弟 `button.rs:23` 的 `handle_contracts: [crate::control::ControlHandle],`。
    `mechanism`：① 两条记录指纹逐字相同（`edc72845cc315b0b…`），而它们指名的两个文件字节不同（`button.rs`=06c45576d883e961…、`panel.rs`=d886e9b0c1281eac…）⇒ 两条不可能同时描述自己的字节；panel 那条自述"在 panel 被重写之前记录"、时间戳（09-20）也早于 button 标本（10-01）⇒ 失效的是 panel 条目（指纹是抄来的/重写后没重录）。② 约束写在 `control.rs:13-16`（"The interface every direct child must implement."）并由每个兄弟在自己注册面里复述一遍 `handle_contracts`；`registry_rule.rs:5-6` 只 `require_exports(&["control.render"])`，没有任何东西要求 `handle_contracts` ⇒ spinner 漏声明不会被门禁或测试抓到。
 ③ `fix`：`spinner.rs:23` 前补 `handle_contracts: [crate::control::ControlHandle],`；**台账既有条目一字不改、不删**——panel 那条的处置是"**需要人，不是改代码**"：由**人**在台账里**追加**一条确认行（走桥的 `adopted … --apply` 流程），旧两行原样留作历史；代码侧没有可改的东西（记录失真不是缺陷）。**不动** `control.rs`、`registry_rule.rs`、offsets 测试、其它 7 个兄弟、台账既有两行。
 ④ `counter-proof`：把 8 个兄弟逐个与 button 比，只有 spinner 出现"缺一行"的 hunk，其余 7 个只差名字替换 ⇒ "恰好缺一条"可核对；若"失效的是 button 条目"，则 panel 那条的 note 与更早时间戳无法解释——两条互斥，note/时间戳指向 panel，而且**可重算**：按内核 `adoption_fingerprint` 的拼法（相对路径 ++ 0x00 ++ 内容字节长度 ++ 0x00 ++ 内容 ++ 0x00，再 sha256）我复算 `src/control/object/button/button.rs` 得 `edc72845cc315b0b2c08dd89bc29600abfa50ccee87c44a4231f1260745af8e9` == panel 那行写的指纹，而 panel 自己的当前指纹是 `57afd3b6e4eca34d…` ⇒ **那一行记的是别的文件（button）的当前指纹**，记录失真、需人工重确认（不是代码缺陷）。工具侧的反证：`callers REGISTRATION_RULE` 返回 0（宏引用的边没进图），所以我没有依赖"谁引用了规则"来下判断，而是回源码读 `registry_rule.rs`。
-   `evidence`（全文见 `logs/h2-claim-unkept.txt`）：`cat …/.nichlink/adopted/entries`→2 行（rc=0）；`sha256sum button.rs panel.rs`（rc=0）；`node …/spinner/spinner.rs`→块 `19-23` 无 `handle_contracts`（rc=0）；`cargo test --offline`（`trees/h2-claim-unkept/host`）→ `test the_rendered_offsets_add_up ... ok` / `test result: ok. 1 passed; 0 failed`（rc=**0**）。
+   `evidence`（全文见 `logs/h2-claim-unkept.txt`）：`cat …/.xirang/adopted/entries`→2 行（rc=0）；`sha256sum button.rs panel.rs`（rc=0）；`node …/spinner/spinner.rs`→块 `19-23` 无 `handle_contracts`（rc=0）；`cargo test --offline`（`trees/h2-claim-unkept/host`）→ `test the_rendered_offsets_add_up ... ok` / `test result: ok. 1 passed; 0 failed`（rc=**0**）。
 ⑤ 调用清单：`files`；`node host/src/control/object/spinner/spinner.rs`、`host/src/control/control.rs`、`host/src/control/registry_rule/registry_rule.rs`；`query REGISTRATION_RULE`、`callers REGISTRATION_RULE`；非 codegraph：`cat entries`、`sha256sum`、`diff` 逐兄弟、`cargo test`。
 
 总调用：成功 7 / 被拒 0（codegraph；含 1 次 init ⇒ 6 步）

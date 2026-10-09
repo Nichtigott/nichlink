@@ -238,7 +238,7 @@ pub struct FaceFields<
 
 #[cfg(test)]
 mod tests {
-    use nichlink_kernel::registry_core::declaration::FACE_FIELD_ORDER;
+    use xirang_kernel::registry_core::declaration::FACE_FIELD_ORDER;
 
     /// The editor's field mirror and the order the front end sorts into must stay
     /// one vocabulary; a field added to one alone would silently stop being

@@ -8,13 +8,13 @@ use super::*;
 
 #[test]
 fn an_unresolvable_project_is_refused_instead_of_falling_back() {
-    let missing = std::env::temp_dir().join("nichlink-toolchain-missing-project");
+    let missing = std::env::temp_dir().join("xirang-toolchain-missing-project");
 
     let nothing = resolve_project_from(None, None, None, None, false)
         .expect_err("no project at all must be an error");
     assert!(nothing.contains("no project to open"), "{nothing}");
     assert!(
-        nothing.contains("NICH_LINK_PACKAGE_ROOT"),
+        nothing.contains("XIRANG_PACKAGE_ROOT"),
         "the message must say how to point Studio at a project: {nothing}"
     );
 
@@ -22,16 +22,13 @@ fn an_unresolvable_project_is_refused_instead_of_falling_back() {
         .expect_err("a path argument that is not a directory must be refused");
     assert!(explicit.contains("path argument"), "{explicit}");
     assert!(
-        explicit.contains("nichlink-toolchain-missing-project"),
+        explicit.contains("xirang-toolchain-missing-project"),
         "{explicit}"
     );
 
     let configured = resolve_project_from(None, None, Some(&missing), None, false)
         .expect_err("a configured root that is not a directory must be refused");
-    assert!(
-        configured.contains("NICH_LINK_PACKAGE_ROOT"),
-        "{configured}"
-    );
+    assert!(configured.contains("XIRANG_PACKAGE_ROOT"), "{configured}");
 
     let selected = resolve_project_from(Some(&missing), None, None, None, false)
         .expect_err("a selected project that vanished must be refused");
@@ -60,12 +57,12 @@ fn only_a_working_directory_that_holds_a_package_is_opened() {
 #[test]
 fn a_relative_candidate_resolves_against_the_working_directory() {
     let root = std::env::temp_dir();
-    let child = root.join("nichlink-toolchain-relative");
+    let child = root.join("xirang-toolchain-relative");
     std::fs::create_dir_all(&child).expect("fixture directory");
     assert_eq!(
         resolve_project_from(
             None,
-            Some(std::path::Path::new("nichlink-toolchain-relative")),
+            Some(std::path::Path::new("xirang-toolchain-relative")),
             None,
             Some(&root),
             false,
@@ -84,7 +81,7 @@ fn mir_target_resolves(label: &str, library: bool, binary: bool, second_binary: 
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("nichlink-toolchain-mir-{label}-{suffix}"));
+    let root = std::env::temp_dir().join(format!("xirang-toolchain-mir-{label}-{suffix}"));
     std::fs::create_dir_all(root.join("src")).expect("fixture src");
     std::fs::write(
         root.join("Cargo.toml"),
@@ -118,9 +115,9 @@ fn mir_target_resolves(label: &str, library: bool, binary: bool, second_binary: 
     compiled
 }
 
-/// A binary-only package — the default output of `nichlink new` — resolves a
+/// A binary-only package — the default output of `xirang new` — resolves a
 /// target for MIR inspection instead of failing on the hardcoded `--lib`.
-/// 仅含二进制的包——`nichlink new` 的默认产物——会为 MIR 检视解析出一个 target，而不是在
+/// 仅含二进制的包——`xirang new` 的默认产物——会为 MIR 检视解析出一个 target，而不是在
 /// 硬编码的 `--lib` 上失败。
 #[test]
 fn mir_inspection_resolves_the_target_a_package_actually_has() {
@@ -158,7 +155,7 @@ fn mir_inspection_resolves_a_host_with_two_binary_targets() {
 #[test]
 fn metadata_decides_the_library_and_keeps_only_this_packages_bins() {
     let root =
-        std::env::temp_dir().join(format!("nichlink-toolchain-targets-{}", std::process::id()));
+        std::env::temp_dir().join(format!("xirang-toolchain-targets-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("app/src")).expect("app src");
     std::fs::create_dir_all(root.join("other/src")).expect("other src");
