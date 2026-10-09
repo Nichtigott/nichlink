@@ -56,6 +56,39 @@ pub struct Finding {
     pub reason: String,
 }
 
+/// The prose of a document: a fenced code block is a **citation**, not a reference.
+/// 一份文档的正文：围栏代码块是**引文**，不是引用。
+///
+/// Fenced blocks are where raw output goes, and raw output is full of `path:line` — a compiler's
+/// `--> …/out/generated_lib.rs:182:1`, a diagnostic's `source=board/object/tile2/tile2.rs:11`. Those name
+/// build artifacts and files outside this checkout **by construction**, so judging them as anchors made
+/// two rules of this repository impossible to satisfy at once: "record the command's raw output" and
+/// "keep every anchor resolving". Measured while writing `docs/closeout-2026-10-09-0.2.x.md`: the two
+/// findings were both inside fenced blocks, quoting a compiler error and a build diagnostic.
+/// 围栏块是放原始输出的地方，而原始输出满是 `path:line`——编译器的 `--> …/out/generated_lib.rs:182:1`、
+/// 诊断的 `source=board/object/tile2/tile2.rs:11`。它们**按构造**点名的就是构建产物与检出之外的文件，因此
+/// 把它们判成锚点，会让本仓库的两条规则无法同时成立："记录命令的原始输出"与"保持每个锚点可解析"。写
+/// `docs/closeout-2026-10-09-0.2.x.md` 时实测：那两条发现都落在围栏块里，引的是一段编译错误与一条构建诊断。
+///
+/// An indented block is not stripped: this repository's documents use fences, and guessing at Markdown's
+/// other block spellings is how a gate starts letting real references through.
+/// 缩进块不被剥掉：本仓库的文档用围栏，而靠猜 Markdown 其它的块拼法是门禁开始放行真引用的方式。
+fn prose_only(text: &str) -> String {
+    let mut prose = String::new();
+    let mut fenced = false;
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if !fenced {
+            prose.push_str(line);
+        }
+        prose.push('\n');
+    }
+    prose
+}
+
 /// Every stale anchor in the living documentation, sorted by document and anchor.
 /// 活文档里每一处失效锚点，按文档与锚点排序。
 pub fn findings(root: &Path) -> Vec<Finding> {
@@ -64,7 +97,7 @@ pub fn findings(root: &Path) -> Vec<Finding> {
     for document in markdown_files(root) {
         let text = fs::read_to_string(&document)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", document.display()));
-        for anchor in anchors(&text) {
+        for anchor in anchors(&prose_only(&text)) {
             let matches = resolve_written_path(&anchor.path, &sources);
             let target = match matches.as_slice() {
                 [only] => (*only).clone(),

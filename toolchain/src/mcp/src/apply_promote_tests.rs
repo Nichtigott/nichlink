@@ -175,9 +175,13 @@ nichlink_toolchain::run_method::external_object! {
     assert_eq!(external.name_en, "Fast button");
     assert_eq!(external.exports, "control.render");
     assert_eq!(external.handle_traits, "ControlHandle");
-    // The patch takes the compact rule spelling, not the Rust path the declaration writes.
-    // patch 收的是紧凑的规则拼法，不是声明写下的 Rust 路径。
-    assert_eq!(external.registration_rule, "ANY");
+    // The rule is **checked, not carried**: the landing keeps the host's `needs_registry` and its rule
+    // path, because both describe the position the face occupies in the host's tree rather than the crate
+    // its fields came from — so what this mapping owes is to accept `ANY` (the `.expect` above says it
+    // did) and to refuse anything richer, which the next test pins.
+    // 规则**只校验、不携带**：落地保留宿主的 `needs_registry` 与规则路径，因为两者描述的是这个面在宿主那棵树
+    // 里占据的位置，而不是它字段的来源 crate——因此这个映射欠的是"接受 `ANY`"（上面那句 `.expect` 已经说了
+    // 它接受了）与"拒绝更复杂的"，后者由下一条测试钉住。
     assert_eq!(external.flow, "control.render.v1|1|In|Out");
     // An external-only field is not carried into the host's declaration at all.
     // 只属于外部的字段根本不会被带进宿主的声明。
@@ -380,4 +384,96 @@ fn a_preview_learns_the_namespace_from_the_project_not_the_copy() {
     );
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_dir_all(&area);
+}
+
+/// A landing moves the implementation's **face**, never the host's **position**.
+/// 一次落地搬的是实现的**面**，绝不是宿主的**位置**。
+///
+/// `needs_registry` and `registration_rule` describe where the face sits: a face that owns a registry
+/// reads its rule from the `registry_rule` module **beside it**, and this action lands one declaration
+/// into one slot without moving the implementation's children. Copying those two made the host stop
+/// compiling — measured on a hand-built project: `phase=face-rule … expected=board/object/tile2/
+/// registry_rule/registry_rule.rs, actual=no sibling registry_rule module`, reported through the
+/// generated tree's `compile_error!`, while the landed face itself was correct (audit `M7`, §M7.57).
+/// `needs_registry` 与 `registration_rule` 描述的是这个面**坐在哪里**：拥有注册机的面从**它旁边**的
+/// `registry_rule` 模块读规则，而本动作只把一条声明落进一个槽位、不搬实现的子面。复制这两个字段让宿主
+/// 停止编译——在一个手工项目上实测：`phase=face-rule … expected=board/object/tile2/registry_rule/
+/// registry_rule.rs, actual=no sibling registry_rule module`，经生成树的 `compile_error!` 报出，而落地的
+/// 面本身是对的（审计 `M7`，§M7.57）。
+#[test]
+fn a_landing_keeps_the_slots_registry_answers_and_takes_the_faces_fields() {
+    let mut host = authored_face_fixture();
+    let replacement = External {
+        kind: "BoardFast".to_owned(),
+        preset: "dash_graft::NoPreset".to_owned(),
+        parts: "dash_graft::NoParts".to_owned(),
+        name_zh: "快速看板".to_owned(),
+        name_en: "Fast board".to_owned(),
+        summary_zh: "项目外实现".to_owned(),
+        summary_en: "Out-of-project implementation".to_owned(),
+        exports: String::new(),
+        stable_name: String::new(),
+        needs_registry: true,
+        handle_traits: String::new(),
+        handle_contracts: "[]".to_owned(),
+        part_traits: String::new(),
+        part_contracts: "[]".to_owned(),
+        requires: "[]".to_owned(),
+        provides: "[]".to_owned(),
+        runtime_checks: "[]".to_owned(),
+        flow: String::new(),
+        flow_provider: String::new(),
+    };
+    super::overlay(&mut host, &replacement);
+
+    // The face's own fields move: this is what a landing is for.
+    // 面自己的字段会搬：这正是落地要做的事。
+    assert_eq!(host.kind, "BoardFast");
+    assert_eq!(host.preset, "dash_graft::NoPreset");
+    assert_eq!(host.name_en, "Fast board");
+
+    // The slot's answers stay: the host's tree is what has to keep compiling.
+    // 槽位的答案留下：要持续编译得过的是宿主那棵树。
+    assert!(
+        !host.needs_registry,
+        "the slot is not a registry owner, and the implementation's answer is about its own tree"
+    );
+    assert_eq!(
+        host.registration_rule, "crate::RegistrationRule::ANY",
+        "the slot's rule path is the one the generated module will resolve"
+    );
+    assert_eq!(
+        host.module, "board::object::tile2",
+        "and the module is the slot's, because that is the file being rewritten"
+    );
+}
+
+/// A face as the executor holds one, with every field filled — including the two a landing must not move.
+/// 执行器持有的一个面，每个字段都填上——包括落地不得搬动的那两个。
+fn authored_face_fixture() -> crate::run_method::AuthoredFace {
+    crate::run_method::AuthoredFace {
+        module: "board::object::tile2".to_owned(),
+        kind: "Tile2".to_owned(),
+        preset: "crate::NoPreset".to_owned(),
+        parts: "crate::NoParts".to_owned(),
+        name_zh: "看板格".to_owned(),
+        name_en: "Tile".to_owned(),
+        summary_zh: String::new(),
+        summary_en: String::new(),
+        exports: String::new(),
+        stable_name: String::new(),
+        needs_registry: false,
+        getting_from_other_registry: String::new(),
+        registration_rule: "crate::RegistrationRule::ANY".to_owned(),
+        admission: String::new(),
+        handle_traits: String::new(),
+        handle_contracts: "[]".to_owned(),
+        part_traits: String::new(),
+        part_contracts: "[]".to_owned(),
+        requires: "[]".to_owned(),
+        provides: "[]".to_owned(),
+        runtime_checks: "[]".to_owned(),
+        flow: String::new(),
+        flow_provider: String::new(),
+    }
 }

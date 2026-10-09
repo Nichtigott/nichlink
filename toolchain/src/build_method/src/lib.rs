@@ -207,6 +207,13 @@ pub(crate) use crate_write::{guard_shape, revert_partition, write_partition, wri
 pub(crate) use discovery_node::{Node, relative_display};
 pub(crate) use entry::{HostEntry, host_entry_from_environment};
 pub(crate) use entry_default::default_entry_source;
+// The sibling-module name a registry-owning face reads its rule from is re-exported only where a
+// second reader exists: the bridge's `promote` asks the same question the `face-rule` phase asks, and
+// a build without the bridge would otherwise carry it as an unused import.
+// 拥有注册机的面据以读取规则的兄弟模块名，只在存在第二个读者处重导出：桥的 `promote` 问的是与
+// `face-rule` 阶段同一个问题，而没有桥的构建否则会把它当成未使用导入背着。
+#[cfg(feature = "mcp")]
+pub(crate) use face_syntax_check::REGISTRY_RULE_MODULE;
 pub(crate) use face_syntax_check::{
     aggregate_parent_macro_errors, aggregate_registry_rule_errors, aggregate_requirements,
     aggregate_stable_name_errors, face_syntax_errors, parsed_face, unplaced_face_errors,

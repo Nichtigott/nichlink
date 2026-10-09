@@ -297,6 +297,21 @@ pub(crate) fn run_promote(
             replacement.kind
         ));
     }
+    // The one thing this landing deliberately does **not** take from the implementation, said out loud.
+    // Silently keeping the host's answer would be a self-description that does not match what happened;
+    // refusing instead would reject a landing that works, because a face's children belong to the tree it
+    // sits in, not to the crate its fields came from.
+    // 这次落地**有意不**从实现那里拿走的那一件事，明说。静默保留宿主的答案会是一句与事实不符的自我描述；
+    // 而改成拒绝，会拒掉一次本来能工作的落地——因为一个面的子面属于它所在的那棵树，不属于它字段的来源 crate。
+    if replacement.needs_registry && !slot_carries_a_registry_rule(work, &face.source) {
+        message.push_str(
+            "note   the implementation owns a registry (`needs_registry: true`) and this slot does \
+             not: its rule would come from a `registry_rule` module beside the face, this tree has \
+             none there, and a land does not move the implementation's children — so the landed face \
+             keeps the slot's own answer. A face that needs a registry here has to be landed into a \
+             slot that carries one\n",
+        );
+    }
     Ok(Outcome {
         message,
         declaration: None,
@@ -366,8 +381,20 @@ fn overlay(authored: &mut crate::run_method::AuthoredFace, replacement: &Externa
     authored.summary_en = replacement.summary_en.clone();
     authored.exports = replacement.exports.clone();
     authored.stable_name = replacement.stable_name.clone();
-    authored.needs_registry = replacement.needs_registry;
-    authored.registration_rule = replacement.registration_rule.clone();
+    // `needs_registry` and `registration_rule` stay the host's, and they are the two fields whose move
+    // would break the tree rather than the face. A face that owns a registry reads its rule from the
+    // `registry_rule` module **beside it**, and this action lands one declaration into one slot: it does
+    // not move the implementation's children, so whether this position has a registry is a fact about the
+    // **host's tree** and not about the crate the implementation came from. Measured on a hand-built
+    // project: copying them made the host stop compiling — `phase=face-rule … expected=board/object/
+    // tile2/registry_rule/registry_rule.rs, actual=no sibling registry_rule module`, reported through the
+    // generated tree's `compile_error!` — while the landed face itself was correct (audit `M7`, §M7.57).
+    // `needs_registry` 与 `registration_rule` 保留宿主的，而它们正是"搬过去会弄坏**树**而不只是面"的两个字段。
+    // 拥有注册机的面从**它旁边**的 `registry_rule` 模块读规则，而本动作只把一条声明落进一个槽位：它不搬实现
+    // 的子面，因此"这个位置有没有注册机"是关于**宿主那棵树**的事实，而不是关于实现来自哪个 crate 的事实。
+    // 在一个手工项目上实测：复制它们会让宿主停止编译——`phase=face-rule … expected=board/object/tile2/
+    // registry_rule/registry_rule.rs, actual=no sibling registry_rule module`，经生成树的 `compile_error!`
+    // 报出——而落地的面本身是对的（审计 `M7`，§M7.57）。
     authored.handle_traits = replacement.handle_traits.clone();
     authored.handle_contracts = replacement.handle_contracts.clone();
     authored.part_traits = replacement.part_traits.clone();
@@ -377,6 +404,24 @@ fn overlay(authored: &mut crate::run_method::AuthoredFace, replacement: &Externa
     authored.runtime_checks = replacement.runtime_checks.clone();
     authored.flow = replacement.flow.clone();
     authored.flow_provider = replacement.flow_provider.clone();
+}
+
+/// Whether the slot a landing targets carries the `registry_rule` module beside it.
+/// 落地的槽位旁边是否带着那个 `registry_rule` 模块。
+///
+/// The same layout the build's `face-rule` phase judges, asked here because this is the last moment a
+/// reader can be told: after the rewrite, the generated tree reports it as a `compile_error!` inside a
+/// file the author cannot edit (measured, audit `M7`, §M7.57).
+/// 这是构建的 `face-rule` 阶段所判的同一套布局，在这里问是因为这是读者还能被告知的最后时刻：改写之后，生成树
+/// 会把它报成一份作者改不了的 `compile_error!`（实测，审计 `M7`，§M7.57）。
+fn slot_carries_a_registry_rule(work: &Path, source: &str) -> bool {
+    Path::new(source).parent().is_some_and(|directory| {
+        work.join("src")
+            .join(directory)
+            .join(crate::build_method::REGISTRY_RULE_MODULE)
+            .join(format!("{}.rs", crate::build_method::REGISTRY_RULE_MODULE))
+            .is_file()
+    })
 }
 
 /// Point the declaration entry at the face itself, and read the result back.

@@ -557,3 +557,61 @@ pub(crate) fn cut_subtree(cut: &str) -> Option<String> {
 #[cfg(test)]
 #[path = "scope_tests.rs"]
 mod scope_tests;
+
+/// What to say when a plan's cuts leave faces outside the build, or `None` when none are.
+/// 计划的切口把一些面留在构建之外时该说的话；一个都没有时返回 `None`。
+///
+/// The narrowing is the feature; saying nothing about it was not. Neither `check` nor the build mentioned
+/// it, so the only place the answer existed was `explain --overlay` — measured on a hand-built project: a
+/// plan with one cut kept 3 of 6 faces and the build reported success (audit `M7`, §M7.58).
+/// 收窄是功能；对它一言不发不是。`check` 与构建都不提它，因此答案只存在于 `explain --overlay` 里——
+/// 在一个手工项目上实测：一条切口让 6 个面只剩 3 个，而构建报告成功（审计 `M7`，§M7.58）。
+///
+/// A pure function of the two lists rather than a print, so the sentence can be pinned: the counts, the
+/// names, and the **paste-ready** clause are the parts a reader acts on.
+/// 它是两份清单的纯函数而不是一次打印，因为这句话要能被钉住：计数、名字，以及那条**可粘贴**的子句，正是
+/// 读者会照做的部分。
+pub(crate) fn outside_slots_note(
+    entry: &Path,
+    all: &[super::scope_faces::FaceSource],
+    roots: &BTreeSet<NodeId>,
+) -> Option<Vec<String>> {
+    let outside: Vec<&super::scope_faces::FaceSource> = all
+        .iter()
+        .filter(|face| !roots.contains(&face.id))
+        .collect();
+    if outside.is_empty() {
+        return None;
+    }
+    let named = outside
+        .iter()
+        .take(5)
+        .map(|face| face.module.as_str())
+        .collect::<Vec<_>>()
+        .join(" · ");
+    let more = outside.len().saturating_sub(5);
+    let mut lines = vec![format!(
+        "nichlink: the cuts in {} name the subtrees this build publishes, so {} of {} face(s) are \
+         outside them and are not shipped: {named}{}",
+        entry.display(),
+        outside.len(),
+        all.len(),
+        if more > 0 {
+            format!(" · and {more} more")
+        } else {
+            String::new()
+        }
+    )];
+    for face in outside.iter().take(3) {
+        lines.push(format!(
+            "nichlink:   to keep `{}`, declare a slot for it: \
+             cut(crate::{}::NODE_ID) graft(crate::{}::NODE_ID),",
+            face.module, face.module, face.module
+        ));
+    }
+    lines.push(format!(
+        "nichlink: `{}=all` keeps the whole tree instead",
+        lexicon::SCOPE_ENV
+    ));
+    Some(lines)
+}

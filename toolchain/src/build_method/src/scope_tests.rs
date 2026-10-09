@@ -422,3 +422,50 @@ fn a_crate_claim_keeps_its_subtree_live_next_to_a_graft_slot() {
 
     std::fs::remove_dir_all(&root).expect("cleanup");
 }
+
+/// **Narrowing is said out loud**: the count, the names, and a clause the reader can paste.
+/// **收窄会被说出来**：计数、名字，以及一条读者能直接粘贴的子句。
+///
+/// Before this existed, a plan with one cut took a six-face host down to three and neither `check` nor
+/// the build mentioned it — the answer lived only in `explain --overlay`, which is a different command a
+/// reader has no reason to run (audit `M7`, §M7.58).
+/// 在这之前，一条切口能把六个面的宿主变成三个，而 `check` 与构建都不提——答案只住在
+/// `explain --overlay` 里，那是读者没有理由去跑的**另一条**命令（审计 `M7`，§M7.58）。
+#[test]
+fn the_faces_a_plan_leaves_outside_are_named_with_a_clause_to_keep_them() {
+    let face = |name: &str| super::super::scope_faces::FaceSource {
+        id: nichlink_kernel::identity::NodeId::from_bytes(name.as_bytes()),
+        source: std::path::PathBuf::from(format!("{name}/{name}.rs")),
+        module: name.to_owned(),
+    };
+    let all = vec![face("panel"), face("frame"), face("gauge")];
+    let roots: std::collections::BTreeSet<nichlink_kernel::identity::NodeId> =
+        [all[0].id].into_iter().collect();
+
+    let lines = super::outside_slots_note(std::path::Path::new("src/lib.rs"), &all, &roots)
+        .expect("two of three faces are outside");
+    let said = lines.join("\n");
+    assert!(
+        said.contains("2 of 3 face(s)") && said.contains("frame") && said.contains("gauge"),
+        "the count and the names are the parts a reader acts on: {said}"
+    );
+    assert!(
+        said.contains("cut(crate::frame::NODE_ID) graft(crate::frame::NODE_ID),"),
+        "the way forward is a clause, not advice: {said}"
+    );
+    assert!(
+        said.contains("NICH_LINK_SCOPE=all"),
+        "and keeping the whole tree is one variable away: {said}"
+    );
+
+    // The negative half: nothing outside means nothing said. A warning that fires on every build which
+    // declares a cut is noise, and noise is how a real one gets ignored.
+    // 否定的那一半：没有面在外面就什么都不说。一条在每次"声明了切口"的构建上都响的警告是噪音，而噪音正是
+    // 真警告被忽略的方式。
+    let everything: std::collections::BTreeSet<nichlink_kernel::identity::NodeId> =
+        all.iter().map(|face| face.id).collect();
+    assert!(
+        super::outside_slots_note(std::path::Path::new("src/lib.rs"), &all, &everything).is_none(),
+        "a build that leaves nothing out says nothing"
+    );
+}

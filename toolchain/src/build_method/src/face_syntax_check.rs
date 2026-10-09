@@ -177,7 +177,7 @@ fn visit_stable_names(
 /// 这个名字是宏的，不是本文件的：`face_rule_or`（`macro/src/lib.rs`）把未点名的规则展开成**相对**路径
 /// `super::registry_rule::REGISTRATION_RULE`，因此规则模块必须是注册面自己模块的兄弟。在这里写成常量，
 /// 正是让本检查与那次展开不会各自漂移的原因。
-const REGISTRY_RULE_MODULE: &str = "registry_rule";
+pub(crate) const REGISTRY_RULE_MODULE: &str = "registry_rule";
 
 /// Refuse a face whose module reads a rule module the generated tree never mounts.
 /// 拒绝这样的注册面：它的模块会去读一个生成树从未挂载的规则模块。

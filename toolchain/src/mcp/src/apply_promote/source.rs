@@ -279,7 +279,6 @@ pub(super) struct External {
     pub(super) exports: String,
     pub(super) stable_name: String,
     pub(super) needs_registry: bool,
-    pub(super) registration_rule: String,
     pub(super) handle_traits: String,
     pub(super) handle_contracts: String,
     pub(super) part_traits: String,
@@ -338,15 +337,20 @@ impl External {
         // in the file. So the host-agnostic value here is the compact `ANY`.
         // *patch* 收的是紧凑的子句拼法（`ANY`，或 `preset:…; exactly:…`），不是 Rust 路径——把空规则写成
         // 文件里的 `crate::RegistrationRule::ANY` 的是 `render.rs`。因此这里宿主无关的取值是紧凑的 `ANY`。
-        let registration_rule = if rule.is_empty() || rule.ends_with("::ANY") || rule == "ANY" {
-            "ANY".to_owned()
-        } else {
+        // Checked, not carried: the landing keeps the **host's** `needs_registry` and rule path, because
+        // both describe the position the face occupies in the host's tree rather than the crate its fields
+        // came from (see `overlay`). What this still has to refuse is a rule too rich for any host to own:
+        // it names a module inside the external crate, and no tree here mounts it.
+        // 只校验，不携带：落地保留**宿主的** `needs_registry` 与规则路径，因为两者描述的是这个面在宿主那棵树里
+        // 占据的位置，而不是它字段的来源 crate（见 `overlay`）。这里仍必须拒绝的是"任何宿主都拥有不了的"富规则：
+        // 它点名外部 crate 内部的一个模块，而这里的任何树都没有挂载它。
+        if !(rule.is_empty() || rule.ends_with("::ANY") || rule == "ANY") {
             return Err(format!(
                 "the external declaration's `registry_rule` is `{rule}`, which names a rule module \
                  inside that crate; this action lands declarations whose rule is `ANY`, and a \
                  richer rule has to be declared on the host side first"
             ));
-        };
+        }
         let _ = file;
         Ok(Self {
             kind: text("kind"),
@@ -359,7 +363,6 @@ impl External {
             exports: list("exports"),
             stable_name: face.string("stable_name").unwrap_or_default(),
             needs_registry: face.boolean("needs_registry").unwrap_or(false),
-            registration_rule,
             handle_traits: list("handle_traits"),
             handle_contracts: text("handle_contracts").trim_matches(['[', ']']).to_owned(),
             part_traits: list("part_traits"),

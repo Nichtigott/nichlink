@@ -137,6 +137,34 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);
+    // A plan with cuts narrows the build to the subtrees those cuts name, and a face no cut names is not
+    // published. That narrowing is the feature — it is what makes a slot replaceable without shipping the
+    // rest — but it is also the one consequence a reader could not see: neither `check` nor the build said
+    // anything, and the only place the answer existed was `explain --overlay`. Measured on a hand-built
+    // project: one cut took the run from 6 faces to 3, the build reported success, and the only way to
+    // learn it was to ask a different command (audit `M7`, §M7.58).
+    // 带切口的计划会把构建收窄到那些切口命名的子树，而没有切口点名的面不会被发布。那次收窄是功能本身——它
+    // 正是"让一个槽位可替换而不必发布其余"的东西——但它也是读者唯一看不见的后果：`check` 与构建都一个字不说，
+    // 答案只存在于 `explain --overlay` 里。在一个手工项目上实测：一条切口让这次运行从 6 个面变成 3 个，构建
+    // 报告成功，而要知道这件事只能去问另一条命令（审计 `M7`，§M7.58）。
+    //
+    // Spoken here because this is the one moment both lists are in hand, and spoken with a **paste-ready
+    // clause** rather than advice: the shared `cut(…) graft(…)` form is what keeps a face in the tree
+    // without an external implementation to link (the same self-graft `promote` lands, audit `M7`, §M7.42).
+    // 在这里说，因为这是两份清单同时在手的唯一时刻；而且给的是**可粘贴的子句**而不是建议：共用的
+    // `cut(…) graft(…)` 形式正是"既保住这个面、又不需要链接外部实现"的写法（与 `promote` 落地的是同一种
+    // 自嫁接，审计 `M7`，§M7.42）。
+    if let Some(roots) = &scope.roots
+        && let Some(lines) = super::scope::outside_slots_note(
+            entry.path(),
+            &super::collect_faces(src, &nodes),
+            roots,
+        )
+    {
+        for line in lines {
+            eprintln!("{line}");
+        }
+    }
     // A **generated** package carries its host's declarations as data, because the release shape has no
     // entry to read: the ghost compiles copied faces and nothing else. The entry wins when this tree has
     // one — the development shape reads the host's own tree, so a host that edits its plan must not keep

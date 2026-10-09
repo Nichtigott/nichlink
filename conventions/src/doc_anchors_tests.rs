@@ -253,3 +253,47 @@ fn the_shipped_documentation_anchors_resolve() {
          sentence that needs it: {found:#?}"
     );
 }
+
+/// Raw output lives in fenced blocks, and a fenced block's `path:line` is a **citation**.
+/// 原始输出住在围栏块里，而围栏块里的 `path:line` 是**引文**。
+///
+/// Recording a command's raw output and keeping every anchor resolving are two rules this repository
+/// holds at once, and they collided the first time a document quoted a compiler error: the error's
+/// `--> …/out/generated_lib.rs:182:1` names a build artifact, and a build diagnostic's
+/// `source=board/object/tile2/tile2.rs:11` names a file outside this checkout. Both were reported as
+/// stale anchors (audit `M7`, §M7.59).
+/// "记录命令的原始输出"与"保持每个锚点可解析"是本仓库同时持有的两条规则，而它们在一份文档第一次引用编译器
+/// 错误时就撞上了：错误里的 `--> …/out/generated_lib.rs:182:1` 点名的是一件构建产物，构建诊断里的
+/// `source=board/object/tile2/tile2.rs:11` 点名的是检出之外的文件。两者都被报成失效锚点（审计 `M7`，§M7.59）。
+#[test]
+fn a_citation_inside_a_fenced_block_is_not_an_anchor() {
+    let sources = [("kernel/src/probe.rs", "fn first() {}\n")];
+    let quoted = synthetic(
+        &[(
+            "docs/quote.md",
+            "The build said:\n\n```text\n--> …/out/generated_lib.rs:182:1\n\
+             |   source=board/object/tile2/tile2.rs:11\n```\n\nand that was all.\n",
+        )],
+        &sources,
+    );
+    assert!(
+        findings(&quoted).is_empty(),
+        "a fenced citation names artifacts and files the checkout does not have: {:?}",
+        findings(&quoted)
+    );
+
+    // The other half: the same reference in prose is still the rename-and-forget shape the gate exists
+    // for. A gate that stopped checking prose would be a gate that stopped guarding.
+    // 另一半：同一个引用写在正文里，仍然是门禁为之存在的"改名后忘记更新"的形状。一道不再检查正文的门禁，
+    // 就是一道不再守任何东西的门禁。
+    let prose = synthetic(
+        &[(
+            "docs/prose.md",
+            "See `src/definitely-gone.rs:99` for the old shape.\n",
+        )],
+        &sources,
+    );
+    let found = findings(&prose);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].reason, "no such file");
+}
