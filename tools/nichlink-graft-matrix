@@ -6,10 +6,19 @@
 #   1. a cut on the **root face** with `full` — the whole tree replaced from the top;
 #   2. **overlapping** cuts (one inside another) — must be refused **by name**, not silently applied;
 #   3. a **re-partition** of the host (the subtree holding both cuts handed to a new crate) — the plan
-#      must not change and every crate must still build.
+#      must not change and every crate must still build;
+#   4. the **replacement's own subtree** — `ControlFast` declares two children of its own, and a `full` cut
+#      replaces the subtree at **runtime**: none of them may enter the host's generated tree;
+#   5. **middle nodes** — a non-`full` cut, a range over faces that have children, and `full` on a middle
+#      node: all three publish the **same** faces, because what a build publishes is decided by the subtrees
+#      the cuts name and `full` only decides how deep the runtime replacement goes.
 #   1. 切口落在**根面**上并带 `full`——整棵树从顶被替换；
 #   2. **重叠**的两条切口（一条在另一条里面）——必须**点名拒绝**，不许静默生效；
-#   3. 把宿主**重新划分**（装着两条切口的那棵子树交给新 crate）——计划不得改变，各 crate 仍要能构建。
+#   3. 把宿主**重新划分**（装着两条切口的那棵子树交给新 crate）——计划不得改变，各 crate 仍要能构建；
+#   4. **替换方自己的子树**——`ControlFast` 自己也声明了两个子面，而 `full` 切口替换的是**运行期**的子树：
+#      它们一个都不许进入宿主的生成树；
+#   5. **中间节点**——非 `full` 的切口、覆盖"有子面的面"的区间、以及落在中间节点上的 `full`：三者发布
+#      **同一批**面，因为一次构建发布哪些面由切口点名的**子树**决定，而 `full` 只决定运行期替换覆盖多深。
 #
 # Usage: tools/nichlink-graft-matrix        (NICHLINK_GRAFT_MATRIX_CARGO_FLAGS to override)
 # 用法：tools/nichlink-graft-matrix        （用 NICHLINK_GRAFT_MATRIX_CARGO_FLAGS 覆盖 cargo 旗标）
@@ -168,5 +177,78 @@ cuts=$(find "$AREA/target" "$AREA/crates" -path "*app-objects-*/out/generated_li
 [ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] ||
   fail "the ghost does not emit both cuts"
 
-printf '\nOK — root-face cut builds, overlapping cuts keep the later entry with a hint, and a re-partitioned host keeps its plan\n'
+step 'leg 4/5: the replacement never brings its own subtree in'
+AREA=$(host replacement-subtree)
+python3 - "$AREA/app/src/lib.rs" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+s = re.sub(
+    r"cut\(crate::control::object::button::NODE_ID\)\s*\n\s*graft\(control_button_graft::button_fast::NODE_ID\),",
+    "cut(crate::control::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
+s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(control_button_graft::slider_fast::NODE_ID\),",
+           "", s, count=1)
+p.write_text(s)
+PY
+(cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the replacing cut does not check"
+(cd "$AREA/app" && build >/dev/null 2>&1) || fail "the replacing cut does not build"
+TREE=$(ls -t "$AREA"/target/debug/build/*/out/generated_lib.rs 2>/dev/null | head -1)
+[ -n "$TREE" ] || fail "no generated tree to read"
+# The replacement declares three faces of its own — `ControlFast` and two children — and a `full` cut replaces
+# the subtree **at runtime**. None of those faces may enter the host's generated tree: the host compiles what it
+# compiles, and the replacement's subtree belongs to the replacement's crate (audit `M7`, §M7.65).
+# 替换方自己也声明了三个面——`ControlFast` 与两个子面——而 `full` 切口替换的是**运行期**的子树。那些面一个都
+# 不许进入宿主的生成树：宿主编译它编译的那些，而替换方的子树属于替换方那个 crate（审计 `M7`，§M7.65）。
+for kind in ControlFast ButtonFast SliderFast; do
+  [ "$(grep -c "$kind" "$TREE")" = "0" ] ||
+    fail "the replacement's own face $kind entered the host's generated tree"
+done
+printf '   the replacement declares 3 faces of its own; none entered the host tree\n'
+
+step 'leg 5/5: middle nodes — non-full, a range over faces with children, and full'
+# Three shapes whose answer is the **same**, and it has been read wrong twice: which faces a build publishes is
+# decided by the subtrees the cuts **name**, and `full` only decides how deep the **runtime** replacement goes
+# (audit `M7`, §M7.56/§M7.65). Each is judged on the `slots` of `explain --overlay`, which a separate
+# measurement showed to agree with the generated tree.
+# 三种形状的答案是**同一个**，而它被读错过两次：一次构建发布哪些面由切口点名的**子树**决定，而 `full` 只决定
+# **运行期**替换覆盖多深（审计 `M7`，§M7.56/§M7.65）。每一种都用 `explain --overlay` 的 slots 判定，而
+# 另一次实测表明它与生成树一致。
+for shape in middle-nonfull range-with-children middle-full; do
+  AREA=$(host "$shape")
+  case "$shape" in
+    middle-nonfull)
+      CUT='cut(crate::control::NODE_ID)\n        graft(control_button_graft::control_fast::NODE_ID),'
+      ;;
+    range-with-children)
+      CUT='cut(crate::control::object::button::NODE_ID to crate::control::object::slider::NODE_ID)\n        graft(control_button_graft::button_fast::NODE_ID),'
+      ;;
+    middle-full)
+      CUT='cut(crate::control::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),'
+      ;;
+  esac
+  python3 - "$AREA/app/src/lib.rs" "$CUT" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text(); cut = sys.argv[2]
+s = re.sub(
+    r"cut\(crate::control::object::button::NODE_ID\)\s*\n\s*graft\(control_button_graft::button_fast::NODE_ID\),",
+    cut, s, count=1)
+s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(control_button_graft::slider_fast::NODE_ID\),",
+           "", s, count=1)
+p.write_text(s)
+PY
+  (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the $shape shape does not check"
+  SLOTS=$("$NICHLINK" explain --overlay --path "$AREA/app" 2>/dev/null)
+  # Logical paths, not module paths: a face at `control/object/button/button.rs` has the module path
+  # `control::object::button` and the **logical** path `root/control/button` — the overlay prints the latter,
+  # and asserting the former is how this leg's first version failed (audit `M7`, §M7.65).
+  # 逻辑路径，不是模块路径：住在 `control/object/button/button.rs` 的面，模块路径是 `control::object::button`，
+  # 而**逻辑**路径是 `root/control/button`——overlay 印的是后者，而断言前者正是这条腿第一版失败的原因
+  # （审计 `M7`，§M7.65）。
+  for face in root/control root/control/button root/control/slider; do
+    printf '%s' "$SLOTS" | grep -q "$face" ||
+      fail "the $shape shape does not publish $face — a cut names subtrees, and full does not prune the build"
+  done
+  printf '   %s: control and both of its children are published\n' "$shape"
+done
+
+printf '\nOK — root-face cut builds; overlapping cuts keep the later entry with a hint; a re-partitioned host keeps its plan; the replacement subtree stays out; and the three middle-node shapes publish the same faces\n'
 rm -rf "$WORK"
