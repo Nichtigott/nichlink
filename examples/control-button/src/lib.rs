@@ -55,12 +55,14 @@ nichlink_toolchain::run_method::static_graft_plan!(
 
 /// 按框架和包命名空间装配这个示例的注册机。
 /// Assemble the example's registry from its framework and package namespace.
+///
+/// It goes through the toolchain's named entry, so this example is also the end-to-end consumer of
+/// `host_registry!()` — and because the crate is a workspace member, the workspace gate compiles and
+/// tests it: the pin for "a host can reach its own registry" is this function running.
+/// 它走工具链的具名入口，因此这个示例同时是 `host_registry!()` 的端到端消费者——而由于本 crate 是工作区
+/// 成员，工作区门禁会编译并测试它："宿主拿得到自己的注册机"这条钉子，就是这个函数跑起来。
 pub fn base_registry() -> Registry {
-    let mut registry = Registry::root_for_namespace(FRAMEWORK, NICHLINK_NAMESPACE);
-    registry
-        .register_all(&registrations())
-        .expect("example faces register");
-    registry
+    nichlink_toolchain::host_registry!().expect("example faces register")
 }
 
 /// 打印注册树的逻辑路径，供示例二进制和集成测试共用。

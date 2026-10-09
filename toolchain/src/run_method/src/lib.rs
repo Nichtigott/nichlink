@@ -18,6 +18,8 @@ pub mod macros;
 pub mod authoring;
 #[path = "call_report.rs"]
 pub mod call_report;
+#[path = "host_registry.rs"]
+pub mod host_registry;
 #[path = "plugin.rs"]
 pub mod plugin;
 #[path = "registry.rs"]

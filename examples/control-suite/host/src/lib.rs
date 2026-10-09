@@ -55,12 +55,18 @@ nichlink_toolchain::run_method::static_graft_plan!(
 
 /// 按框架和包命名空间装配这个示例的注册机。
 /// Assemble the example's registry from its framework and package namespace.
+///
+/// The same named entry `examples/control-button` uses: two hosts, one incantation — and this one is
+/// **not a workspace member**, so it is the half that proves the entry works from a crate whose
+/// `build.rs` ran outside the workspace build. `tools/nichlink-daily-behaviors` is what builds it
+/// (measured: it was the only device naming this example, and `tools/nichlink-external-rehearsal`
+/// does not touch it).
+/// 与 `examples/control-button` 用的是同一个具名入口：两个宿主、一句咒语——而这一份**不是工作区成员**，
+/// 因此它是"该入口能从'不在工作区构建里'的 crate 用起来"的那一半。构建它的是
+/// `tools/nichlink-daily-behaviors`（实测：只有它点名这个示例，而 `tools/nichlink-external-rehearsal`
+/// 根本不碰它）。
 pub fn base_registry() -> Registry {
-    let mut registry = Registry::root_for_namespace(FRAMEWORK, NICHLINK_NAMESPACE);
-    registry
-        .register_all(&registrations())
-        .expect("example faces register");
-    registry
+    nichlink_toolchain::host_registry!().expect("example faces register")
 }
 
 /// 打印注册树的逻辑路径，供示例二进制和集成测试共用。

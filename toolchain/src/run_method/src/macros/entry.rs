@@ -70,6 +70,49 @@ macro_rules! host {
     };
 }
 
+/// Reach this crate's own registry at run time.
+/// 在运行期拿到本 crate 自己的注册机。
+///
+/// ```ignore
+/// nichlink_toolchain::run_method::host!();
+///
+/// pub const FRAMEWORK: FrameworkId = FrameworkId::new("my.app");
+///
+/// pub fn registry() -> Registry {
+///     nichlink_toolchain::host_registry!().expect("this crate's faces register")
+/// }
+/// ```
+///
+/// It reads three things from the **crate root** the generated entry already populates — `FRAMEWORK`
+/// (which the host declares), `NICHLINK_NAMESPACE` (emitted by `host!()`) and `registrations()`
+/// (emitted into `generated_lib.rs`) — and hands them to
+/// [`run_method::host_registry`](crate::run_method::host_registry::host_registry), which keeps the
+/// pairing rule and the atomicity in one place. A macro rather than a function for exactly that
+/// reason: those three symbols live in the *host's* crate, not in this one.
+/// 它从生成入口已经填好的 **crate 根**读三样东西——`FRAMEWORK`（宿主声明）、`NICHLINK_NAMESPACE`
+/// （`host!()` 发出）与 `registrations()`（发进 `generated_lib.rs`）——并交给
+/// [`run_method::host_registry`](crate::run_method::host_registry::host_registry)，由它把配对规则与
+/// 原子性收在一处。做成宏而不是函数正是因为这个：那三个符号住在**宿主**的 crate 里，不在这个 crate 里。
+///
+/// Returns `RegistryResult<Registry>`: a host decides whether a failed self-registration is fatal.
+/// 返回 `RegistryResult<Registry>`：自我注册失败是否致命，由宿主决定。
+///
+/// **The half of audit `M7` §M7.62 this closes.** The bridge's `explain` half (it now names the
+/// implementation that replaced a slot) landed first; this is the other half — before it, every host
+/// wanting a registry re-derived the assembly from an example.
+/// **它闭合的是审计 `M7` §M7.62 的另一半。** 桥的 `explain` 那一半（现在会点名替换某个槽位的实现）
+/// 先落地；这是另一半——在它之前，每个想要注册机的宿主都得从某个示例反推这段装配。
+#[macro_export]
+macro_rules! host_registry {
+    () => {
+        $crate::run_method::host_registry::host_registry(
+            FRAMEWORK,
+            NICHLINK_NAMESPACE,
+            &registrations(),
+        )
+    };
+}
+
 /// Declare graft selectors for build-time capture without constructing a
 /// runtime `GraftPlan`.
 /// 声明供构建阶段捕获的 graft selector，不构造运行时 `GraftPlan`。
