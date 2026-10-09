@@ -246,3 +246,44 @@ fn comparisons_are_not_generic_nesting() {
         .collect();
     guard_nesting(&source).expect("a `<` comparison opens no generic level");
 }
+
+/// A long documentation block is documentation, not a run.
+/// 一长段文档是文档，不是一条串。
+///
+/// `//!` becomes `#[doc = "…"]`: five tokens with **no separator anywhere** between the lines of a
+/// block, so a 213-line module header measured 1025 tokens and the guard refused it. That is not a
+/// hypothetical: taken from the local registry cache, `tokio/src/fs/mod.rs` has exactly that header and
+/// `nichlink check .` refused it, along with four more of that crate's files — a guard that only accepts
+/// this repository's own sources refuses the trees it exists to be pointed at (audit `M7`, §M7.56).
+/// `//!` 会变成 `#[doc = "…"]`：五个 token，而一个文档块各行之间**没有任何分隔符**，因此一段 213 行的
+/// 模块头量出 1025 个 token，守卫拒绝了它。这不是假设：取自本机 registry 缓存的 `tokio/src/fs/mod.rs`
+/// 正是那样一段头，`nichlink check .` 拒绝了它，同一个 crate 还有四个文件同样被拒——一个只接受本仓库
+/// 自己源码的守卫，会拒绝它本来就是要被指向的那些树（审计 `M7`，§M7.56）。
+///
+/// The count is chosen to be **red on the old guard**: 3000 lines ≈ 15 000 tokens, fifteen times the run
+/// limit, so this cannot pass by being near a threshold.
+/// 这个行数是**按"旧的守卫会红"选的**：3000 行 ≈ 15 000 个 token，是串上限的十五倍，因此它不可能靠
+/// 贴着阈值蒙过去。
+#[test]
+fn a_documentation_block_is_not_a_run() {
+    let source: String = (0..3000)
+        .map(|index| format!("//! line {index} of a module header\n"))
+        .collect();
+    guard_nesting(&source).expect("a doc block is metadata, not a linear run");
+}
+
+/// The attribute that ends a run must not hide one: a real chain behind one is still refused.
+/// 终结一条串的属性不得把串藏起来：它后面一条真串仍要被拒。
+///
+/// The fix for the case above was to treat `#` as a separator, and this is its other half — a
+/// separator that also swallowed the expression after it would be a guard that stopped guarding.
+/// 上面那个用例的修法是把 `#` 当作分隔符，而这是它的另一半——一个连它后面的表达式也一起吞掉的分隔符，
+/// 就是一个不再守任何东西的守卫。
+#[test]
+fn an_attribute_does_not_hide_a_real_run() {
+    let source = format!("#[allow(unused)]\n{};\n", "1 + ".repeat(2000) + "1");
+    let error = guard_nesting(&source)
+        .expect_err("2000 operators are still a run")
+        .to_string();
+    assert!(error.contains("above the limit of"), "{error}");
+}

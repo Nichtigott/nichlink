@@ -1,0 +1,131 @@
+#!/bin/sh
+# Point the read-only surface at other people's crates: does NichLink accept real code, or does it
+# refuse it by name?
+# 把只读面指向别人的 crate：NichLink 接受真实代码，还是按名拒绝它？
+#
+# Every source tree this walks was written by someone who has never heard of NichLink, which is the
+# only shape that can catch a rule that is really a description of *this* repository. It caught one:
+# the nesting guard counted the tokens of `#[doc = "…"]`, so a module header of consecutive `//!` lines
+# measured as one long expression — `tokio/src/fs/mod.rs` has 213 of them, `nichlink check .` refused it
+# with "input nests 1025 levels … above the limit of 1024", and four more of that crate's files were
+# refused the same way (audit `M7`, §M7.56). A gate that only ever looked at this checkout could not see
+# that.
+# 本脚本遍历的每一棵源码树，作者都没听说过 NichLink，而这是唯一能抓住"某条规则其实只是对本仓库的描述"
+# 的形状。它抓到了一条：嵌套守卫在数 `#[doc = "…"]` 的 token，于是连续 `//!` 行组成的模块头被量成一个
+# 长表达式——`tokio/src/fs/mod.rs` 有 213 行，`nichlink check .` 以「input nests 1025 levels … above
+# the limit of 1024」拒绝了它，同一个 crate 还有四个文件被同样拒绝（审计 `M7`，§M7.56）。一个只看本
+# 检出的门禁看不见这些。
+#
+# What it asserts:
+# 它断言什么：
+#   1. no crate is refused by the **nesting guard** — that guard is about stack safety, and a stack-safe
+#      source refused by it is a bug in the guard, never in the crate;
+#   2. `check` answers, and answers with a diagnostic — a crash (signal, 101, empty output) is not an
+#      answer;
+#   3. the walk really covered crates, so a cache that moved cannot make this pass by finding nothing.
+#   1. 没有任何 crate 被**嵌套守卫**拒绝——那道守卫管的是栈安全，一份栈安全的源码被它拒绝，是守卫的缺陷，
+#      绝不是那个 crate 的；
+#   2. `check` 给出答案，而且是一个带诊断的答案——崩溃（信号、101、空输出）不是答案；
+#   3. 遍历确实覆盖到了 crate，因此搬走缓存不会让它靠"什么都没找到"通过。
+#
+# Other refusals are **reported, not judged**: a real crate may legitimately trip a rule this project has
+# not taught to the outside world yet, and turning that into a red gate here would make the gate's colour
+# depend on strangers' source layouts. The counts are printed so the number cannot drift unnoticed.
+# 其他拒绝**只报不判**：一个真 crate 可能合理地踩到本项目尚未教给外界的规则，把它变成这里的红灯，会让
+# 灯色取决于陌生人的源码布局。计数会打印出来，使这个数字不会无声地漂移。
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CARGO_FLAGS="${NICHLINK_CARGO_FLAGS---offline}"
+NICHLINK="$ROOT/target/debug/nichlink"
+WANT="${NICHLINK_REAL_PROJECTS:-60}"
+REGISTRY="${NICHLINK_REGISTRY_SRC:-${CARGO_HOME:-$HOME/.cargo}/registry/src}"
+fail() { printf 'real-projects FAILED: %s\n' "$1" >&2; exit 1; }
+step() { printf '== %s\n' "$1"; }
+
+[ -d "$REGISTRY" ] || fail "no registry sources at $REGISTRY (this gate reads them; set NICHLINK_REGISTRY_SRC)"
+
+step "building the CLI"
+(cd "$ROOT" && cargo build $CARGO_FLAGS -p nichlink-toolchain --features cli --bin nichlink >/dev/null 2>&1) ||
+  fail "cannot build $NICHLINK"
+
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/nichlink-real-projects.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+step "collecting up to $WANT crates from $REGISTRY"
+LIST="$WORK/list"
+: >"$LIST"
+for index in "$REGISTRY"/*/; do
+  for crate in "$index"*/; do
+    name=$(basename "$crate")
+    case "$name" in
+      nichlink-*) continue ;;
+    esac
+    [ -d "$crate/src" ] || continue
+    find "$crate/src" -name '*.rs' -print -quit 2>/dev/null | grep -q . || continue
+    printf '%s\n' "$crate" >>"$LIST"
+  done
+done
+total=$(wc -l <"$LIST")
+[ "$total" -gt 0 ] || fail "found no crate sources under $REGISTRY"
+head -n "$WANT" "$LIST" >"$WORK/chosen"
+
+step "checking each crate through its own copy (the registry is never written to)"
+nesting=0
+other=0
+checked=0
+crash=0
+bulk="$WORK/bulk"
+: >"$bulk"
+while IFS= read -r crate; do
+  name=$(basename "$crate")
+  room="$WORK/$name"
+  mkdir -p "$room"
+  cp -a "$crate/Cargo.toml" "$room/Cargo.toml" 2>/dev/null || continue
+  cp -a "$crate/src" "$room/src" 2>/dev/null || continue
+  # A crate whose manifest declares a workspace member that is not in the copy cannot be named by cargo,
+  # and the package name is the identity namespace: that is a refusal about the copy, not about the code,
+  # so it is recorded as neither.
+  # 清单里声明了某个不在副本里的 workspace 成员的 crate，cargo 说不出它的名字，而包名就是身份命名空间：
+  # 那是对副本的拒绝，不是对代码的拒绝，因此两边都不记。
+  out=$("$NICHLINK" check "$room" 2>&1)
+  code=$?
+  checked=$((checked + 1))
+  if [ "$code" -eq 0 ]; then
+    rm -rf "$room"
+    continue
+  fi
+  if printf '%s' "$out" | grep -q 'above the limit of'; then
+    nesting=$((nesting + 1))
+    printf '%s\n' "$name" >>"$WORK/nesting-refused"
+    printf '   NESTING-REFUSED %s\n' "$name"
+  elif printf '%s' "$out" | grep -q 'is not a package; cargo metadata'; then
+    printf '   (skipped: %s is a workspace member outside the copy)\n' "$name"
+  elif printf '%s' "$out" | grep -q 'cargo metadata failed'; then
+    printf '   (skipped: %s has a manifest cargo will not resolve outside its own tree)\n' "$name"
+  elif [ "$code" -gt 1 ] || [ -z "$out" ]; then
+    crash=$((crash + 1))
+    printf '   CRASHED rc=%s %s\n' "$code" "$name"
+    printf '%s\n' "$name" >>"$WORK/crashed"
+  else
+    other=$((other + 1))
+    printf '%s\t%s\n' "$name" "$(printf '%s' "$out" | head -n 3 | tr '\n' ' ')" >>"$WORK/other-refused"
+  fi
+  rm -rf "$room"
+done <"$WORK/chosen"
+
+printf '   checked %s of %s crate(s): %s accepted, %s nesting-refused, %s other-refused, %s crashed\n' \
+  "$checked" "$total" "$((checked - nesting - other - crash))" "$nesting" "$other" "$crash"
+if [ -s "$WORK/other-refused" ]; then
+  printf '   other refusals (reported, not judged):\n'
+  head -n 10 "$WORK/other-refused" | sed 's/^/     /'
+fi
+
+# The floor: a walk that covered nothing must not pass, and neither must one that covered a handful
+# because the cache moved.
+# 下限：什么都没覆盖到的遍历不得通过，因为缓存搬走而只覆盖了几个的也不行。
+[ "$checked" -ge 10 ] || fail "only $checked crate(s) were checked; the gate is supposed to cover the cache"
+[ "$crash" -eq 0 ] || fail "$crash crate(s) made check crash instead of answering: $(cat "$WORK/crashed" | tr '\n' ' ')"
+[ "$nesting" -eq 0 ] ||
+  fail "the nesting guard refused $nesting real crate(s): $(cat "$WORK/nesting-refused" | tr '\n' ' ')"
+
+printf '\nOK — %s real crate(s) checked; none refused by the nesting guard, none crashed\n' "$checked"

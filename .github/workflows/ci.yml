@@ -205,6 +205,24 @@ jobs:
         # crate、把其余的报成等待，且不上传任何东西。它需要网络，这正是它在这个任务而不是
         # 离线本地门禁里的原因。
         run: tools/nichlink-publish
+      - name: Real crates from the registry (not refused by name)
+        # Points the read-only surface at source trees nobody wrote for us. Every rule in this repository
+        # is a description of *some* Rust, and a rule that is really a description of *this checkout* can
+        # only be caught by looking at someone else's crate: the nesting guard counted the tokens of
+        # `#[doc = "…"]`, so `tokio/src/fs/mod.rs` — 213 consecutive `//!` lines — was refused with
+        # "input nests 1025 levels … above the limit of 1024", and four more of that crate's files with it
+        # (audit `M7`, §M7.56). The step above has already fetched every dependency, so the registry cache
+        # this reads is populated; it copies each crate before checking it, so nothing in the cache is
+        # written to.
+        # 把只读面指向没人为我们写的源码树。本仓库里每条规则都是对**某种** Rust 的描述，而一条其实只是
+        # 对**本检出**的描述的规则，只能靠看别人的 crate 才抓得到：嵌套守卫在数 `#[doc = "…"]` 的 token，
+        # 于是 `tokio/src/fs/mod.rs`——连续 213 行 `//!`——被以「input nests 1025 levels … above the
+        # limit of 1024」拒绝，同一个 crate 还有四个文件同样被拒（审计 `M7`，§M7.56）。上一步已经取回
+        # 全部依赖，因此它读的 registry 缓存是满的；它在检查前先复制每个 crate，因此缓存不会被写入。
+        env:
+          NICHLINK_CARGO_FLAGS: ""
+          NICHLINK_REAL_PROJECTS: "60"
+        run: tools/nichlink-real-projects
       - name: IDE mirror (rust_analyzer cfg)
         # No other step compiles this: the check builds two host examples again
         # under a cfg only an editor uses. A nested face's derived rule path

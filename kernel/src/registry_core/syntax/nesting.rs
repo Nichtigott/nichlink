@@ -62,7 +62,16 @@ pub(crate) const LIMIT: usize = 128;
 /// A run is measured between separators: `,` and `;` end one, and so does a brace
 /// group, because a body or an item ends a chain in real code. Parentheses and
 /// brackets do not end one, since `x.f().f()…` and `foo(a, b)` both keep folding
-/// across them.
+/// across them. `#` ends one too, because an attribute is metadata rather than an
+/// expression — and because it has to: a `//!` line **is** `#[doc = "…"]`, five tokens
+/// with no separator between the lines of a block, so a module header of 213 lines
+/// measured 1025 tokens and refused a real crate taken from the registry cache
+/// (audit `M7`, §M7.56).
+/// 串是在分隔符之间度量的：`,` 与 `;` 终结一条串，花括号组也是，因为函数体或条目在真实代码里终结
+/// 一条链。圆括号与方括号不终结：`x.f().f()…` 与 `foo(a, b)` 都会跨过它们继续折叠。`#` 同样终结
+/// 一条串，因为属性是元数据而不是表达式——也因为它必须如此：一行 `//!` **就是** `#[doc = "…"]`，
+/// 五个 token，而一个文档块各行之间没有分隔符，于是一段 213 行的模块头量出 1025 个 token、拒绝了一个
+/// 取自 registry 缓存的真 crate（审计 `M7`，§M7.56）。
 ///
 /// 1024 is chosen from measurements rather than taste: a run of 16 384 survives
 /// even a 256 KiB stack while 60 000 aborts an eight-megabyte one, so this is a
@@ -297,6 +306,27 @@ pub(crate) fn guard(source: &str) -> Result<(), TooDeep> {
                     levels.clear();
                     angle = 0;
                 }
+            }
+            // `#` opens an attribute (`#[…]`, `#![…]`); it never continues a linear expression, and it
+            // ends one. It has to end one, because a `//!` line becomes `#[doc = "…"]` — five tokens with
+            // no separator anywhere between the lines of a doc block — so counting them against the run
+            // limit refused every crate whose module header is a long `//!` block. Measured on a real
+            // crate taken from the registry cache: `tokio/src/fs/mod.rs` has 213 consecutive `//!` lines
+            // ≈ 1065 tokens, and `nichlink check .` refused it with "input nests 1025 levels of tokens
+            // folded into one expression, above the limit of 1024" (audit `M7`, §M7.56). The same held
+            // for four more of that crate's files, and for `tokio/src/lib.rs` (431 `//!` lines), `syn`
+            // (249) and `serde` (113): a guard that only accepts this repository's own sources is a guard
+            // that refuses the trees it exists to be pointed at.
+            // `#` 打开一个属性（`#[…]`、`#![…]`）；它从不延续线性表达式，而且它**结束**一条。它必须结束
+            // 一条，因为一行 `//!` 会变成 `#[doc = "…"]`——五个 token，而文档块各行之间没有任何分隔符——把
+            // 它们计进串上限，就拒绝了每一个模块头是一长段 `//!` 的 crate。在一个取自 registry 缓存的真
+            // crate 上实测：`tokio/src/fs/mod.rs` 有连续 213 行 `//!` ≈ 1065 个 token，而
+            // `nichlink check .` 以「input nests 1025 levels of tokens folded into one expression, above
+            // the limit of 1024」拒绝了它（审计 `M7`，§M7.56）。同一个 crate 的另外四个文件、以及
+            // `tokio/src/lib.rs`（431 行）、`syn`（249 行）、`serde`（113 行）同样如此：一个只接受本仓库
+            // 自己源码的守卫，会拒绝它本来就是要被指向的那些树。
+            proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '#' => {
+                grows = false;
             }
             _ => {}
         }
