@@ -73,6 +73,7 @@ fn a_facade_sees_the_host_and_every_ghost() {
         "control-button",
         "control-button",
         &planned,
+        &[],
     )
     .expect("the plan is made")
     .expect("a partition always has a facade");
@@ -135,6 +136,7 @@ fn a_declaration_with_no_crates_needs_no_facade() {
         "control-button",
         "control-button",
         &[],
+        &[],
     )
     .expect("no refusal")
     .is_none();
@@ -148,8 +150,8 @@ fn a_declaration_with_no_crates_needs_no_facade() {
 fn a_facade_that_would_be_the_host_is_refused() {
     let root = host("clash");
     let planned = vec![ghost(&root, "control-button-widgets")];
-    let refused =
-        plan_facade(&root, "control", "control", "control-facade", &planned).expect_err("refused");
+    let refused = plan_facade(&root, "control", "control", "control-facade", &planned, &[])
+        .expect_err("refused");
     assert!(
         refused.contains("control-facade") && refused.contains("package_prefix"),
         "the refusal names the clash and the knob: {refused}"

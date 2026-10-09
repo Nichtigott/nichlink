@@ -21,6 +21,13 @@ fn host(label: &str) -> PathBuf {
             std::process::id()
         ));
     let _ = std::fs::remove_dir_all(&root);
+    // A host a facade can depend on has a **library** target: `plan_facade` refuses a binary-only host
+    // by name, because cargo ignores such a dependency and the facade would then compile zero faces
+    // (audit `M7`, §M7.55). The fixture describes that requirement rather than dodging it.
+    // 能被 facade 依赖的宿主有**库**目标：`plan_facade` 会按名拒绝只有二进制的宿主，因为 cargo 会忽略那样
+    // 的依赖，而 facade 随后会编译零个面（审计 `M7`，§M7.55）。夹具描述的是这条要求，而不是绕开它。
+    fs::create_dir_all(root.join("src")).expect("the host's src");
+    fs::write(root.join("src/lib.rs"), "// the host library\n").expect("the host library");
     for file in [
         "src/panel/frame/frame.rs",
         "src/panel/frame/widget/widget.rs",
@@ -98,7 +105,7 @@ fn planned(root: &Path) -> PlannedCrate {
 #[test]
 fn a_release_ghost_carries_the_files_its_build_reads() {
     let root = host("ghost");
-    let ghost = plan_ghost(&root, &planned(&root), &faces()).expect("the ghost plans");
+    let ghost = plan_ghost(&root, &planned(&root), &faces(), &[]).expect("the ghost plans");
 
     // Every mounted face is copied, at the same relative source the host's records name — that path is
     // what makes the copied file's identity the one the host baked, with no remap.
@@ -158,7 +165,8 @@ fn a_release_ghost_carries_the_files_its_build_reads() {
 fn a_release_facade_resolves_its_host_instead_of_carrying_it() {
     let root = host("facade");
     let planned = vec![planned(&root)];
-    let facade = plan_facade(&root, "host", "host", "host", &planned).expect("the facade plans");
+    let facade =
+        plan_facade(&root, "host", "host", "host", &planned, &[]).expect("the facade plans");
 
     assert!(
         facade.copies.is_empty(),
@@ -192,10 +200,90 @@ fn a_release_facade_resolves_its_host_instead_of_carrying_it() {
 
     // A declaration with no crates has nothing for a facade to carry, and says so.
     // 没有 crate 的声明没有东西让 facade 承载，它会说出来。
-    let refused = plan_facade(&root, "host", "host", "host", &[]).expect_err("refused");
+    let refused = plan_facade(&root, "host", "host", "host", &[], &[]).expect_err("refused");
     assert!(
         refused.contains("at least one generated package"),
         "{refused}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A release ghost carries its host's graft cuts **as data**; without them it compiled the copied faces
+/// and emitted an empty table.
+/// 发布幽灵把宿主的 graft 切口当作**数据**携带；没有它们，它会编译复制过来的面、发射一张空表。
+///
+/// The development shape can read the host's tree at build time, and does; the release shape has none to
+/// read, so the cuts have to arrive in the generated script. Measured on a two-ghost host: the ghost that
+/// compiled the cut face emitted no cut for it in the release shape and one in the development shape, so a
+/// published crate never applied the graft the plan promised (audit `M7`, §M7.55).
+/// 开发形状在构建期读得到宿主的树，它也确实这么做；发布形状没有树可读，因此切口必须写进生成的脚本。
+/// 在一个两幽灵的宿主上实测：编译切口面的那个幽灵在发布形状下不为它发射任何切口、在开发形状下发射一条，
+/// 于是发布出去的 crate 从不应用计划承诺的嫁接（审计 `M7`，§M7.55）。
+#[test]
+fn a_release_ghost_carries_the_hosts_cuts_as_data() {
+    let root = host("cuts");
+    let cut = crate::build_method::HostCut {
+        cut: "crate::panel::frame::widget::NODE_ID".to_owned(),
+        cut_end: None,
+        graft: "fast_widget::fast::NODE_ID".to_owned(),
+        full: false,
+        typed: true,
+        cfg: None,
+        line: 7,
+        column: 8,
+    };
+    let carried = plan_ghost(&root, &planned(&root), &faces(), &[cut]).expect("the ghost plans");
+    assert!(
+        carried.build_rs.contains("run_for_partition_with_cuts"),
+        "the generated script hands the cuts over: {}",
+        carried.build_rs
+    );
+    for expected in [
+        "crate::panel::frame::widget::NODE_ID",
+        "fast_widget::fast::NODE_ID",
+        "typed: true",
+        "line: 7",
+    ] {
+        assert!(
+            carried.build_rs.contains(expected),
+            "the data survives into the script (`{expected}`): {}",
+            carried.build_rs
+        );
+    }
+    // A host that declares nothing keeps the five-argument call, so a generated script says exactly as
+    // much as it needs to.
+    // 什么都没声明的宿主保留五参数调用，因此生成的脚本只说它必须说的那些。
+    let bare = plan_ghost(&root, &planned(&root), &faces(), &[]).expect("the ghost plans");
+    assert!(
+        bare.build_rs.contains("run_for_partition(")
+            && !bare.build_rs.contains("HostCut")
+            && !bare.build_rs.contains("run_for_partition_with_cuts"),
+        "no cuts, no argument: {}",
+        bare.build_rs
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A release facade refuses a host cargo will not hand over: one with no library target.
+/// 发布 facade 拒绝一个 cargo 不肯交出的宿主：没有库目标的那个。
+///
+/// Cargo **ignores** such a dependency (it warns and builds on), and the facade's build script then took
+/// its own directory for the host's — measured, the published facade carried neither faces nor cuts and
+/// the build still reported success. A refusal at plan time is the only place this can be said before a
+/// reader believes the package works.
+/// cargo 会**忽略**这样的依赖（警告一句、继续构建），而 facade 的构建脚本随后把自己的目录当成了宿主的
+/// ——实测，发布出去的 facade 既不带面也不带切口，而构建仍报告成功。规划期的一句拒绝，是读者相信这个包能用
+/// 之前唯一说得出这句话的地方。
+#[test]
+fn a_release_facade_refuses_a_host_with_no_library_target() {
+    let root = host("binary");
+    std::fs::remove_file(root.join("src/lib.rs")).expect("the host loses its library");
+    let planned = vec![planned(&root)];
+    let refused = plan_facade(&root, "host", "host", "host", &planned, &[])
+        .expect_err("a binary host is refused");
+    assert!(
+        refused.contains("no library target") && refused.contains("way forward"),
+        "the refusal names the reason and the way out: {refused}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

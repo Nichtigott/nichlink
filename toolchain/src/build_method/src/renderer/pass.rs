@@ -13,7 +13,7 @@ use std::path::Path;
 
 use super::aliases::{registry_path, render_object_aliases};
 use super::ide::render_ide_shadows;
-use super::owners::{face_module, graft_constructor, names_a_compiled_module, owned};
+use super::owners::{emitted_grafts, face_module, graft_constructor, owned};
 use super::tree::{ShapeRender, render_nodes};
 use crate::build_method::diagnostics::BuildDiagnostics;
 use crate::build_method::registry_syntax::GraftSyntax;
@@ -76,22 +76,13 @@ pub(crate) fn render_lib(
         "\n#[doc(hidden)]\npub static BUILTIN_GRAFT_CUTS: &[{registry}::StaticGraftCut] = &[\n",
     ));
     let mut cut_contracts = String::new();
-    for graft in grafts {
-        // A crate may only name the modules it compiles, and a typed cut names one. After a partition
-        // the host hands its claim away, so a cut that falls **inside** it names a module the host no
-        // longer has: emitting the entry anyway failed with `error[E0433]: cannot find 'frame' in
-        // 'panel'` (measured on the first end-to-end build whose host carried a graft inside a claimed
-        // subtree). The entry belongs to the crates that compile the face — the ghost that owns it, and
-        // the facade that carries the union (audit `M7`, §M7.39).
-        // 一个 crate 只许点名它编译的模块，而类型化切口点名一个模块。分区之后宿主把认领的子树交出去，因此落在
-        // **其中**的切口点名的是宿主已经没有的模块：照旧发射这条条目会报
-        // `error[E0433]: cannot find 'frame' in 'panel'`（首次端到端构建实测：宿主的 graft 落在被认领的
-        // 子树之内）。这条条目属于编译该面的 crate——拥有它的幽灵，以及携带并集的 facade（审计 `M7`，§M7.39）。
-        if let Some(expressions) = &graft.expressions
-            && !names_a_compiled_module(static_faces, &expressions.cut)
-        {
-            continue;
-        }
+    // The attribution happens once, in `emitted_grafts`, and the same list is what the build writes to
+    // `graft_plan.tsv` — an audit text that described a different table than this literal is what made
+    // two readers conclude the release shape carried every cut everywhere (audit `M7`, §M7.55).
+    // 归属只判一次，在 `emitted_grafts` 里，而构建写进 `graft_plan.tsv` 的就是同一份清单——审计文本若描述
+    // 的是另一张表，正是让两位读者得出"发布形状到处都是全量切口"的原因（审计 `M7`，§M7.55）。
+    let emitted = emitted_grafts(static_faces, grafts, shape.facade);
+    for graft in &emitted {
         writeln!(
             output,
             "    {},",

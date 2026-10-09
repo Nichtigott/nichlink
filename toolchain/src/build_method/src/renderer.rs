@@ -24,6 +24,7 @@ mod pass;
 #[path = "renderer/tree.rs"]
 mod tree;
 
+pub(crate) use owners::emitted_grafts;
 pub(crate) use pass::render_lib;
 pub(crate) use tree::ShapeRender;
 

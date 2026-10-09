@@ -21,6 +21,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::HostCut;
 use nichlink_kernel::lexicon;
 
 use super::crate_plan::{
@@ -71,6 +72,7 @@ pub(crate) fn plan_facade(
     namespace: &str,
     host_package: &str,
     planned: &[PlannedCrate],
+    cuts: &[HostCut],
 ) -> Result<Option<PlannedFacade>, String> {
     if planned.is_empty() {
         return Ok(None);
@@ -89,7 +91,7 @@ pub(crate) fn plan_facade(
     dependencies.sort();
     dependencies.dedup();
     let lib_rs = facade_lib_rs(namespace);
-    let build_rs = facade_build_rs(host_root, namespace);
+    let build_rs = facade_build_rs(host_root, namespace, cuts);
     let cargo_toml = facade_cargo_toml(host_root, &package, &directory, host_package, planned)?;
     Ok(Some(PlannedFacade {
         package,
@@ -124,7 +126,8 @@ fn facade_lib_rs(namespace: &str) -> String {
 /// contract assertions, rewritten to the crates that own each module.
 /// 形状与幽灵的相同，只有一处不同而这处正是要点：模式是 **facade**，因此这个 crate 渲染出来的树不发模块、
 /// 不发面的身份——它携带切口表与契约断言，并改写成各自模块的属主 crate。
-fn facade_build_rs(host_root: &Path, namespace: &str) -> String {
+fn facade_build_rs(host_root: &Path, namespace: &str, cuts: &[HostCut]) -> String {
+    let (function, cuts_argument) = super::crate_plan::partition_call(cuts);
     let src = host_root.join("src");
     let declaration = host_root.join(lexicon::ADD_CRATES_FILE);
     format!(
@@ -134,12 +137,13 @@ fn facade_build_rs(host_root: &Path, namespace: &str) -> String {
          {i}println!(\"cargo:rerun-if-changed={src}\");\n\
          {i}println!(\"cargo:rerun-if-changed={declaration}\");\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}nichlink_toolchain::build_method::run_for_partition(\n\
+         {i}nichlink_toolchain::build_method::{function}(\n\
          {i}    std::path::Path::new({root:?}),\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
          {i}    None,\n\
          {i}    true,\n\
+         {cuts_argument}\
          {i})\n\
          {i}.expect(\"nichlink\");\n\
          }}\n",

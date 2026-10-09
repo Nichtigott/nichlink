@@ -75,7 +75,7 @@ fn plan_host(root: &Path) -> Result<Vec<PlannedCrate>, String> {
             )
         })
         .collect();
-    plan(root, "myapp", &declaration, &faces)
+    plan(root, "myapp", &declaration, &faces, &[])
 }
 
 /// A declaration for one crate claiming `control::object`.

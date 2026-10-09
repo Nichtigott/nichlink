@@ -137,7 +137,24 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     let demo_errors = aggregate_requirements(src, &nodes, true, &scope, Some(&cache_units));
     let (static_faces, static_errors) = static_plan(src, &nodes, &scope);
     append_error(&mut compile_errors, static_errors);
-    let mut graft_entries = super::host_graft_entries(&entry, &mut compile_errors);
+    // A **generated** package carries its host's declarations as data, because the release shape has no
+    // entry to read: the ghost compiles copied faces and nothing else. The entry wins when this tree has
+    // one — the development shape reads the host's own tree, so a host that edits its plan must not keep
+    // answering from a snapshot taken when the package was generated. Both routes end in the same
+    // `enable_graft_entries`, so the `cfg` gate is evaluated once, by one rule.
+    // **生成的**包把宿主的声明当作数据携带，因为发布形状没有入口可读：幽灵编译的是复制过来的面，仅此
+    // 而已。本树自己有声明时**入口赢**——开发形状读的就是宿主自己的树，因此改了计划的宿主不该继续用生成
+    // 那个时刻的快照作答。两条路都终于同一个 `enable_graft_entries`，因此 `cfg` 门控只由一条规则求值一次。
+    let from_entry = super::host_graft_entries(&entry, &mut compile_errors);
+    let mut graft_entries = if from_entry.declared.is_empty() && !input.host_cuts.is_empty() {
+        super::enable_graft_entries(
+            input.host_cuts.iter().map(super::HostCut::syntax).collect(),
+            entry.path(),
+            &mut compile_errors,
+        )
+    } else {
+        from_entry
+    };
     // Overlap is answered by **declaration order** (the later entry wins), and this is the one place
     // that has to apply it: the record below and the rendered table are both built from what survives.
     // The hint is spoken here, once, so a reader hears the decision instead of inferring it.
@@ -241,6 +258,12 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
             &super::registry_identity::package_namespace(),
             shape,
             &shape_faces,
+            // This call plans the **mounts and shells** the render needs; it writes no build script, so
+            // the cuts it carries are inert here. They are passed through rather than replaced with an
+            // empty slice so there is one answer to "what does this package carry".
+            // 本次调用规划的是渲染所需的**挂载与壳**；它不写任何构建脚本，因此这里携带的切口是惰性的。它们
+            // 被原样传下去而不是换成空切片，这样"本包携带什么"只有一个答案。
+            &input.host_cuts,
         ) {
             Ok(planned) => planned,
             Err(refusal) => {
@@ -311,6 +334,12 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
     // Both modes come from one shape, read once: a host renders all but what it hands away, a ghost
     // renders only its fragment (audit `M7`, P3.2).
     // 两种模式出自同一份形状，只读一次：宿主渲染除交出去之外的全部，幽灵只渲染自己的碎片（审计 `M7`，P3.2）。
+    // The cuts this crate emits are attributed **once** and read twice: the renderer compiles them into
+    // `BUILTIN_GRAFT_CUTS`, and `graft_plan.tsv` records the same list. Two filters was one filter too
+    // many — the audit text used to carry the host's whole plan into every package (audit `M7`, §M7.55).
+    // 本 crate 发射的切口只判**一次**、读两处：渲染器把它们编进 `BUILTIN_GRAFT_CUTS`，`graft_plan.tsv`
+    // 记录同一份清单。两个过滤器就是多了一个——审计文本过去把宿主的整份计划带进了每一个包（审计 `M7`，§M7.55）。
+    let emitted_grafts = super::renderer::emitted_grafts(&visible, &graft_entries.enabled, facade);
     let generated = render_lib(
         src,
         &nodes,
@@ -318,7 +347,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
         &demo_errors,
         &scope,
         &visible,
-        &graft_entries.enabled,
+        &emitted_grafts,
         if only.is_none() && cut_out.is_empty() {
             // No declaration at all: this crate renders the whole tree, which is what every host did
             // before `add_crates.rs` existed.
@@ -424,7 +453,7 @@ pub(crate) fn run(input: &BuildInput) -> Option<BuildDiagnostics> {
             write_function_manifest(src, &nodes, out_dir),
             write_source_scope_manifest(src, &nodes, &scope, out_dir),
             write_shape_manifest(src, &nodes, out_dir),
-            write_graft_manifest(out_dir, &graft_entries.enabled),
+            write_graft_manifest(out_dir, &emitted_grafts),
             write_if_changed(&out_dir.join(lexicon::GENERATED_LIB_FILE), &generated),
         ] {
             if let Err(error) = result {

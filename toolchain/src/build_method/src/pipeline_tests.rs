@@ -295,3 +295,146 @@ fn a_malformed_face_is_reported_instead_of_aborting() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// Pins for the two halves of one defect: what a package **emits**, and what it **says** it emits
+// (audit `M7`, §M7.55).
+// 一条缺陷的两半各自的钉子：一个包**发射**什么，以及它**说**自己发射什么（审计 `M7`，§M7.55）。
+//
+// The defect was measured on a real host in both partition shapes. In the development shape every
+// package's `graft_plan.tsv` listed the **host's whole plan** while the table it compiled carried one
+// entry or none, so two readers concluded the shape "carries every cut everywhere"; in the release shape
+// the ghost that compiled the cut face emitted **no** cut at all, so the published crate compiled the
+// copied source and never applied the graft the plan promised. The three cases below are the three
+// answers that have to agree: the emitted table, the audit text, and the cuts a package receives when its
+// own tree carries no declaration.
+
+use std::path::{Path, PathBuf};
+
+use crate::build_method::{HostCut, check_for_shape_with_cuts};
+
+/// A throwaway host package with one registration face, and its output directory.
+/// 一个含单个注册面的临时宿主包，以及它的输出目录。
+///
+/// `entry` is written verbatim as `src/lib.rs`, because the pipeline **parses** the entry rather than
+/// compiling it: a fixture that spelled a real `FRAMEWORK` constant would be testing rustc, not this.
+/// `entry` 逐字写成 `src/lib.rs`，因为管线**解析**入口而不是编译它：把 `FRAMEWORK` 常量写成真的，测的是
+/// rustc 而不是本模块。
+fn fixture(label: &str, entry: &str) -> (PathBuf, PathBuf) {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir()
+        .join("nichlink-scratch")
+        .join(module_path!().replace("::", "-"))
+        .join(format!(
+            "nichlink-cuts-{label}-{}-{sequence}",
+            std::process::id()
+        ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src/button")).expect("src");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"cuts-host\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("manifest");
+    std::fs::write(root.join("src/lib.rs"), entry).expect("entry");
+    std::fs::write(
+        root.join("src/button/button.rs"),
+        "pub struct Button;\n\ncrate::root_object! {\n    kind: Button,\n    parent: crate::root_node_id(crate::NICHLINK_NAMESPACE),\n}\n",
+    )
+    .expect("face");
+    let out = root.join("out");
+    (root, out)
+}
+
+/// The one cut every fixture host's face is replaced by, as the generator would hand it over.
+/// 每个夹具宿主的面都被它替换的那一条切口，按生成器交过来的样子。
+fn the_cut() -> HostCut {
+    HostCut {
+        cut: "crate::button::NODE_ID".to_owned(),
+        cut_end: None,
+        graft: "fast_button::fast::NODE_ID".to_owned(),
+        full: false,
+        typed: true,
+        cfg: None,
+        line: 3,
+        column: 8,
+    }
+}
+
+/// How many entries the generated table carries, and how many rows the audit text has.
+/// 生成的表里有多少条，以及审计文本有多少行。
+fn read_both(out: &Path) -> (usize, usize) {
+    let generated =
+        std::fs::read_to_string(out.join("generated_lib.rs")).expect("the generated tree");
+    let table = generated
+        .split_once("pub static BUILTIN_GRAFT_CUTS")
+        .and_then(|(_, rest)| rest.split_once("];"))
+        .map(|(body, _)| body.matches("StaticGraftCut::").count())
+        .expect("the cut table is in the generated tree");
+    let audit = std::fs::read_to_string(out.join("graft_plan.tsv")).expect("the audit text");
+    let rows = audit.lines().filter(|line| !line.starts_with('#')).count();
+    (table, rows)
+}
+
+/// A package that carries its host's cuts as **data** emits them — and says so.
+/// 把宿主的切口当作**数据**携带的包会发射它们——并且如实说出来。
+///
+/// This is the release shape's ghost: its own tree has copied faces and no entry, so the empty-table
+/// answer it used to give was the published crate never applying the graft the plan promised.
+/// 这就是发布形状的幽灵：它自己的树里只有复制过来的面、没有入口，因此它过去给出的"空表"答案，就是发布
+/// 出去的 crate 从不应用计划承诺的嫁接。
+#[test]
+fn a_package_carrying_host_cuts_emits_them_and_records_the_same_rows() {
+    let (root, out) = fixture(
+        "carried",
+        "// a generated package: no declaration of its own\n",
+    );
+    check_for_shape_with_cuts(&root, &out, "cuts-host", None, false, false, &[the_cut()])
+        .expect("the pipeline accepts the host");
+    let (table, rows) = read_both(&out);
+    assert_eq!(table, 1, "the cut the host declared is emitted");
+    assert_eq!(
+        rows, table,
+        "the audit text lists exactly the table this package compiles"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A package with neither a declaration nor inherited cuts emits none — and the audit text agrees.
+/// 既没有声明、也没有继承切口的包，一条都不发射——而审计文本与此一致。
+///
+/// The negative half is what the development shape failed: the audit text carried the host's whole plan
+/// into packages whose compiled table was empty.
+/// 否定的那一半正是开发形状失败的地方：审计文本把宿主的整份计划带进了那些编译表为空的包。
+#[test]
+fn a_package_with_no_cuts_emits_none_and_records_none() {
+    let (root, out) = fixture("bare", "// nothing declared here\n");
+    check_for_shape_with_cuts(&root, &out, "cuts-host", None, false, false, &[])
+        .expect("the pipeline accepts the host");
+    let (table, rows) = read_both(&out);
+    assert_eq!(table, 0, "nothing is emitted");
+    assert_eq!(rows, 0, "and nothing is claimed: {rows} row(s)");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A hand-written entry is still the authority: its cuts are emitted, and the audit text matches.
+/// 手写入口仍是权威：它的切口会被发射，审计文本与之一致。
+///
+/// This is the half that already worked, kept here so the two paths cannot drift apart silently.
+/// 这是本来就没坏的那一半，留在这里，好让两条路不会无声地分道扬镳。
+#[test]
+fn a_hand_written_entry_still_answers_for_itself() {
+    let (root, out) = fixture(
+        "entry",
+        "pub const FRAMEWORK: FrameworkId = FrameworkId::new(\"cuts.fixture\");\n\
+         nichlink_toolchain::run_method::static_graft_plan!(\n\
+         \x20   FRAMEWORK,\n\
+         \x20   cut(crate::button::NODE_ID) graft(fast_button::fast::NODE_ID),\n\
+         );\n",
+    );
+    check_for_shape_with_cuts(&root, &out, "cuts-host", None, false, false, &[]).expect("accepted");
+    let (table, rows) = read_both(&out);
+    assert_eq!(table, 1, "the entry's cut is emitted");
+    assert_eq!(rows, table, "and the audit text lists the same one");
+    let _ = std::fs::remove_dir_all(&root);
+}

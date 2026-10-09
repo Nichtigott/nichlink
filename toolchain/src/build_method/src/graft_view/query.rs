@@ -63,6 +63,24 @@ pub(crate) fn host_graft_entries(
     errors: &mut BuildDiagnostics,
 ) -> HostGraftEntries {
     let declared = read_graft_entries(entry.path(), entry.is_required(), errors);
+    enable_graft_entries(declared, entry.path(), errors)
+}
+
+/// Split one declaration list into what the author declared and what this feature set enables.
+/// 把一份声明清单拆成"作者声明的"与"本次特性组合启用的"。
+///
+/// The gate rule is one implementation because two callers reach it: the build reads the host entry
+/// itself, and a **generated package** receives its host's declarations as data — the release shape
+/// carries only the sources it compiles, so it has no entry to read. Both must evaluate `#[cfg]` the
+/// same way, or a slot that is gated off in the host would be live in the ghost that compiles it.
+/// 门控规则只有一份实现，因为有两个调用方到达它：构建自己读宿主入口，而**生成包**把宿主的声明当作数据
+/// 收下——发布形状只携带它编译的那些源码，因此没有入口可读。两者必须以同一方式求值 `#[cfg]`，否则在
+/// 宿主里被门控关掉的槽位，会在编译它的幽灵里活着。
+pub(crate) fn enable_graft_entries(
+    declared: Vec<GraftSyntax>,
+    entry_path: &Path,
+    errors: &mut BuildDiagnostics,
+) -> HostGraftEntries {
     // The same gate rule the static plan follows: a feature the build can see
     // decides, and a gate it cannot evaluate is refused rather than guessed.
     // Refused *with a diagnostic*: this used to panic, which took `check --json`
@@ -74,9 +92,8 @@ pub(crate) fn host_graft_entries(
     // **发诊断**：这里过去会 panic，使 `check --json` 以 101 退出、stdout 为空，而不是给出 CLI
     // 承诺的文档——与 C2 为注册面修掉的是同一类，只是这一处被漏了。消息与 `scope` 为畸形入口
     // 已推的那条一致，因此两者会折叠成一行而不是重复。
-    let entry_path = entry.path();
     let mut enabled = Vec::new();
-    for declaration in &declared {
+    for declaration in declared.iter() {
         let Some(cfg) = declaration.cfg.as_deref() else {
             enabled.push(declaration.clone());
             continue;

@@ -30,4 +30,4 @@ pub(crate) use matching::{face_declares_plugin, graft_expression_module, string_
 pub use overlay_rows::{OVERLAY_NOTE, OverlayProjection, OverlaySlot, overlay_projection};
 pub use plan_rows::{GraftPlanRow, graft_plan_rows};
 pub use query::declared_grafts;
-pub(crate) use query::{declared_graft_view, host_graft_entries};
+pub(crate) use query::{declared_graft_view, enable_graft_entries, host_graft_entries};

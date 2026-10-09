@@ -117,17 +117,54 @@ pub(crate) fn crates(
             )
         })
         .collect();
-    let planned = crate::build_method::plan_crates(&package_root, &package, &declaration, &faces)?;
+    // The preview plans the same bytes the writer writes, so it needs the same input the writer uses:
+    // the host entry's declared cuts, which travel with every generated package (audit `M7`, §M7.55).
+    // 预览规划的是写入方写下的同一份字节，因此需要写入方所用的同一个输入：宿主入口声明的切口，它随每个
+    // 生成包一起走（审计 `M7`，§M7.55）。
+    let cuts = crate::build_method::declared_host_cuts(&package_root)?;
+    let planned =
+        crate::build_method::plan_crates(&package_root, &package, &declaration, &faces, &cuts)?;
     let facade = crate::build_method::plan_facade(
         &package_root,
         &declaration.package_prefix,
         &package,
         &package,
         &planned,
+        &cuts,
     )?;
     if planned.is_empty() {
         return line(out, format!("nothing declared: {package} names no crate"));
     }
+    // The release packages are planned **before** they are described. A refusal belongs to the plan, and
+    // it used to arrive after the preview had already listed a facade the writer would never create:
+    // measured on a binary host, the CLI printed all three release packages and then exited non-zero.
+    // The `--check` path needs this too — it prints the plan a `--write` would follow, so it has to
+    // refuse what that write would refuse.
+    // 发布包**先规划、后描述**。拒绝属于规划，而它过去在预览已经列出了写入方永远不会创建的 facade 之后才
+    // 到来：在一个二进制宿主上实测，CLI 打印了全部三个发布包、然后以非零退出。`--check` 路径同样需要它
+    // ——它打印的是 `--write` 将要遵循的计划，因此必须拒绝那次写入会拒绝的东西。
+    let release_packages = if release {
+        let mut packages = Vec::new();
+        for planned in &planned {
+            packages.push(crate::build_method::plan_release_ghost(
+                &package_root,
+                planned,
+                &faces,
+                &cuts,
+            )?);
+        }
+        packages.push(crate::build_method::plan_release_facade(
+            &package_root,
+            &package,
+            &declaration.package_prefix,
+            &package,
+            &planned,
+            &cuts,
+        )?);
+        Some(packages)
+    } else {
+        None
+    };
     if release {
         for planned in &planned {
             line(
@@ -240,21 +277,7 @@ pub(crate) fn crates(
         return Ok(());
     }
     if release {
-        let mut packages = Vec::new();
-        for planned in &planned {
-            packages.push(crate::build_method::plan_release_ghost(
-                &package_root,
-                planned,
-                &faces,
-            )?);
-        }
-        packages.push(crate::build_method::plan_release_facade(
-            &package_root,
-            &package,
-            &declaration.package_prefix,
-            &package,
-            &planned,
-        )?);
+        let packages = release_packages.expect("a release run planned its packages above");
         crate::build_method::guard_shape(
             &packages
                 .iter()

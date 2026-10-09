@@ -31,8 +31,10 @@
 //! * facade 可以在**构建期**经 `cargo metadata` 找到它的宿主，而那是唯一能在发布后成立的拼写：行内 `path`
 //!   在打包后的清单里会被改写成注册局要求。实测：这样解析宿主的 facade 构建全绿。
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::HostCut;
 use nichlink_kernel::identity::NodeId;
 use nichlink_kernel::lexicon;
 
@@ -78,6 +80,7 @@ pub(crate) fn plan_ghost(
     host_root: &Path,
     planned: &PlannedCrate,
     faces: &[(String, String, NodeId)],
+    cuts: &[HostCut],
 ) -> Result<ReleasePackage, String> {
     let text = host_manifest(host_root)?;
     let version = toml_value(&text, "version").unwrap_or_else(|| "0.1.0".to_owned());
@@ -175,7 +178,7 @@ pub(crate) fn plan_ghost(
         directory: planned.directory.clone(),
         cargo_toml,
         lib_rs: lib_rs(&planned.namespace),
-        build_rs: ghost_build_rs(&planned.namespace, &planned.subtrees),
+        build_rs: ghost_build_rs(&planned.namespace, &planned.subtrees, cuts),
         copies,
     })
 }
@@ -188,6 +191,7 @@ pub(crate) fn plan_facade(
     package_prefix: &str,
     namespace: &str,
     planned: &[PlannedCrate],
+    cuts: &[HostCut],
 ) -> Result<ReleasePackage, String> {
     if planned.is_empty() {
         return Err(
@@ -199,6 +203,23 @@ pub(crate) fn plan_facade(
         return Err(format!(
             "add_crates: the facade would be called `{package}`, the same as the host package. \
              Rename the host or pick a different `package_prefix`; a crate cannot depend on itself."
+        ));
+    }
+    // A release facade reaches the host's tree through cargo, so a host cargo will not hand over is a
+    // refusal here rather than a facade that compiles zero faces: cargo *ignores* a dependency with no
+    // library target (it warns and builds on), and the build script's name scan then took the facade's
+    // own directory for the host's — measured, the published facade carried neither the faces nor the
+    // cuts and the build still reported success (audit `M7`, §M7.55).
+    // 发布 facade 经 cargo 到达宿主的树，因此 cargo 不肯交出的宿主在这里是一句拒绝，而不是一个编译零个面的
+    // facade：cargo 会**忽略**没有库目标的依赖（警告一句然后继续构建），而构建脚本按名扫描时把 facade 自己的
+    // 目录当成了宿主的——实测，发布出去的 facade 既不带面也不带切口，而构建仍报告成功（审计 `M7`，§M7.55）。
+    if !has_library_target(host_root) {
+        return Err(format!(
+            "add_crates: the host package `{host_package}` has no library target, so a release facade \
+             cannot reach its tree: cargo ignores a dependency that is only a binary, and the facade \
+             would compile no faces and carry no cuts while still reporting success.\n\
+             way forward: give the host a `src/lib.rs` (a library host with a thin binary, the shape \
+             the examples use), or partition in the development shape"
         ));
     }
     // The same one implementation the ghost and the development facade use: a release shape that put
@@ -218,7 +239,7 @@ pub(crate) fn plan_facade(
         directory,
         cargo_toml,
         lib_rs: lib_rs(namespace),
-        build_rs: facade_build_rs(host_package, namespace),
+        build_rs: facade_build_rs(host_package, namespace, cuts),
         copies: Vec::new(),
     })
 }
@@ -279,7 +300,8 @@ fn lib_rs(namespace: &str) -> String {
 /// the case the identity derivation handles by itself.
 /// `env!("CARGO_MANIFEST_DIR")` 在依赖方编译本脚本时展开，因此拼写是他们的、没有任何东西需要 remap：源码就在
 /// 清单目录之下，而那正是身份推导自己处理得了的情形。
-fn ghost_build_rs(namespace: &str, subtrees: &[String]) -> String {
+fn ghost_build_rs(namespace: &str, subtrees: &[String], cuts: &[HostCut]) -> String {
+    let (function, cuts_argument) = super::crate_plan::partition_call(cuts);
     format!(
         "//! {marker}: build this fragment out of its own sources.\n\
          //! 由 NichLink 生成：从它自己的源码构建这个碎片。\n\n\
@@ -288,12 +310,13 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String]) -> String {
          {i}println!(\"cargo:rerun-if-changed={declaration}\");\n\
          {i}let root = std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\"));\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}nichlink_toolchain::build_method::run_for_partition(\n\
+         {i}nichlink_toolchain::build_method::{function}(\n\
          {i}    root,\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
          {i}    Some({claims:?}),\n\
          {i}    false,\n\
+         {cuts_argument}\
          {i})\n\
          {i}.expect(\"nichlink\");\n\
          }}\n",
@@ -303,6 +326,40 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String]) -> String {
         claims = subtrees.join(","),
         namespace = namespace,
     )
+}
+
+/// Whether another package can depend on this host: does it have a **library** target?
+/// 别的包能不能依赖这个宿主：它有**库**目标吗？
+///
+/// Read from the filesystem rather than asked of cargo, and the reason is the caller: the partition
+/// writer runs before the generated packages exist, offline, on a manifest whose dependency paths may not
+/// resolve yet — `cargo metadata` would refuse it for reasons that have nothing to do with this question.
+/// What cargo itself keys on is `src/lib.rs`, or a `[lib] path` that names one; that is what this asks.
+/// 从文件系统读，而不是问 cargo，理由在调用方：分区写入方在生成包存在之前、离线、在一份依赖路径可能还解析不
+/// 了的清单上运行——`cargo metadata` 会因为与这个问题毫无关系的原因拒绝它。cargo 自己认的是 `src/lib.rs`，
+/// 或者一个指名了某个文件的 `[lib] path`；这里问的就是这个。
+///
+/// The answer is load-bearing: a facade lists the host as a dependency, cargo **ignores** a dependency
+/// with no library target (warns, builds on), and measured on a binary host the facade then compiled zero
+/// faces and emitted zero cuts while reporting success (audit `M7`, §M7.55).
+/// 这个答案是要紧的：facade 把宿主列为依赖，而 cargo 会**忽略**没有库目标的依赖（警告一句、继续构建），
+/// 在二进制宿主上实测，facade 随后编译了零个面、发射了零条切口，却报告成功（审计 `M7`，§M7.55）。
+fn has_library_target(host_root: &Path) -> bool {
+    if host_root.join("src/lib.rs").is_file() {
+        return true;
+    }
+    let Ok(manifest) = fs::read_to_string(host_root.join("Cargo.toml")) else {
+        return false;
+    };
+    let Some(lib) = super::crate_plan::toml_section(&manifest, "lib") else {
+        return false;
+    };
+    // A `[lib]` table with no `path` is `src/lib.rs`, which the check above already answered.
+    // 没有 `path` 的 `[lib]` 表就是 `src/lib.rs`，上面的检查已经答过了。
+    match super::crate_plan::toml_value(&lib, "path") {
+        Some(path) => host_root.join(path).is_file(),
+        None => false,
+    }
 }
 
 /// The release facade's `build.rs`: find the host package through cargo, then run the facade pipeline.
@@ -318,7 +375,8 @@ fn ghost_build_rs(namespace: &str, subtrees: &[String]) -> String {
 /// 因此根在构建期由 `cargo metadata` 解析，它会列出每个依赖及其被解包到的目录。这里的 JSON 是扫描而不是解析，
 /// 因为这个脚本没有自己的依赖；扫描以包名为键、取紧接其后的 `manifest_path`，而元数据格式把两者放在同一个包
 /// 对象里相邻的位置（实测：构建全绿）。
-fn facade_build_rs(host_package: &str, namespace: &str) -> String {
+fn facade_build_rs(host_package: &str, namespace: &str, cuts: &[HostCut]) -> String {
+    let (function, cuts_argument) = super::crate_plan::partition_call(cuts);
     format!(
         "//! {marker}: build the cross-crate half out of the host package it depends on.\n\
          //! 由 NichLink 生成：从它依赖的那个宿主包里构建跨 crate 那一半。\n\n\
@@ -334,7 +392,7 @@ fn facade_build_rs(host_package: &str, namespace: &str) -> String {
          {i}    panic!(\"cargo metadata failed: {{}}\", String::from_utf8_lossy(&output.stderr));\n\
          {i}}}\n\
          {i}let text = String::from_utf8(output.stdout).expect(\"utf-8 metadata\");\n\
-         {i}let name = format!(\"\\\"name\\\":{{:?}}\", {host:?});\n\
+         {i}let name = format!(\"\\\"name\\\":{{:?}},\\\"version\\\":\", {host:?});\n\
          {i}let at = text.find(&name).unwrap_or_else(|| panic!(\"`{host}` is not a dependency of this facade\"));\n\
          {i}let rest = &text[at..];\n\
          {i}let key = \"\\\"manifest_path\\\":\\\"\";\n\
@@ -350,12 +408,13 @@ fn facade_build_rs(host_package: &str, namespace: &str) -> String {
          {i}let host = host_root();\n\
          {i}println!(\"cargo:rerun-if-changed={{}}\", host.join(\"src\").display());\n\
          {i}let out = std::path::PathBuf::from(std::env::var(\"OUT_DIR\").expect(\"OUT_DIR\"));\n\
-         {i}nichlink_toolchain::build_method::run_for_partition(\n\
+         {i}nichlink_toolchain::build_method::{function}(\n\
          {i}    &host,\n\
          {i}    &out,\n\
          {i}    {namespace:?},\n\
          {i}    None,\n\
          {i}    true,\n\
+         {cuts_argument}\
          {i})\n\
          {i}.expect(\"nichlink\");\n\
          }}\n",

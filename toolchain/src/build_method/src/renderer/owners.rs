@@ -170,6 +170,46 @@ pub(super) fn names_a_compiled_module(faces: &[StaticFaceRecord], expression: &s
     }
 }
 
+/// The graft cuts **this** crate emits, in declaration order.
+/// **本** crate 发射的那些 graft 切口，按声明顺序。
+///
+/// One rule, two readers: `render_lib` fills `BUILTIN_GRAFT_CUTS` from this list, and the build writes
+/// the same list into `graft_plan.tsv`. They used to disagree — the renderer filtered and the audit text
+/// did not, so every generated package's `graft_plan.tsv` listed the **host's whole plan** while the
+/// table it actually compiled carried one entry or none. Measured on a two-ghost host: the board ghost
+/// emitted exactly its own cut, and its own audit file claimed the cut belonged to the input ghost too.
+/// An audit text that describes a table nobody compiled is the "self-description must match behaviour"
+/// failure, and it is what made two independent readers conclude the release shape "carries every cut
+/// everywhere" (audit `M7`, §M7.55).
+/// 一条规则、两个读者：`render_lib` 由这份清单填充 `BUILTIN_GRAFT_CUTS`，构建把同一份清单写进
+/// `graft_plan.tsv`。两者过去并不一致——渲染器过滤、审计文本不过滤，于是每个生成包的 `graft_plan.tsv`
+/// 都列着**宿主的整份计划**，而它真正编译的表里只有一条或一条都没有。实测（两幽灵的宿主）：board 幽灵
+/// 只发射自己那条切口，而它自己的审计文件声称那条切口也属于 input 幽灵。**描述一张没人编译过的表的
+/// 审计文本**正是"自我描述必须与行为一致"那条的反面，也是让两位独立读者得出"发布形状到处都是全量切口"
+/// 的原因（审计 `M7`，§M7.55）。
+///
+/// `facade` short-circuits the filter because the facade carries the union: it has no modules of its own,
+/// and every `crate::<module>` in it is rewritten to the crate that compiles that module.
+/// `facade` 直接短路过滤，因为 facade 携带并集：它自己没有模块，而它里面每个 `crate::<模块>` 都被改写成
+/// 编译该模块的那个 crate。
+pub(crate) fn emitted_grafts(
+    faces: &[StaticFaceRecord],
+    grafts: &[GraftSyntax],
+    facade: bool,
+) -> Vec<GraftSyntax> {
+    grafts
+        .iter()
+        .filter(|graft| {
+            facade
+                || graft
+                    .expressions
+                    .as_ref()
+                    .is_none_or(|expressions| names_a_compiled_module(faces, &expressions.cut))
+        })
+        .cloned()
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "owners_tests.rs"]
 mod owners_tests;

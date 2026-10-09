@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use nichlink_kernel::identity::NodeId;
 
+use super::HostCut;
 use super::crate_facade::{PlannedFacade, plan_facade};
 use super::crate_plan::{GENERATED_MARKER, PlannedCrate, plan as plan_crates};
 use super::crate_release::plan_ghost as plan_release_ghost;
@@ -35,7 +36,45 @@ pub(crate) fn build_out_dir(package_root: &Path) -> PathBuf {
     package_root.join("target/nichlink/out")
 }
 
-/// The plans for one host's declared crates: what the writer writes, and what the screen describes.
+/// The graft cuts the host entry declares, for a generated package to carry.
+/// 宿主入口声明的 graft 切口，供生成包携带。
+///
+/// The **declared** list, not the enabled one: `#[cfg]` is evaluated where the declaration is compiled,
+/// and that is the generated package's own build (it copies the host's feature table). Handing over a
+/// list already filtered here would bake this machine's feature set into a package built elsewhere.
+/// 取的是**声明的**那份清单，而不是已启用的：`#[cfg]` 在声明被编译的地方求值，而那正是生成包自己的构建
+/// （它复制了宿主的特性表）。在这里就过滤好，等于把本机的特性组合烤进一个在别处构建的包。
+///
+/// Reading the entry rather than the published records is deliberate: `graft_plan.tsv` is what one
+/// **package** emits, already attributed, so it cannot say what the host declared.
+/// 读入口而不是读已发布的记录是有意的：`graft_plan.tsv` 是某个**包**发射的东西、已经过归属，因此它说不出
+/// 宿主声明了什么。
+pub(crate) fn declared_host_cuts(root: &Path) -> Result<Vec<HostCut>, String> {
+    let entry = super::entry::host_entry_source(root).map_err(|error| {
+        format!(
+            "{error}\nway forward: a partition hands the host entry's graft plan to every package it \
+             generates, so the entry has to be where the build looks for it"
+        )
+    })?;
+    let source =
+        fs::read_to_string(&entry).map_err(|error| format!("read {}: {error}", entry.display()))?;
+    let declarations = super::registry_syntax::graft_entries(&source)
+        .map_err(|error| format!("{}: {}", entry.display(), error.message))?;
+    Ok(declarations
+        .into_iter()
+        .map(|declaration| HostCut {
+            cut: declaration.cut,
+            cut_end: declaration.cut_end,
+            graft: declaration.graft,
+            full: declaration.full,
+            typed: declaration.expressions.is_some(),
+            cfg: declaration.cfg,
+            line: declaration.location.line,
+            column: declaration.location.column,
+        })
+        .collect())
+}
+
 /// 某个宿主所声明各 crate 的计划：写入方要写的东西，也是画面要描述的东西。
 pub(crate) struct PartitionPlan {
     /// The declared package prefix.
@@ -100,17 +139,24 @@ pub(crate) fn plan(package_root: &Path) -> Result<Option<PartitionPlan>, String>
                  cargo has to be able to read it"
             )
         })?;
-    let planned = plan_crates(package_root, &host_package, &declaration, &faces)?;
+    // The host's graft plan travels with every generated package: the release shape has no host tree to
+    // read, so a package that only re-read its own `src/` emitted an empty cut table and the graft the
+    // plan promised never happened in the published crate (audit `M7`, §M7.55).
+    // 宿主的 graft 计划随每个生成包一起走：发布形状没有宿主树可读，因此只回读自己 `src/` 的包会发射空切口
+    // 表，计划承诺的嫁接在发布出去的 crate 里从未发生（审计 `M7`，§M7.55）。
+    let cuts = declared_host_cuts(package_root)?;
+    let planned = plan_crates(package_root, &host_package, &declaration, &faces, &cuts)?;
     let facade = plan_facade(
         package_root,
         &declaration.package_prefix,
         &host_package,
         &host_package,
         &planned,
+        &cuts,
     )?;
     let mut release = Vec::new();
     for planned in &planned {
-        release.push(plan_release_ghost(package_root, planned, &faces)?);
+        release.push(plan_release_ghost(package_root, planned, &faces, &cuts)?);
     }
     if !planned.is_empty() {
         release.push(plan_release_facade(
@@ -119,6 +165,7 @@ pub(crate) fn plan(package_root: &Path) -> Result<Option<PartitionPlan>, String>
             &declaration.package_prefix,
             &host_package,
             &planned,
+            &cuts,
         )?);
     }
     let (config_root, workspace) = partition_roots(package_root);

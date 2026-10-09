@@ -163,6 +163,7 @@ pub use static_plan::source_module_path;
 // crate 内部辅助项，重新导出以便同级模块在拆分后保留 `super::…` 路径，
 // 不必互相伸进对方的新家。
 pub(crate) use build_input::BuildInput;
+pub use build_input::HostCut;
 pub(crate) use contracts::aggregate_contract_errors;
 pub(crate) use discovery_cache::{
     CACHE_SCHEMA, cached_parent_id, update_discovery_cache, write_if_changed,
@@ -210,7 +211,7 @@ pub(crate) use face_syntax_check::{
     aggregate_parent_macro_errors, aggregate_registry_rule_errors, aggregate_requirements,
     aggregate_stable_name_errors, face_syntax_errors, parsed_face, unplaced_face_errors,
 };
-pub(crate) use graft_view::{declared_graft_view, host_graft_entries};
+pub(crate) use graft_view::{declared_graft_view, enable_graft_entries, host_graft_entries};
 pub(crate) use graph::{write_generation, write_graph_manifest};
 pub(crate) use identity_cache::{cache_directory, prime_node_id_cache};
 pub(crate) use manifests::{
@@ -221,7 +222,7 @@ pub(crate) use node_identity::{CACHED_NODE_IDS, node_id};
 #[cfg(any(feature = "cli", feature = "studio", feature = "mcp"))]
 pub use partition_view::{OnDisk, PackageView, PartitionView};
 #[cfg(any(feature = "cli", feature = "studio", feature = "mcp"))]
-pub(crate) use partition_view::{apply_declaration_edit, package_directory_of};
+pub(crate) use partition_view::{apply_declaration_edit, declared_host_cuts, package_directory_of};
 #[cfg(feature = "cli")]
 pub(crate) use registry_identity::NodeId;
 pub(crate) use renderer::render_lib;
@@ -304,6 +305,36 @@ pub fn run_for_partition(
     )
 }
 
+/// [`run_for_partition`] for a package that carries its host's graft cuts as **data**.
+/// [`run_for_partition`]，用于把宿主的 graft 切口当作**数据**携带的包。
+///
+/// A generated package has no entry of its own, so without this argument the release shape's ghosts
+/// compiled the copied faces and emitted an empty cut table — the graft the plan promised never left the
+/// build (see [`HostCut`]; audit `M7`, §M7.55). The cuts are attributed to the packages that compile
+/// them by the same rule a hand-written entry is, so a ghost emits its own and the facade emits the
+/// union.
+/// 生成包没有自己的入口，因此没有这个参数时，发布形状的幽灵编译了复制过来的面、却发射空切口表——计划
+/// 承诺的嫁接从未离开构建（见 [`HostCut`]；审计 `M7`，§M7.55）。这些切口按与手写入口**同一条**归属规则
+/// 归到编译它们的包上，因此幽灵发射自己那条、facade 发射并集。
+pub fn run_for_partition_with_cuts(
+    manifest: &Path,
+    out_dir: &Path,
+    package: &str,
+    only: Option<&str>,
+    facade: bool,
+    cuts: &[HostCut],
+) -> Result<(), String> {
+    run_shape_with_cuts(
+        manifest,
+        out_dir,
+        package,
+        only.map(str::to_owned),
+        facade,
+        true,
+        cuts,
+    )
+}
+
 /// The shared body of [`run_for`] and [`run_for_partition`].
 /// [`run_for`] 与 [`run_for_partition`] 共用的主体。
 fn run_shape(
@@ -314,6 +345,29 @@ fn run_shape(
     facade: bool,
     emit_cargo_directives: bool,
 ) -> Result<(), String> {
+    run_shape_with_cuts(
+        manifest,
+        out_dir,
+        package,
+        only,
+        facade,
+        emit_cargo_directives,
+        &[],
+    )
+}
+
+/// [`run_shape`] with the host's cuts handed in as data.
+/// [`run_shape`]，外加以数据交进来的宿主切口。
+#[allow(clippy::too_many_arguments)]
+fn run_shape_with_cuts(
+    manifest: &Path,
+    out_dir: &Path,
+    package: &str,
+    only: Option<String>,
+    facade: bool,
+    emit_cargo_directives: bool,
+    cuts: &[HostCut],
+) -> Result<(), String> {
     std::fs::create_dir_all(out_dir)
         .map_err(|error| format!("create {}: {error}", out_dir.display()))?;
     // A **build script** has to emit cargo's directives, and one of them matters here: the
@@ -323,13 +377,14 @@ fn run_shape(
     // **构建脚本**必须发 cargo 指令，其中一条在这里很要紧：`rustc-check-cfg=cfg(rust_analyzer)`，它让生成树里
     // 给 rust-analyzer 的镜像不再被当成未知 cfg 警告。传 `false`（CLI 的设置）会让每个生成包在自己的构建里报警
     // ——实测：`partitioned-button-facade` 上的 `unexpected_cfgs`。
-    check_for_shape(
+    check_for_shape_with_cuts(
         manifest,
         out_dir,
         package,
         only,
         facade,
         emit_cargo_directives,
+        cuts,
     )
     .map_err(|diagnostics| diagnostics.render_build_diagnostics())
 }
@@ -381,6 +436,29 @@ pub fn check_for_shape(
     facade: bool,
     emit_cargo_directives: bool,
 ) -> Result<(), nichlink_kernel::BuildDiagnostics> {
+    check_for_shape_with_cuts(
+        manifest,
+        out_dir,
+        package,
+        only,
+        facade,
+        emit_cargo_directives,
+        &[],
+    )
+}
+
+/// [`check_for_shape`] with the host's graft cuts handed in as data.
+/// [`check_for_shape`]，外加以数据交进来的宿主 graft 切口。
+#[allow(clippy::too_many_arguments)]
+pub fn check_for_shape_with_cuts(
+    manifest: &Path,
+    out_dir: &Path,
+    package: &str,
+    only: Option<String>,
+    facade: bool,
+    emit_cargo_directives: bool,
+    cuts: &[HostCut],
+) -> Result<(), nichlink_kernel::BuildDiagnostics> {
     std::fs::create_dir_all(out_dir).map_err(|error| {
         let mut diagnostics = nichlink_kernel::BuildDiagnostics::default();
         diagnostics.push(nichlink_kernel::BuildDiagnostic::new(
@@ -395,7 +473,8 @@ pub fn check_for_shape(
         out_dir.to_path_buf(),
         emit_cargo_directives,
     )
-    .with_shape(only, facade);
+    .with_shape(only, facade)
+    .with_host_cuts(cuts.to_vec());
     // `package` is the authority for this run, not the process-wide pin: a
     // bridge or a test binary runs several packages in one process, and the pin
     // is first-write-wins, so a second run would otherwise publish identities
