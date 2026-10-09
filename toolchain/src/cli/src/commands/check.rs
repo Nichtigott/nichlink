@@ -21,6 +21,61 @@ use super::{build_out_dir, resolve_package};
 /// 实测的后果是作者改不了的文件里的一个类型错误（见 [`crate::build_method::duplicated_own_crates`]），
 /// 因此这句话必须赶在构建之前到。
 fn refuse_duplicated_own_crates(manifest: &std::path::Path) -> Result<(), String> {
+    for candidate in own_crate_manifests(manifest) {
+        refuse_duplicated_in(&candidate, candidate == manifest)?;
+    }
+    Ok(())
+}
+
+/// The manifests this gate reads: the host's, and **every generated package's**.
+/// 这道门禁要读的清单：宿主的，以及**每一个生成包的**。
+///
+/// A ghost is an **independent package** — the host's `[patch.crates-io]` (or its path dependency) does not
+/// reach it — so it can carry this workspace's own crates twice while the host carries them once. Measured on a
+/// partitioned tree: the host's own `check` was green while `cargo metadata --manifest-path
+/// crates/dash-dash-board/Cargo.toml` reported `{'nichlink-kernel': 2, 'nichlink-macro': 2,
+/// 'nichlink-toolchain': 2}` and the build died with `error[E0308]: mismatched types … expected `NodeId`,
+/// found a different `NodeId`` inside **that package's** `generated_lib.rs` (audit `M7`, §M7.66).
+/// 幽灵是一个**独立的包**——宿主的 `[patch.crates-io]`（或它的 path 依赖）到不了它——因此宿主只有一份时，它
+/// 可能带着本工作区自己的 crate 两份。在一个分区树上实测：宿主自己的 `check` 是绿的，而
+/// `cargo metadata --manifest-path crates/dash-dash-board/Cargo.toml` 报
+/// `{'nichlink-kernel': 2, 'nichlink-macro': 2, 'nichlink-toolchain': 2}`，构建死在**那个包**的
+/// `generated_lib.rs` 里的 `error[E0308]: mismatched types … expected `NodeId`, found a different
+/// `NodeId``（审计 `M7`，§M7.66）。
+///
+/// Where the generated packages are comes from the function the **writer** uses, so a reader and a writer
+/// cannot disagree about it.
+/// 生成包在哪里取自**写入方**用的那个函数，因此读的一方与写的一方不可能有分歧。
+pub(crate) fn own_crate_manifests(manifest: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut manifests = vec![manifest.to_path_buf()];
+    let Some(host) = manifest.parent() else {
+        return manifests;
+    };
+    let (partition_root, _) = crate::build_method::partition_roots(host);
+    let Ok(entries) = std::fs::read_dir(partition_root.join(nichlink_kernel::lexicon::CRATES_DIR))
+    else {
+        // No generated packages is the ordinary answer, not a failure to read: a tree that was never split
+        // has no such directory.
+        // 没有生成包是普通的答案，而不是读失败：一棵从未被拆分过的树没有这个目录。
+        return manifests;
+    };
+    for entry in entries.flatten() {
+        let candidate = entry.path().join("Cargo.toml");
+        if candidate.is_file() {
+            manifests.push(candidate);
+        }
+    }
+    manifests
+}
+
+/// Refuse one manifest whose graph carries this workspace's own crates twice.
+/// 拒绝一个依赖图里带着本工作区自己 crate 两份拷贝的清单。
+///
+/// `is_host` only decides whether the sentence names the package it is about: the host's own message stays
+/// byte-identical to what it has always been, and a generated package's says which one it read.
+/// `is_host` 只决定这句话要不要点名它说的是哪个包：宿主自己的消息与它一直以来的样子逐字节相同，而生成包的
+/// 会说出读的是哪一个。
+fn refuse_duplicated_in(manifest: &std::path::Path, is_host: bool) -> Result<(), String> {
     let duplicated = crate::build_method::duplicated_own_crates(manifest)?;
     let Some((name, copies)) = duplicated.first() else {
         return Ok(());
@@ -30,7 +85,7 @@ fn refuse_duplicated_own_crates(manifest: &std::path::Path) -> Result<(), String
         .skip(1)
         .map(|(name, _)| name.as_str())
         .collect::<Vec<_>>();
-    Err(format!(
+    let said = format!(
         "this project's dependency graph carries `{name}` twice, and the two copies are distinct \
          types to rustc:\n  {}\n  {}\n\
          the generated tree names both — the host resolves its own copy, a graft implementation \
@@ -47,6 +102,14 @@ fn refuse_duplicated_own_crates(manifest: &std::path::Path) -> Result<(), String
         } else {
             format!("\nthe same holds for: {}", others.join(", "))
         }
+    );
+    if is_host {
+        return Err(said);
+    }
+    Err(format!(
+        "the generated package `{}` carries it twice as well, and it needs its own `[patch]` table — \
+         the host's does not reach it:\n{said}",
+        manifest.parent().unwrap_or(manifest).display()
     ))
 }
 
@@ -144,3 +207,7 @@ pub(crate) fn check(
         .map_err(|error| format!("cannot write output: {error}"))?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "check_tests.rs"]
+mod check_tests;
