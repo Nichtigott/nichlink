@@ -114,15 +114,55 @@ pub(crate) fn explain(root: &Path, arguments: &Value) -> Result<String, String> 
                 .iter()
                 .find(|face| face.id == id)
                 .ok_or_else(|| format!("no face in the derived tree has identity {id}"))?;
-            Ok(node_report(&namespace, face, &evidence))
+            Ok(node_report(
+                &namespace,
+                face,
+                &evidence,
+                &graft_line(root, face),
+            ))
         }
         None => Ok(tree_report(&namespace, &faces, &evidence, limit)),
     }
 }
 
+/// What the host entry hands this slot to — and it says so even when the answer is "nothing".
+/// 宿主入口把这个槽位交给了谁——即使答案是"没有"，它也会说出来。
+///
+/// The bridge's `explain` did not mention this at all, while the CLI's `explain --overlay` printed
+/// `<- graft=… full=false (line N)` for the same slot: the agent-facing half of the same question was
+/// missing, and an agent asking "who implements this face now" got a report that never said (audit
+/// `M7`, §M7.62). The "none" line is deliberate and not noise: a view that stays silent when there is
+/// nothing to hand over makes "nothing" indistinguishable from "this tool did not look", which is the
+/// shape of the defect this line closes.
+/// 桥的 `explain` 完全不提这件事，而 CLI 的 `explain --overlay` 为同一个槽位打印
+/// `<- graft=… full=false (line N)`：同一个问题的**代理面**那一半是缺的，问"这个面现在由谁实现"的代理
+/// 拿到一份通篇不说的报告（审计 `M7`，§M7.62）。那句"没有"是有意的、不是噪音：一个在没有东西可交时保持
+/// 沉默的视图，会让"没有"与"这件工具根本没看"变得无法区分——而那正是本行要闭合的缺陷形状。
+fn graft_line(root: &std::path::Path, face: &FaceView) -> String {
+    match crate::build_method::declared_grafts(root) {
+        Ok(declared) => match declared
+            .cuts
+            .iter()
+            .find(|cut| cut.names_face(&face.path, Some(&face.module)))
+        {
+            Some(cut) => format!(
+                "graft  <- {} full={} form={} (entry line {})\n",
+                cut.graft,
+                cut.full,
+                cut.form(),
+                cut.line
+            ),
+            None => {
+                "graft  none — no declaration in the host entry hands this slot over\n".to_owned()
+            }
+        },
+        Err(error) => format!("graft  unknown — the host entry could not be read: {error}\n"),
+    }
+}
+
 /// One face, plus what the build says about its scope and pruning.
 /// 一个面，外加构建对其作用域与剪枝的说法。
-fn node_report(namespace: &str, face: &FaceView, evidence: &BuildEvidence) -> String {
+fn node_report(namespace: &str, face: &FaceView, evidence: &BuildEvidence, graft: &str) -> String {
     let mut output = format!(
         "namespace {namespace}\nnode {}\n  path {}\n  kind {}\n  source {}\n  module {}\n  parent {}{}\n  registry_name {}\n",
         face.id,
@@ -138,6 +178,7 @@ fn node_report(namespace: &str, face: &FaceView, evidence: &BuildEvidence) -> St
         },
         face.registry_name,
     );
+    output.push_str(graft);
     output.push_str(&format!("build {}\n", evidence.freshness()));
     output.push_str(&scope_line(evidence.scope.as_ref(), face));
     output.push_str(&pruning_line(evidence.pruning.as_deref(), face));

@@ -294,3 +294,44 @@ fn the_tree_projection_is_bounded_by_limit() {
     assert!(reply.contains("root/button"), "{reply}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The bridge's `explain` says **who implements the slot** — and says so when nobody does.
+/// 桥的 `explain` 说出**这个槽位由谁实现**——而在没有人实现它时也会说。
+///
+/// The CLI's `explain --overlay` printed `<- graft=… full=false (line N)` for the same slot while the bridge
+/// said nothing at all, so an agent asking "who implements this face now" got a report that never answered
+/// (audit `M7`, §M7.62). The negative half is deliberate, not noise: a view that stays silent when there is
+/// nothing to hand over makes "nothing" indistinguishable from "this tool did not look" — which is the shape of
+/// the defect this line closes.
+/// CLI 的 `explain --overlay` 为同一个槽位打印 `<- graft=… full=false (line N)`，而桥什么都不说，于是问"这个面
+/// 现在由谁实现"的代理拿到一份从不回答的报告（审计 `M7`，§M7.62）。否定的那一半是有意的、不是噪音：一个在没有
+/// 东西可交时保持沉默的视图，会让"没有"与"这件工具根本没看"无法区分——而那正是本行要闭合的缺陷形状。
+#[test]
+fn the_report_says_who_implements_the_slot() {
+    let (root, _name) = package("graft-line");
+    let before = explain(&root, &json!({"node": "root/button"})).expect("a report");
+    assert!(
+        before.contains("graft  none — no declaration"),
+        "a slot nothing hands over says so: {before}"
+    );
+
+    // Now declare it the way a host does: the entry names the slot with a Rust path.
+    // 然后按宿主的方式声明它：入口用一条 Rust 路径点名这个槽位。
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub const FRAMEWORK: FrameworkId = FrameworkId::new(\"evidence.fixture\");\n\
+         nichlink_toolchain::run_method::static_graft_plan!(\n    FRAMEWORK,\n    \
+         cut(crate::button::NODE_ID) graft(fast_button::fast::NODE_ID),\n);\n",
+    )
+    .expect("the entry");
+    let after = explain(&root, &json!({"node": "root/button"})).expect("a report");
+    assert!(
+        after.contains("graft  <- fast_button::fast::NODE_ID full=false form=typed"),
+        "the implementation is named, in the declaration's own spelling: {after}"
+    );
+    assert!(
+        after.contains("(entry line 4)"),
+        "and the line it was written on, so the reader can go there: {after}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
