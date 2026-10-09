@@ -144,10 +144,17 @@ pub(crate) fn grafts(
             )
             .map_err(write_error)?,
             None => {
-                let declared = match row["declared"].as_bool() {
-                    Some(true) => "declared",
-                    Some(false) => "NOT declared by the host entry",
-                    None => "declaration unknown",
+                // "the slot is declared" and "this record is what gets applied" are two answers, and only
+                // the first one used to be printed (audit `M7`, §M7.63).
+                // "槽位有声明"与"会被应用的是这条记录"是两个答案，而过去只印了第一个（审计 `M7`，§M7.63）。
+                let declared = match (row["declared"].as_bool(), row["selector_matches"].as_bool())
+                {
+                    (Some(true), Some(false)) => {
+                        "declared for this slot, but handed to another implementation"
+                    }
+                    (Some(true), _) => "declared",
+                    (Some(false), _) => "NOT declared by the host entry",
+                    (None, _) => "declaration unknown",
                 };
                 writeln!(
                     out,
@@ -247,5 +254,6 @@ pub(crate) fn row_json(row: &crate::build_method::GraftPlanRow) -> Value {
         "full": row.full,
         "declared": row.declared,
         "declared_by": declared_by,
+        "selector_matches": row.selector_matches,
     })
 }

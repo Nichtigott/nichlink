@@ -151,10 +151,23 @@ pub(crate) fn grafts_body(member: &Member, arguments: &Value) -> Result<String, 
                 let verdict = match row.declared {
                     Some(true) => match &row.declared_by {
                         Some(cut) => format!(
-                            "declared at entry line {} as cut `{}` graft `{}`",
+                            "declared at entry line {} as cut `{}` graft `{}`{}",
                             cut.line,
                             cut.cut_label(),
-                            cut.graft
+                            cut.graft,
+                            // A record on a slot the entry hands to *another* implementation will never be
+                            // applied, and saying only "declared" made that look like a working plan
+                            // (audit `M7`, §M7.63).
+                            // 一份坐在"入口交给**别的**实现"的槽位上的记录永远不会被应用，而只说一句
+                            // "declared" 会让它看起来是一份能工作的计划（审计 `M7`，§M7.63）。
+                            if row.selector_matches == Some(false) {
+                                format!(
+                                    " — but this record selects `{}`, so no build applies it",
+                                    row.selector
+                                )
+                            } else {
+                                String::new()
+                            }
                         ),
                         None => "declared".to_owned(),
                     },

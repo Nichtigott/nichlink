@@ -67,6 +67,23 @@ pub struct GraftPlanRow {
     /// The declaration that keeps this plan, when one does.
     /// 保住这条计划的那条声明（若有）。
     pub declared_by: Option<DeclaredGraft>,
+    /// Whether that declaration hands this slot to **this** record's implementation.
+    /// 那条声明是否把这个槽位交给**这条记录**的实现。
+    ///
+    /// A plan's directory name is its selector, and a declaration names an implementation as a Rust path
+    /// (`dash_graft::board_fast::NODE_ID`) or as the string selector itself (`"board_fast"`): the two agree
+    /// when any `::`-separated segment of the declaration's spelling **is** the selector.
+    /// 计划目录名就是它的选择器，而声明用 Rust 路径（`dash_graft::board_fast::NODE_ID`）或字符串选择器本身
+    /// （`"board_fast"`）点名实现：当声明拼写里任何一个 `::` 分段**就是**选择器时，两者一致。
+    ///
+    /// It exists because "the slot is declared" and "this record is what will be applied" are two different
+    /// answers, and the report gave only the first: measured, an external plan named `other_fast` sitting on a
+    /// slot the entry hands to `board_fast` was reported as `[declared]` and `check` said `ok`, so a record that
+    /// **no build will ever apply** looked like a working one (audit `M7`, §M7.63).
+    /// 它存在是因为"这个槽位有声明"与"会被应用的是这条记录"是两个不同的答案，而报告只给了第一个：实测，
+    /// 一份叫 `other_fast` 的外部计划坐在入口交给 `board_fast` 的槽位上时被报成 `[declared]` 而 `check` 报
+    /// `ok`，于是一份**没有任何构建会应用**的记录看起来是能用的（审计 `M7`，§M7.63）。
+    pub selector_matches: Option<bool>,
 }
 
 /// Read every plan under `<package_root>/.nichlink/external-grafts/*/graft.plan`, sorted
@@ -103,6 +120,20 @@ pub fn graft_plan_rows(
     }
     rows.sort_by(|left, right| left.selector.cmp(&right.selector));
     Ok(rows)
+}
+
+/// Whether a declaration's spelling hands this slot to the implementation a record selects.
+/// 一条声明的拼写是否把这个槽位交给某条记录所选择的实现。
+///
+/// The comparison is **segment-wise** because the two spellings are different on purpose: a typed cut writes
+/// a Rust path (`dash_graft::board_fast::NODE_ID`) and a string cut writes the selector itself
+/// (`"board_fast"`), while a record's directory name is always the selector. Asking "is the selector a
+/// `::`-separated segment of the spelling" answers both without a second rule per spelling.
+/// 比较是**按分段**做的，因为两种拼写是故意不同的：类型化切口写 Rust 路径
+/// （`dash_graft::board_fast::NODE_ID`），字符串切口写选择器本身（`"board_fast"`），而一条记录的目录名永远
+/// 是选择器。"选择器是不是这段拼写里某个 `::` 分段"这一个问法，对两种拼写都成立，不必各写一条规则。
+fn names_the_record(cut: &DeclaredGraft, selector: &str) -> bool {
+    cut.graft.split("::").any(|segment| segment == selector)
 }
 
 /// The row one directory entry contributes, including the row for an entry that could not be read.
@@ -164,6 +195,11 @@ fn entry_rows(
         (Some(_), Some(_)) => Some(true),
         (Some(_), None) => Some(false),
     };
+    // The selector the declaration spells, compared segment-wise: a typed cut writes a Rust path and a
+    // string cut writes the selector itself, and both have to answer the same question.
+    // 声明拼出的选择器，按分段比较：类型化切口写的是 Rust 路径，字符串切口写的就是选择器本身，两者必须回答
+    // 同一个问题。
+    let selector_matches = matched.map(|cut| names_the_record(cut, &document.graft));
     vec![GraftPlanRow {
         selector,
         error: None,
@@ -173,6 +209,7 @@ fn entry_rows(
         full: Some(document.full),
         declared: declared_state,
         declared_by: matched.cloned(),
+        selector_matches,
     }]
 }
 
@@ -189,6 +226,7 @@ impl GraftPlanRow {
             full: None,
             declared: None,
             declared_by: None,
+            selector_matches: None,
         }
     }
 }

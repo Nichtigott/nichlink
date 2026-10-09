@@ -3,7 +3,7 @@
 
 use std::io;
 
-use super::{UNREADABLE_ENTRY, entry_rows};
+use super::{UNREADABLE_ENTRY, entry_rows, names_the_record};
 
 /// A directory entry that could not be read becomes a counted row instead of vanishing.
 /// 读不了的目录项会变成一条被计数的记录，而不是消失。
@@ -32,5 +32,43 @@ fn an_unreadable_entry_is_a_counted_row() {
     assert!(
         row.target.is_none() && row.target_path.is_none() && row.graft.is_none(),
         "there is nothing else to say about a directory entry that was never read"
+    );
+}
+
+/// **"The slot is declared" and "this record is what gets applied" are two answers.**
+/// **"槽位有声明"与"会被应用的是这条记录"是两个答案。**
+///
+/// Measured: an external plan named `other_fast` sitting on a slot the entry hands to `board_fast` was reported
+/// as `[declared]`, so a record that **no build will ever apply** looked like a working one (audit `M7`,
+/// §7.63). Both spellings have to answer the same question, which is why the comparison is segment-wise.
+/// 实测：一份叫 `other_fast` 的外部计划坐在入口交给 `board_fast` 的槽位上时被报成 `[declared]`，于是一份
+/// **没有任何构建会应用**的记录看起来是能用的（审计 `M7`，§M7.63）。两种拼写必须回答同一个问题，这也是比较
+/// 按分段做的原因。
+#[test]
+fn a_declaration_names_the_record_that_will_be_applied() {
+    let typed = |path: &str| super::DeclaredGraft {
+        cut: "crate::board::NODE_ID".to_owned(),
+        cut_end: None,
+        graft: path.to_owned(),
+        full: true,
+        cfg: None,
+        expressions: None,
+        line: 12,
+    };
+    assert!(
+        names_the_record(&typed("dash_graft::board_fast::NODE_ID"), "board_fast"),
+        "a typed cut is a Rust path, and one of its segments is the selector"
+    );
+    assert!(
+        names_the_record(&typed("board_fast"), "board_fast"),
+        "a string cut writes the selector itself"
+    );
+    assert!(
+        !names_the_record(&typed("dash_graft::board_fast::NODE_ID"), "other_fast"),
+        "a different implementation is a different answer"
+    );
+    assert!(
+        !names_the_record(&typed("dash_graft::board_faster::NODE_ID"), "board_fast"),
+        "segments compare whole, not by prefix"
     );
 }
