@@ -6,12 +6,34 @@ fn main() {
     println!("cargo:rerun-if-changed=add_crates.rs");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
-    xirang_toolchain::build_method::run_for_partition(
+    xirang_toolchain::build_method::run_for_partition_with_cuts(
         root,
         &out,
         "xirang-example-partitioned-button",
         Some("control"),
         false,
+        &[
+            xirang_toolchain::build_method::HostCut {
+                cut: "crate::control::object::button::NODE_ID".to_owned(),
+                cut_end: None,
+                graft: "control_button_graft::button_fast::NODE_ID".to_owned(),
+                full: false,
+                typed: true,
+                cfg: None,
+                line: 50,
+                column: 8,
+            },
+            xirang_toolchain::build_method::HostCut {
+                cut: "crate::control::object::slider::NODE_ID".to_owned(),
+                cut_end: None,
+                graft: "control_button_graft::slider_fast::NODE_ID".to_owned(),
+                full: false,
+                typed: true,
+                cfg: None,
+                line: 52,
+                column: 8,
+            },
+        ],
     )
     .expect("xirang");
 }
