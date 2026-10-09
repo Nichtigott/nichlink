@@ -64,14 +64,16 @@ jobs:
         run: tools/nichlink-partition-rehearsal
       - name: Graft matrix (root face, overlap, re-partition)
         if: runner.os == 'Linux' && matrix.toolchain == 'stable'
-        # Five shapes only a real host plus a real cargo can answer: a cut on the root face with `full`,
+        # Six shapes only a real host plus a real cargo can answer: a cut on the root face with `full`,
         # two overlapping cuts (which must be refused by name), a re-partition whose plan must not change,
         # the replacement's own subtree (which must not enter the host's generated tree), and the three
         # middle-node shapes (which must publish the same faces). Each was hand-measured before it was
-        # written down here.
-        # 五种只有"真宿主 + 真 cargo"能回答的形状：根面 + `full` 的切口、两条重叠切口（必须点名拒绝）、
+        # written down here. The sixth asserts the **opposite** of a hand-off row that measured false:
+        # two identical string cuts are named and the build succeeds.
+        # 六种只有"真宿主 + 真 cargo"能回答的形状：根面 + `full` 的切口、两条重叠切口（必须点名拒绝）、
         # 一次"计划不得改变"的重新划分、替换方自己的子树（不得进入宿主的生成树）、以及三种中间节点形状
-        # （必须发布同一批面）。每一种都是先手工量过才写进这里的。
+        # （必须发布同一批面）。第六种断言的是某条交接清单里"实测不成立"那行的**反面**：两条相同的字符串切口
+        # 被点名，而构建成功。每一种都是先手工量过才写进这里的。
         env:
           NICHLINK_GRAFT_MATRIX_CARGO_FLAGS: ""
         run: tools/nichlink-graft-matrix
