@@ -244,3 +244,144 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+
+/// Every copy of this workspace's own crates in a project's dependency graph, grouped by name.
+/// 一个项目的依赖图里属于本工作区那些 crate 的每一份拷贝，按名字分组。
+///
+/// Two copies of `nichlink-toolchain` are **two different types** to rustc, and the generated tree names
+/// both: the host resolves its own copy, the graft implementation resolves the one it was built against.
+/// The failure then lands inside a file the author cannot edit — measured on a hand-built host whose own
+/// manifest took the toolchain from a checkout while its external implementation took it from the
+/// registry:
+/// `nichlink-toolchain` 的两份拷贝对 rustc 是**两个不同的类型**，而生成树把两者都点名：宿主解析自己那一份，
+/// 嫁接实现解析它编译时用的那一份。失败随后落在作者无法编辑的文件里——在一个手工宿主上实测，它的清单从检出取
+/// toolchain，而它的项目外实现从注册局取：
+///
+/// ```text
+/// error[E0308]: mismatched types
+///    --> …/build/dash-dash-board-…/out/generated_lib.rs:218:144
+///     |     expected `NodeId`, found a different `NodeId`
+/// error[E0277]: the trait bound `…::NoParts: PartsContract` is not satisfied
+///    --> …/generated_lib.rs:223:114
+/// ```
+///
+/// Read from `cargo metadata` rather than from the manifests: a `path` dependency three crates deep is
+/// still the copy that gets linked, and only cargo's own graph knows which copies a build will contain.
+/// 从 `cargo metadata` 读，而不是从清单读：三层深的一个 `path` 依赖仍然是会被链接的那一份，而只有 cargo
+/// 自己的图知道一次构建会包含哪些拷贝。
+///
+/// Returns `(name, spelling of each copy)` so the refusal can name both, and an empty list when there is
+/// nothing to say — which is the normal case, and the reason this is not a warning.
+/// 返回 `(名字, 每一份的拼写)` 使拒绝能同时点名两者；没有可说的时候返回空表——那是常态，也是这里不做成
+/// 警告的原因。
+pub fn duplicated_own_crates(manifest: &Path) -> Result<Vec<(String, Vec<String>)>, String> {
+    let output = std::process::Command::new("cargo")
+        .args(["metadata", "--format-version", "1"])
+        .arg("--manifest-path")
+        .arg(manifest)
+        .output()
+        .map_err(|error| format!("cannot run cargo metadata: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "cargo metadata failed for {}: {}",
+            manifest.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("cannot read cargo metadata output: {error}"))?;
+    let packages = metadata["packages"]
+        .as_array()
+        .ok_or_else(|| "cargo metadata reported no packages".to_owned())?;
+    Ok(duplicated_in(packages))
+}
+
+/// The grouping itself: which of this workspace's own crates arrive more than once, and as what.
+/// 分组本身：本工作区自己的 crate 里哪些来了不止一次，以及各自以什么形式。
+///
+/// A pure function of one `cargo metadata` package list, so the rule can be pinned without a cargo run —
+/// the same split `package_name` uses for its own question.
+/// 它是**一份** `cargo metadata` 包清单的纯函数，因此这条规则不需要跑 cargo 就能被钉住——与 `package_name`
+/// 为自己那个问题所做的拆分相同。
+fn duplicated_in(packages: &[serde_json::Value]) -> Vec<(String, Vec<String>)> {
+    let mut by_name: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for package in packages {
+        let Some(name) = package["name"].as_str() else {
+            continue;
+        };
+        if !name.starts_with("nichlink-") {
+            continue;
+        }
+        let spelling = match package["source"].as_str() {
+            Some(source) => format!(
+                "{source} ({name} {})",
+                package["version"].as_str().unwrap_or("?")
+            ),
+            None => package["manifest_path"]
+                .as_str()
+                .map(|path| format!("this checkout ({path})"))
+                .unwrap_or_else(|| "a path dependency".to_owned()),
+        };
+        by_name.entry(name.to_owned()).or_default().push(spelling);
+    }
+    by_name
+        .into_iter()
+        .filter(|(_, copies)| copies.len() > 1)
+        .collect()
+}
+
+#[cfg(test)]
+mod duplicated_tests {
+    use super::duplicated_in;
+
+    /// One copy of each of this workspace's crates is the normal case, and the gate says nothing.
+    /// 本工作区每个 crate 各一份是常态，门禁什么都不说。
+    #[test]
+    fn one_copy_each_is_silent() {
+        let packages = vec![
+            serde_json::json!({"name": "nichlink-kernel", "version": "0.2.2", "source": null,
+                               "manifest_path": "/w/kernel/Cargo.toml"}),
+            serde_json::json!({"name": "serde", "version": "1.0.0", "source": "registry+x",
+                               "manifest_path": "/r/serde/Cargo.toml"}),
+        ];
+        assert!(duplicated_in(&packages).is_empty());
+    }
+
+    /// A third party appearing twice is not this gate's business: two versions of a foreign crate are a
+    /// normal dependency graph, and refusing them would refuse the ecosystem.
+    /// 第三方出现两次不归本门禁管：外来 crate 的两个版本是正常的依赖图，拒绝它等于拒绝整个生态。
+    #[test]
+    fn a_foreign_crate_twice_is_left_alone() {
+        let packages = vec![
+            serde_json::json!({"name": "serde", "version": "1.0.0", "source": "registry+x",
+                               "manifest_path": "/r/serde-1/Cargo.toml"}),
+            serde_json::json!({"name": "serde", "version": "1.0.1", "source": "registry+x",
+                               "manifest_path": "/r/serde-2/Cargo.toml"}),
+        ];
+        assert!(duplicated_in(&packages).is_empty());
+    }
+
+    /// The measured shape: the host takes the toolchain from a checkout, the graft implementation takes
+    /// it from the registry, and the two copies are distinct types inside one build.
+    /// 实测的形状：宿主从检出取 toolchain，嫁接实现从注册局取，而两份拷贝在同一次构建里是两个不同的类型。
+    #[test]
+    fn a_checkout_copy_beside_a_registry_copy_is_reported() {
+        let packages = vec![
+            serde_json::json!({"name": "nichlink-toolchain", "version": "0.2.2", "source": null,
+                               "manifest_path": "/w/toolchain/Cargo.toml"}),
+            serde_json::json!({"name": "nichlink-toolchain", "version": "0.2.2",
+                               "source": "registry+https://github.com/rust-lang/crates.io-index",
+                               "manifest_path": "/r/nichlink-toolchain/Cargo.toml"}),
+        ];
+        let found = duplicated_in(&packages);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "nichlink-toolchain");
+        assert_eq!(found[0].1.len(), 2);
+        assert!(
+            found[0].1[0].contains("this checkout") && found[0].1[1].contains("registry+"),
+            "both spellings are named, so the reader knows which two to unify: {:?}",
+            found[0].1
+        );
+    }
+}

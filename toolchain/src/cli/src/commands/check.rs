@@ -13,6 +13,43 @@ use std::io::Write;
 
 use super::{build_out_dir, resolve_package};
 
+/// Refuse a project whose dependency graph carries this workspace's own crates twice.
+/// 拒绝一个依赖图里带着本工作区自己 crate 两份拷贝的项目。
+///
+/// The measured consequence is a type error inside a file the author cannot edit (see
+/// [`crate::build_method::duplicated_own_crates`]), so the sentence has to arrive before the build does.
+/// 实测的后果是作者改不了的文件里的一个类型错误（见 [`crate::build_method::duplicated_own_crates`]），
+/// 因此这句话必须赶在构建之前到。
+fn refuse_duplicated_own_crates(manifest: &std::path::Path) -> Result<(), String> {
+    let duplicated = crate::build_method::duplicated_own_crates(manifest)?;
+    let Some((name, copies)) = duplicated.first() else {
+        return Ok(());
+    };
+    let others = duplicated
+        .iter()
+        .skip(1)
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>();
+    Err(format!(
+        "this project's dependency graph carries `{name}` twice, and the two copies are distinct \
+         types to rustc:\n  {}\n  {}\n\
+         the generated tree names both — the host resolves its own copy, a graft implementation \
+         resolves the one it was built against — so the failure lands inside a generated file the \
+         author cannot edit (measured: `error[E0308]: mismatched types … expected `NodeId`, found a \
+         different `NodeId`` at `generated_lib.rs:218`).\n\
+         way forward: give every crate in this build the same source for it — either all from the \
+         registry (`version = \"0.2.2\"`), or all from this checkout, which one `[patch.crates-io]` \
+         table in the workspace root does for every member at once{others}",
+        copies.first().cloned().unwrap_or_default(),
+        copies.get(1).cloned().unwrap_or_default(),
+        others = if others.is_empty() {
+            String::new()
+        } else {
+            format!("\nthe same holds for: {}", others.join(", "))
+        }
+    ))
+}
+
 /// Run the validation pass, optionally as one JSON document for CI.
 /// 运行校验，可选地以单个 JSON 文档输出给 CI。
 ///
@@ -64,6 +101,12 @@ pub(crate) fn check(
             return Err(error);
         }
     };
+    // Two copies of this workspace's own crates cannot be linked into one build without the failure
+    // landing inside a generated file, so this is asked **before** the pipeline runs — the one place a
+    // reader can still be told to unify the source.
+    // 本工作区自己的 crate 有两份拷贝时，一次构建不可能不把失败落进某个生成文件里，因此这一问发生在管线**之前**
+    // ——那是读者还能被告知"把来源统一起来"的唯一位置。
+    refuse_duplicated_own_crates(&manifest.join("Cargo.toml"))?;
     let out_dir = build_out_dir(&manifest);
     if json_output {
         return match crate::build_method::check_for(&manifest, &out_dir, &package) {

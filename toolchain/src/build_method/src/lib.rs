@@ -149,6 +149,7 @@ pub use graft_view::{
     DeclaredGraft, DeclaredGraftExpressions, DeclaredGrafts, GraftPlanRow, OVERLAY_NOTE,
     OverlayProjection, OverlaySlot, declared_grafts, graft_plan_rows, overlay_projection,
 };
+pub use package::duplicated_own_crates;
 /// The package name Cargo reports for a package root, which is the identity
 /// namespace of every face that package compiles.
 /// Cargo 为某个包根报告的包名，也就是该包编译的每个面的身份命名空间。
