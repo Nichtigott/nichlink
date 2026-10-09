@@ -15,60 +15,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "xirang-example-partitioned-button"
-version = "0.2.1"
-dependencies = [
- "xirang-example-partitioned-button-graft",
- "xirang-toolchain",
-]
-
-[[package]]
-name = "xirang-example-partitioned-button-graft"
-version = "0.2.1"
-dependencies = [
- "xirang-toolchain",
-]
-
-[[package]]
-name = "xirang-kernel"
-version = "0.2.2"
-dependencies = [
- "proc-macro2",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "xirang-macro"
-version = "0.2.2"
-dependencies = [
- "xirang-kernel",
- "proc-macro2",
-]
-
-[[package]]
-name = "xirang-toolchain"
-version = "0.2.2"
-dependencies = [
- "xirang-kernel",
- "xirang-macro",
- "proc-macro2",
- "serde_json",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "partitioned-button-facade"
-version = "0.2.1"
+version = "0.1.0"
 dependencies = [
+ "partitioned-button-objects",
  "xirang-example-partitioned-button",
  "xirang-example-partitioned-button-graft",
  "xirang-toolchain",
- "partitioned-button-objects",
 ]
 
 [[package]]
 name = "partitioned-button-objects"
-version = "0.2.1"
+version = "0.1.0"
 dependencies = [
  "xirang-example-partitioned-button-graft",
  "xirang-toolchain",
@@ -161,6 +119,48 @@ name = "unicode-ident"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
+
+[[package]]
+name = "xirang-example-partitioned-button"
+version = "0.1.0"
+dependencies = [
+ "xirang-example-partitioned-button-graft",
+ "xirang-toolchain",
+]
+
+[[package]]
+name = "xirang-example-partitioned-button-graft"
+version = "0.1.0"
+dependencies = [
+ "xirang-toolchain",
+]
+
+[[package]]
+name = "xirang-kernel"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "xirang-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "xirang-kernel",
+]
+
+[[package]]
+name = "xirang-toolchain"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "serde_json",
+ "syn 2.0.119",
+ "xirang-kernel",
+ "xirang-macro",
+]
 
 [[package]]
 name = "zmij"

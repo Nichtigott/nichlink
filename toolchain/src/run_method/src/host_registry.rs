@@ -6,9 +6,9 @@ use crate::run_method::registry_core::{FrameworkId, RegistrationInfo, Registry, 
 /// Assemble this crate's runtime registry from the registrations its build produced.
 /// 用本次构建产出的注册装配本 crate 的运行期注册机。
 ///
-/// Call it through [`host_registry!`](crate::host_registry), which supplies the three arguments from
+/// Call it through [`host_registry!`](crate::host_registry!), which supplies the three arguments from
 /// the crate root the generated entry already populates.
-/// 请经 [`host_registry!`](crate::host_registry) 调用：它从生成入口已经填好的 crate 根取那三个实参。
+/// 请经 [`host_registry!`](crate::host_registry!) 调用：它从生成入口已经填好的 crate 根取那三个实参。
 ///
 /// **Why this exists.** Every piece was public and generated — `registrations()` in
 /// `OUT_DIR/generated_lib.rs`, [`Registry::root_for_namespace`] and [`Registry::register_all`] in the
