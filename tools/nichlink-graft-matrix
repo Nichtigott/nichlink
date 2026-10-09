@@ -122,9 +122,17 @@ RS
 # graft plan"。实测——这正是这条腿在 CI 上红而本地绿的原因。下面的存在性检查正是让"计划缺失"不会变成
 # "两个空哈希相等、于是报成功"。
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the declared host does not check"
-PLAN="$AREA/app/target/nichlink/out/graft_plan.tsv"
-[ -f "$PLAN" ] || fail "the declared host published no graft plan"
-before=$(md5sum <"$PLAN")
+# The witness is the **unpartitioned** build's own table, taken after building it: one crate compiles every face,
+# so its table is the whole declared plan. It has to be built rather than only checked, because `check` writes
+# the CLI's records (`target/nichlink/out`) and a build script writes the package's own (`build/*/out`) — and the
+# second is what a package actually emits.
+# 证人是**未分区**那次构建自己的表，在构建之后取：一个 crate 编译每一个面，因此它的表就是整份声明的计划。它必须
+# 被**构建**而不只是 check，因为 `check` 写的是 CLI 的记录（`target/nichlink/out`），而包的构建脚本写自己的那份
+# （`build/*/out`）——后者才是这个包真正发射的东西。
+(cd "$AREA/app" && build >/dev/null 2>&1) || fail "the declared host does not build"
+before=$(find "$AREA/target" -path '*/build/*/out/graft_plan.tsv' -type f | head -1)
+[ -n "$before" ] || fail "the unpartitioned host emitted no graft plan at all"
+before=$(md5sum <"$before")
 (cd "$AREA/app" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the split host does not check"
 # The partition root is the **workspace** root, so the generated packages sit beside the host, and the
@@ -133,9 +141,17 @@ before=$(md5sum <"$PLAN")
 [ -d "$AREA/crates/app-objects" ] || fail "the split did not produce the ghost"
 [ -d "$AREA/crates/app-facade" ] || fail "the split did not produce the facade"
 (cd "$AREA" && build --workspace >/dev/null 2>&1) || fail "a crate of the split does not build"
-[ -f "$PLAN" ] || fail "the partitioned host published no graft plan"
-after=$(md5sum <"$PLAN")
-[ "$before" = "$after" ] || fail "re-partitioning changed the graft plan"
+# After the split the host legitimately emits **fewer** cuts (it no longer compiles the faces that moved), so the
+# package to compare is the **facade**: it carries the union, which is the unpartitioned plan. Comparing the
+# host's own table here would either fail (correctly — attribution changed) or pass for the wrong reason, which
+# is what it used to do while every package carried the host's whole plan (audit `M7`, §M7.55).
+# 划分之后宿主合法地**少发**几条（它不再编译搬走的那些面），因此要比的包是 **facade**：它携带并集，也就是未分区
+# 的那份计划。在这里比宿主自己的表，要么失败（正确地——归属变了），要么因为一个错理由通过——而那正是它过去所做的
+# 事，当时每个包都带着宿主的整份计划（审计 `M7`，§M7.55）。
+FACADE_PLAN=$(find "$AREA" -path '*app-facade*/out/graft_plan.tsv' -type f | head -1)
+[ -n "$FACADE_PLAN" ] || fail "the split published no facade graft plan"
+after=$(md5sum <"$FACADE_PLAN")
+[ "$before" = "$after" ] || fail "re-partitioning changed the cuts the tree declares (the facade's union moved)"
 cuts=$(find "$AREA/target" "$AREA/crates" -path "*app-objects-*/out/generated_lib.rs" 2>/dev/null | head -1)
 [ -n "$cuts" ] || fail "no generated tree for the ghost"
 [ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] ||

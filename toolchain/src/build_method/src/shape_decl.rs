@@ -882,6 +882,19 @@ pub(crate) fn declare(
         close
     };
     let mut inserted = String::new();
+    // A comma when the entry before the insertion point does not end with one, and this is the same defect as
+    // the wrong anchor one shape later: an **inline** list (`crates: &[Crate::named("a").at(…)` on a single
+    // line) has no trailing comma to inherit, so inserting a whole entry gave two adjacent expressions —
+    // measured, `check` then refused the file the preview had just described as a success (audit `M7`,
+    // §M7.61). A list that already spans lines ends its last entry with a comma and gains nothing.
+    // 插入点之前那条 entry 没有以逗号结尾时补一个，而它与"锚点找错"是同一个缺陷晚一种版式：**单行**列表
+    // （`crates: &[Crate::named("a").at(…)` 在一行里）没有可继承的尾逗号，于是插入一整条 entry 会得到两个相邻
+    // 的表达式——实测，`check` 随后拒绝了预览刚描述为成功的那份文件（审计 `M7`，§M7.61）。已经跨行的列表最后
+    // 一条 entry 本来就带逗号，什么也不加。
+    let tail = before[..anchor].trim_end();
+    if !tail.ends_with(',') && !tail.ends_with('[') {
+        inserted.push(',');
+    }
     if !before[..anchor].ends_with('\n') {
         inserted.push('\n');
     }

@@ -564,3 +564,70 @@ fn declaration_root(label: &str) -> PathBuf {
     fs::create_dir_all(&root).expect("fixture root");
     root
 }
+
+/// Every **layout** a declaration is written in gains an entry that parses.
+/// 声明被写下的**每一种版式**都要在加一条 entry 之后仍能解析。
+///
+/// The anchor defect had two shapes, and the first fix only covered one of them: a multi-line list found its
+/// bracket wrong (the first `]` belongs to the first entry), and an **inline** list had no trailing comma to
+/// inherit, so a whole entry inserted after it produced two adjacent expressions. Both were measured on real
+/// runs, one after the other — which is why this pin is a table of layouts rather than a single case
+/// (audit `M7`, §M7.61).
+/// 锚点那个缺陷有两种版式，而第一次修复只覆盖了其中一种：跨行的列表把括号找错了（第一个 `]` 属于第一条
+/// entry），而**单行**列表没有可继承的尾逗号，因此插进一整条 entry 之后会得到两个相邻的表达式。两者都是
+/// 在真实运行里量到的，一个接一个——这就是这条钉子是一张版式表、而不是单个用例的原因（审计 `M7`，§M7.61）。
+// `declare` rides the authoring surfaces, like the `declare`/`undeclare` imports at the top of this file: a
+// default build has no writer to test.
+// `declare` 随创作界面走，与本文件顶部的 `declare`/`undeclare` 导入相同：默认构建里没有写入方可测。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
+#[test]
+fn every_layout_gains_an_entry_that_parses() {
+    let layouts = [
+        // The template's constructor, one entry per line.
+        // 模板的构造器，一条 entry 一行。
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+         pub fn add_crates() -> Shape {\n    Shape::of(\"app\", &[\n        \
+         Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE]),\n    ])\n}\n",
+        // The same, all on one line: no trailing comma to inherit.
+        // 同上，但全在一行里：没有可继承的尾逗号。
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+         pub fn add_crates() -> Shape {\n    \
+         Shape::of(\"app\", &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])])\n}\n",
+        // The struct literal, one entry per line.
+        // 结构体字面量，一条 entry 一行。
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+         pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n    \
+         crates: &[\n        Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE]),\n    ],\n};\n",
+        // The struct literal inline.
+        // 结构体字面量，单行。
+        "use nichlink_toolchain::run_method::{Crate, Shape};\n\n\
+         pub const SHAPE: Shape = Shape {\n    package_prefix: \"app\",\n    \
+         crates: &[Crate::named(\"widgets\").at(&[crate::panel::frame::SUBTREE])],\n};\n",
+    ];
+    for (index, layout) in layouts.iter().enumerate() {
+        let root = declaration_root(&format!("layout-{index}"));
+        fs::write(root.join("add_crates.rs"), layout).expect("the declaration");
+        let edit = super::declare(&root, "gauge", &["crate::panel::gauge::SUBTREE".to_owned()])
+            .unwrap_or_else(|error| panic!("layout {index} is declarable: {error}"));
+        fs::write(root.join("add_crates.rs"), &edit.after).expect("the write");
+        let read = read_shape_declaration(&root).unwrap_or_else(|error| {
+            panic!(
+                "layout {index} must read back after the write: {error}\n{}",
+                edit.after
+            )
+        });
+        let read = read.unwrap_or_else(|| panic!("layout {index} declares a shape"));
+        assert_eq!(
+            read.crates.len(),
+            2,
+            "layout {index} gained exactly one crate:\n{}",
+            edit.after
+        );
+        assert!(
+            edit.after.contains(r#"Crate::named("widgets")"#),
+            "layout {index} kept what was there:\n{}",
+            edit.after
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+}

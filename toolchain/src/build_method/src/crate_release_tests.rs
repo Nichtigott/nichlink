@@ -269,18 +269,27 @@ fn a_release_ghost_carries_the_hosts_cuts_as_data() {
 ///
 /// Cargo **ignores** such a dependency (it warns and builds on), and the facade's build script then took
 /// its own directory for the host's — measured, the published facade carried neither faces nor cuts and
-/// the build still reported success. A refusal at plan time is the only place this can be said before a
-/// reader believes the package works.
-/// cargo 会**忽略**这样的依赖（警告一句、继续构建），而 facade 的构建脚本随后把自己的目录当成了宿主的
-/// ——实测，发布出去的 facade 既不带面也不带切口，而构建仍报告成功。规划期的一句拒绝，是读者相信这个包能用
-/// 之前唯一说得出这句话的地方。
+/// the build still reported success.
+/// cargo 会**忽略**这样的依赖（警告一句、继续构建），而 facade 的构建脚本随后把自己的目录当成了宿主的——
+/// 实测，发布出去的 facade 既不带面也不带切口，而构建仍报告成功。
+///
+/// The refusal lives at the **writers**, and this test says so in both halves: planning still describes the
+/// package (a read-only view runs the same planner, and a declaration edit that merely looks at the plan must
+/// not fail because the host is a binary — measured, putting the refusal in `plan_facade` made
+/// `crates --declare … --write` refuse an edit with nothing to do with release shapes), and
+/// [`refuse_binary_host`] — which `write_release` calls before a single file lands — refuses it.
+/// 拒绝住在**写入方**，而这条测试两半都说了：规划仍然描述这个包（只读视图跑的是同一个规划器，而一次只是看一眼
+/// 计划的声明编辑不该因为宿主是二进制而失败——实测，把拒绝放进 `plan_facade` 让
+/// `crates --declare … --write` 拒绝了一次与发布形状毫无关系的编辑），而 [`refuse_binary_host`]——
+/// `write_release` 在任何文件落地之前调它——拒绝它。
 #[test]
-fn a_release_facade_refuses_a_host_with_no_library_target() {
+fn a_binary_host_is_refused_by_the_writer_not_by_the_planner() {
     let root = host("binary");
     std::fs::remove_file(root.join("src/lib.rs")).expect("the host loses its library");
     let planned = vec![planned(&root)];
-    let refused = plan_facade(&root, "host", "host", "host", &planned, &[])
-        .expect_err("a binary host is refused");
+    plan_facade(&root, "host", "host", "host", &planned, &[])
+        .expect("planning still describes the package it would write");
+    let refused = super::refuse_binary_host(&root).expect_err("the writer refuses it");
     assert!(
         refused.contains("no library target") && refused.contains("way forward"),
         "the refusal names the reason and the way out: {refused}"

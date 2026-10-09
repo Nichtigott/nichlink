@@ -306,13 +306,27 @@ NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$WS/app" >/dev/null ||
   fail "the facade shape does not check"
 cp -R "$OUT" "$WORK/facade-out"
 
-# ② The graft plan is the same data in every shape: the declaration did not move, so the cut, the graft
-# and the `full` flag cannot differ.
-# ② graft 计划在每个形状里都是同一份数据：声明没有搬家，因此切口、替换与 `full` 不可能不同。
-for shape in host ghost facade; do
-  cmp "$WORK/base-out/graft_plan.tsv" "$WORK/$shape-out/graft_plan.tsv" ||
-    fail "② the graft plan differs in the $shape shape"
-done
+# ② The cuts the tree **declares** did not move, and each package emits the ones it compiles.
+#
+# This used to compare one package's table against every shape's, and it passed only because the audit text was
+# the host's whole plan copied into every package: the release shape's ghosts emitted **no** cut at all and this
+# line still said the plans matched (audit `M7`, §M7.55). What each package emits is *supposed* to differ now —
+# a package emits the cuts whose faces it compiles — so the witness is the two facts that cannot hold unless
+# attribution is right: the **facade** carries the union (equal to the unpartitioned plan), and the host plus
+# the ghost partition that union between them.
+# ② 这棵树**声明**的切口没有搬家，而每个包发射它编译的那些。
+#
+# 这里过去拿某一个包的表与每个形状比，而它之所以通过，只是因为审计文本是宿主的整份计划被复制进每一个包：发布
+# 形状的幽灵**一条切口都没发**，这一行却照样说计划一致（审计 `M7`，§M7.55）。现在每个包发射什么是**应该**不同的
+# ——一个包发射它编译的那些面的切口——因此证人是两条"归属不对就成立不了"的事实：**facade** 携带并集（等于未分区
+# 的那份计划），而宿主与幽灵把这份并集分成两半。
+cmp "$WORK/base-out/graft_plan.tsv" "$WORK/facade-out/graft_plan.tsv" ||
+  fail "② the facade does not carry the cuts the unpartitioned tree declared"
+{ tail -n +2 "$WORK/host-out/graft_plan.tsv"; tail -n +2 "$WORK/ghost-out/graft_plan.tsv"; } |
+  sort -u >"$WORK/host-ghost.tsv"
+tail -n +2 "$WORK/facade-out/graft_plan.tsv" | sort -u >"$WORK/facade-cuts.tsv"
+cmp "$WORK/host-ghost.tsv" "$WORK/facade-cuts.tsv" ||
+  fail "② the host and the ghost do not partition the declared cuts between them"
 
 # ③ Identity is unchanged: the facade carries the union of the faces with byte-identical triples, and the
 # cut face baked into the ghost is the one the unpartitioned build baked.
