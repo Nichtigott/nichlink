@@ -222,6 +222,16 @@ pub(super) fn write_example(root: &Path, namespace: &str, action: Action) -> Str
             "apply": true,
             "confirm": true
         }),
+        // `move` names a face and the parent it should hang under; the face it offers is a leaf that
+        // does not own a registry, and the parent is a real registry owner from this tree.
+        // `move` 点一个面以及它该挂到哪个父级之下；它给出的面是一个不拥有注册机的叶子，父级则是这棵树里
+        // 真实的注册机拥有者。
+        Action::Move => json!({
+            "action": "move",
+            "node": leaf.map(|view| view.path.clone()).unwrap_or_else(|| "root".to_owned()),
+            "to": parent,
+            "apply": true
+        }),
     };
     format!("accepted shape  {request}")
 }

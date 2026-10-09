@@ -261,6 +261,20 @@ pub const ADOPTION_FILE: &str = "entries";
 /// 单个外部 graft 计划的文件名。
 pub const GRAFT_PLAN_FILE: &str = "graft.plan";
 
+/// Directory name, under `NICHLINK_DIR`, holding the move records.
+/// `NICHLINK_DIR` 下存放搬动记录的目录名。
+///
+/// A move is an **identity change** — `NodeId = hash(namespace, source path, name)` — so these records
+/// are a compatibility note for the next reader rather than an audit ledger, and only the most recent
+/// few are kept (the maintainer's decision on 2026-10-09).
+/// 一次搬动就是一次**身份变化**——`NodeId = hash(命名空间, 源码路径, 名字)`——因此这些记录是留给下一个读者的
+/// 兼容提示，而不是审计账本，只保留最近几条（维护者 2026-10-09 的决定）。
+pub const MOVES_DIR: &str = "moves";
+
+/// File name, under a numbered directory in [`MOVES_DIR`], holding one move record.
+/// [`MOVES_DIR`] 下每个编号目录里存放一条搬动记录的文件名。
+pub const MOVE_PLAN_FILE: &str = "move.plan";
+
 /// Directory name, under `NICHLINK_DIR`, holding recorded trace artifacts.
 /// `NICHLINK_DIR` 下存放已记录 trace artifact 的目录名。
 pub const TRACE_DIR: &str = "traces";

@@ -25,6 +25,9 @@ use std::path::{Path, PathBuf};
 #[path = "apply_cut.rs"]
 mod apply_cut;
 
+#[path = "apply_move.rs"]
+mod apply_move;
+
 #[path = "apply_promote.rs"]
 mod apply_promote;
 
@@ -67,6 +70,9 @@ enum Action {
     /// 把一条已确认的外部 graft 记录落地：用外部实现的字段改写目标面的声明、退役那条声明条目，并把
     /// 记录移进回收目录。
     Promote,
+    /// Relocate a face — and the module subtree under it — to a new parent.
+    /// 把一个面（连同它下面的模块子树）搬到新的父级之下。
+    Move,
 }
 
 /// Run one edit request, previewing unless `apply` is true.
@@ -87,6 +93,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         Some("deepen") => Action::Deepen,
         Some("cut") => Action::Cut,
         Some("promote") => Action::Promote,
+        Some("move") => Action::Move,
         Some(other) => {
             // The example is built from this tree, so the refusal is one paste away from a call
             // rather than one research step away. A root whose namespace cannot be read still gets
@@ -98,7 +105,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
                 .map(|namespace| write_example(root, &namespace, Action::Add));
             return Err(format!(
                 "action `{other}` is not implemented; this tool supports `add`, `edit`, \
-                 `rename`, `delete`, `deepen`, `cut` and `promote`{}",
+                 `rename`, `delete`, `deepen`, `cut`, `promote` and `move`{}",
                 example.map_or(String::new(), |example| format!("\n{example}"))
             ));
         }
@@ -108,7 +115,7 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
                 .map(|namespace| write_example(root, &namespace, Action::Add));
             return Err(format!(
                 "nichlink.apply requires `action` (`add`, `edit`, `rename`, `delete`, `deepen`, \
-                 `cut`, or `promote`){}",
+                 `cut`, `promote`, or `move`){}",
                 example.map_or(String::new(), |example| format!("\n{example}"))
             ));
         }
@@ -123,12 +130,12 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
     } else {
         Target::Copy(copy_package(root)?)
     };
+    let write = matches!(target, Target::Project);
+    let work = target.work_dir(root);
     let outcome = match action {
-        Action::Add => run_add(target.work_dir(root), &namespace, arguments),
-        Action::Edit | Action::Rename => {
-            run_edit(target.work_dir(root), &namespace, arguments, action)
-        }
-        Action::Delete => run_delete(target.work_dir(root), &namespace, arguments),
+        Action::Add => run_add(work, &namespace, arguments),
+        Action::Edit | Action::Rename => run_edit(work, &namespace, arguments, action),
+        Action::Delete => run_delete(work, &namespace, arguments),
         // `deepen`'s consumer story has two halves that live in different trees: the face it
         // deepened is in the **work** directory (a copy, in a preview), while the graft plans it must
         // name are in the **project** — the preview copy skips `.nichlink` by design. Passing both is
@@ -137,19 +144,15 @@ pub(crate) fn apply(root: &Path, arguments: &Value) -> Result<String, String> {
         // `deepen` 的消费方说法有两半，住在两棵不同的树上：它做深的那个面在**工作**目录里（预览时是副本），
         // 而它必须点名的 graft 计划在**项目**里——预览副本按设计跳过 `.nichlink`。两棵都传进去，才让预览
         // 不讲述一个与写入不同的消费方故事，而那正是预览绝不能做的事（审计 `W5-3`）。
-        Action::Deepen => run_deepen(target.work_dir(root), root, &namespace, arguments),
-        Action::Cut => apply_cut::run_cut(target.work_dir(root), arguments),
+        Action::Deepen => run_deepen(work, root, &namespace, arguments),
+        Action::Cut => apply_cut::run_cut(work, arguments),
         // `promote` reads the record from the project root and rewrites source in the work
         // directory, so it is the one action that needs both — and the one that has to know
         // whether it is applying, because only then may the record move.
         // `promote` 从项目根读记录、在工作目录里改写源码，因此它是唯一同时需要两者的动作——也是必须知道
         // 自己是否在落盘的那个，因为只有落盘时才可以把记录移走。
-        Action::Promote => apply_promote::run_promote(
-            root,
-            target.work_dir(root),
-            matches!(target, Target::Project),
-            arguments,
-        ),
+        Action::Promote => apply_promote::run_promote(root, work, write, arguments),
+        Action::Move => apply_move::run_move(root, work, write, arguments),
     };
     let outcome = match outcome {
         // A preview ran in the copy, so the paths the executor reported belong to

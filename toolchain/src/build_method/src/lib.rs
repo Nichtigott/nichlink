@@ -238,7 +238,11 @@ pub(crate) use scope::{
     SourceScope, collect_active_ids, face_source_is_active, module_feature, source_is_active,
 };
 pub(crate) use scope_faces::{FaceSource, collect_faces};
-#[cfg(any(feature = "cli", feature = "studio"))]
+// The reader rides the surfaces that have to answer "is this subtree claimed?": the CLI and Studio, and
+// the bridge's `move`, which refuses a move across a claim (P2, 2026-10-09).
+// 读取方随那些必须回答"这棵子树被认领了吗"的执行面走：CLI 与 Studio，以及桥的 `move`——它拒绝跨认领的搬动
+// （P2，2026-10-09）。
+#[cfg(any(feature = "cli", feature = "mcp", feature = "studio"))]
 pub(crate) use shape_decl::read_shape_declaration;
 // The declaration's two writers ride the authoring surfaces: the CLI's `crates` verb, the bridge's
 // `declare`/`undeclare`, and Studio's delete key all edit the same hand-written file through them.

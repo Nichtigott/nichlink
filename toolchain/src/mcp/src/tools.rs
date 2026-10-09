@@ -234,8 +234,8 @@ pub(crate) fn tools() -> Vec<Value> {
             "nichlink.apply",
             "Edit this package's registration faces through the same authoring executor Studio \
              uses, so the kernel's admission, parent-rule, and topology checks run on the change. \
-             **The seven actions fall into two classes, and the class decides whether a \
-             hand-written face is a legal subject**: `add`, `deepen`, `cut` and `promote` are \
+             **The eight actions fall into two classes, and the class decides whether a \
+             hand-written face is a legal subject**: `add`, `deepen`, `cut`, `promote` and `move` are \
              **additive** — they write declarations (a new face, a layer inside one, the entry a \
              graft plan reads, a landed record) and reach an existing hand-written face fine; \
              `edit`, `rename` and `delete` are **rewrites** — they rewrite the face's own file, and \
@@ -269,7 +269,7 @@ pub(crate) fn tools() -> Vec<Value> {
              refused with the candidate member directories and nothing is copied or written — a \
              write runs against a member it is the unique owner of, or it does not run. **`fields.module` is a bare snake_case module name** (`widget`), not the logical path the tree reports: the executor names the module's directory and file, so `control::object::widget` is refused by name. Every other `fields` value is a **string**: `exports` is one export per call rather than an array, `requires` entries are spelled `capability=>provider`, and `handle_traits` entries are the **labels** the registration rule checks (a Rust path such as `crate::control::ControlHandle` is accepted here and only the parent rule refuses it later). The one non-string key is `needs_registry`, a boolean. **A request the kernel refuses comes back as an error** (`isError` true), because a request this tool cannot carry out is a tool failure rather than a fact about the tree; the read tools are the other way round and print their verdict in the body.",
             json!({"type":"object","properties":{
-                "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote"]},
+                "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote","move"]},
                 "selector":{"type":"string","description":"promote: the .nichlink/external-grafts/<selector>/ directory to land"},
                 "implementation":{"type":"string","description":"promote: where the external implementation crate lives, when the declaration names it as a Rust path but that crate is not a path dependency of this package"},
                 "node":{"type":"string","description":"edit/rename/delete/deepen: the face, by logical path or identity"},
@@ -813,8 +813,8 @@ const ADVERTISED_CHECK: &str = "\
 non-default feature cannot fail on the default face. It also carries a sampled whole-tree census.";
 
 const ADVERTISED_APPLY: &str = "\
-**The only write path** for this tree's registration faces. Seven actions in two classes: \
-`add`/`deepen`/`cut`/`promote` are **additive** (a hand-written face is fine), \
+**The only write path** for this tree's registration faces. Eight actions in two classes: \
+`add`/`deepen`/`cut`/`promote`/`move` are **additive** (a hand-written face is fine), \
 `edit`/`rename`/`delete` are **rewrites** (generated faces only). \
 **Previewed unless `apply: true`**; `delete`/`promote` also need `confirm: true`.";
 
@@ -844,7 +844,7 @@ fn advertised_schema(tool: &str) -> Value {
             "root":{"type":"string"}
         }}),
         "nichlink.apply" => json!({"type":"object","properties":{
-            "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote"],"description":"add/deepen/cut/promote: declarations; edit/rename/delete: generated files"},
+            "action":{"type":"string","enum":["add","edit","rename","delete","deepen","cut","promote","move"],"description":"add/deepen/cut/promote: declarations; edit/rename/delete: generated files; move: position"},
             "node":{"type":"string","description":"edit/rename/delete/deepen: the face"},
             "parent":{"type":"string","description":"add: parent (default root)"},
             "fields":{"type":"object","description":"the face's fields; strings except `needs_registry`; `module` is bare snake_case","properties":{"needs_registry":{"type":"boolean"}},"additionalProperties":{"type":"string"}},
