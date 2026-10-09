@@ -162,6 +162,17 @@ pub(super) fn graft_constructor(
 /// 切口在这里没有可查的东西。
 pub(super) fn names_a_compiled_module(faces: &[StaticFaceRecord], expression: &str) -> bool {
     match face_module(expression) {
+        // `crate::NODE_ID` is the **root** of the tree, and no face record stands for it: a cut anchored
+        // there covers everything, so this rule cannot say which crate it belongs to and stays conservative.
+        // Getting this wrong is not theoretical — the first version of this filter compared `crate` against
+        // every face's module, matched nothing, and dropped every root-face cut from the host that had one:
+        // measured by `tools/nichlink-graft-matrix`, "the plan does not record the root-face cut" (audit
+        // `M7`, §M7.56).
+        // `crate::NODE_ID` 是这棵树的**根**，而没有任何一条面记录代表它：锚在那里的切口覆盖一切，因此这条规则
+        // 说不出它属于哪个 crate，于是保持保守。弄错它不是理论问题——本过滤器的第一版拿 `crate` 去比每个面的
+        // module、什么都没匹配到，于是把带根切口的宿主那条切口丢掉了：由 `tools/nichlink-graft-matrix` 实测，
+        // "the plan does not record the root-face cut"（审计 `M7`，§M7.56）。
+        Some("crate") => true,
         Some(module) => {
             let module = module.strip_prefix("crate::").unwrap_or(module);
             faces.iter().any(|face| face.module == module)

@@ -54,13 +54,13 @@ import re, sys, pathlib
 p = pathlib.Path(sys.argv[1]); s = p.read_text()
 s = re.sub(
     r"cut\(crate::control::object::button::NODE_ID\)\s*\n\s*graft\(control_button_graft::button_fast::NODE_ID\),",
-    "cut(crate::NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
+    "cut(crate::ROOT_NODE_ID) full\n        graft(control_button_graft::control_fast::NODE_ID),", s, count=1)
 s = re.sub(r"\s*cut\(crate::control::object::slider::NODE_ID\)\s*\n\s*graft\(control_button_graft::slider_fast::NODE_ID\),",
            "", s, count=1)
 p.write_text(s)
 PY
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the root-face cut does not check"
-[ "$(sed -n '2p' "$AREA/app/target/nichlink/out/graft_plan.tsv" | cut -f1)" = "crate::NODE_ID" ] ||
+[ "$(sed -n '2p' "$AREA/app/target/nichlink/out/graft_plan.tsv" | cut -f1)" = "crate::ROOT_NODE_ID" ] ||
   fail "the plan does not record the root-face cut"
 (cd "$AREA/app" && build >/dev/null 2>&1) || fail "the root-face cut does not build"
 
