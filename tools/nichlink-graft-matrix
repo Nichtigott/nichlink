@@ -83,6 +83,18 @@ grep -q "later, wins" "$WORK/overlap.out" ||
   fail "the hint does not say which entry answers: $(grep -m1 overlap "$WORK/overlap.out")"
 printf '   hint: %s\n' "$(grep -m1 'two graft cuts overlap' "$WORK/overlap.out" | cut -c1-200)"
 # And only the winner reaches the plan: the later `control` full entry replaces the earlier button cut.
+#
+# Read through the **facade** shape, because this fixture's host has handed `control` — and everything under
+# it, including the slider — to a ghost: a host that no longer compiles the cut face legitimately emits no cut
+# for it, and reading the host's own table here looked exactly like a missing plan. That is the same mistake
+# the other two device criteria made (audit `M7`, §M7.55), and it is worth spelling out: the shape-independent
+# witness to "which cut won" is the crate that carries the union.
+# 经 **facade** 形状读，因为这个夹具的宿主已经把 `control`——以及它之下的一切，包括 slider——交给了一个幽灵：
+# 一个不再编译那个切口面的宿主合法地不为它发射切口，而在这里读宿主自己的表，看起来与"计划缺失"一模一样。这与
+# 另外两处装置判据犯的是同一个错误（审计 `M7`，§M7.55），值得写明：**"哪条切口赢了"**这个问题的与形状无关的
+# 证人，是那个携带并集的 crate。
+NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$AREA/app" >/dev/null 2>&1 ||
+  fail "the facade shape does not check"
 PLAN="$AREA/app/target/nichlink/out/graft_plan.tsv"
 [ -f "$PLAN" ] || fail "no graft plan to read"
 # The fixture declares three cuts — `button`, then `control` (full), then `slider`. Pairwise "later
@@ -122,17 +134,24 @@ RS
 # graft plan"。实测——这正是这条腿在 CI 上红而本地绿的原因。下面的存在性检查正是让"计划缺失"不会变成
 # "两个空哈希相等、于是报成功"。
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the declared host does not check"
-# The witness is the **unpartitioned** build's own table, taken after building it: one crate compiles every face,
-# so its table is the whole declared plan. It has to be built rather than only checked, because `check` writes
-# the CLI's records (`target/nichlink/out`) and a build script writes the package's own (`build/*/out`) — and the
-# second is what a package actually emits.
-# 证人是**未分区**那次构建自己的表，在构建之后取：一个 crate 编译每一个面，因此它的表就是整份声明的计划。它必须
-# 被**构建**而不只是 check，因为 `check` 写的是 CLI 的记录（`target/nichlink/out`），而包的构建脚本写自己的那份
-# （`build/*/out`）——后者才是这个包真正发射的东西。
-(cd "$AREA/app" && build >/dev/null 2>&1) || fail "the declared host does not build"
-before=$(find "$AREA/target" -path '*/build/*/out/graft_plan.tsv' -type f | head -1)
-[ -n "$before" ] || fail "the unpartitioned host emitted no graft plan at all"
-before=$(md5sum <"$before")
+# The witness is the **facade shape's own** table, read before and after the split. Not the host's: this
+# fixture declares a crate, so the host has handed that subtree away and legitimately emits fewer cuts than the
+# declaration names — reading the host here is the mistake this file has now made three times (audit `M7`,
+# §M7.55). The facade carries the union, so its plan is the shape-independent reading of "what does this tree
+# declare", and asking for it twice is exactly the question this leg exists to ask: does re-partitioning change
+# it?
+# 证人是 **facade 形状自己**的表，在拆分前后各读一次。不是宿主的：这个夹具声明了一个 crate，因此宿主已经把
+# 那棵子树交出去、合法地少发几条——在这里读宿主，就是本文件已经犯过三次的那个错误（审计 `M7`，§M7.55）。
+# facade 携带并集，因此它的计划是"这棵树声明了什么"的与形状无关的读法，而问它两次正是这条腿存在的意义：
+# 重新划分会不会改变它？
+facade_plan() {
+  NICH_LINK_SHAPE_FACADE=1 "$NICHLINK" check "$AREA/app" >/dev/null 2>&1 ||
+    fail "the facade shape does not check"
+  cat "$AREA/app/target/nichlink/out/graft_plan.tsv"
+}
+before=$(facade_plan)
+[ -n "$(printf '%s' "$before" | tail -n +2)" ] ||
+  fail "the facade carries no cut at all, so this leg would compare two empty plans: $before"
 (cd "$AREA/app" && "$NICHLINK" crates --write . >/dev/null 2>&1) || fail "the split is not written"
 (cd "$AREA/app" && "$NICHLINK" check . >/dev/null 2>&1) || fail "the split host does not check"
 # The partition root is the **workspace** root, so the generated packages sit beside the host, and the
@@ -141,17 +160,9 @@ before=$(md5sum <"$before")
 [ -d "$AREA/crates/app-objects" ] || fail "the split did not produce the ghost"
 [ -d "$AREA/crates/app-facade" ] || fail "the split did not produce the facade"
 (cd "$AREA" && build --workspace >/dev/null 2>&1) || fail "a crate of the split does not build"
-# After the split the host legitimately emits **fewer** cuts (it no longer compiles the faces that moved), so the
-# package to compare is the **facade**: it carries the union, which is the unpartitioned plan. Comparing the
-# host's own table here would either fail (correctly — attribution changed) or pass for the wrong reason, which
-# is what it used to do while every package carried the host's whole plan (audit `M7`, §M7.55).
-# 划分之后宿主合法地**少发**几条（它不再编译搬走的那些面），因此要比的包是 **facade**：它携带并集，也就是未分区
-# 的那份计划。在这里比宿主自己的表，要么失败（正确地——归属变了），要么因为一个错理由通过——而那正是它过去所做的
-# 事，当时每个包都带着宿主的整份计划（审计 `M7`，§M7.55）。
-FACADE_PLAN=$(find "$AREA" -path '*app-facade*/out/graft_plan.tsv' -type f | head -1)
-[ -n "$FACADE_PLAN" ] || fail "the split published no facade graft plan"
-after=$(md5sum <"$FACADE_PLAN")
-[ "$before" = "$after" ] || fail "re-partitioning changed the cuts the tree declares (the facade's union moved)"
+after=$(facade_plan)
+[ "$before" = "$after" ] ||
+  fail "re-partitioning changed the cuts the tree declares (the facade's plan moved)"
 cuts=$(find "$AREA/target" "$AREA/crates" -path "*app-objects-*/out/generated_lib.rs" 2>/dev/null | head -1)
 [ -n "$cuts" ] || fail "no generated tree for the ghost"
 [ "$(grep -c 'StaticGraftCut::from_ids' "$cuts")" = "2" ] ||
